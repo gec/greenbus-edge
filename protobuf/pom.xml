@@ -1,0 +1,82 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.greenbus.edge</groupId>
+        <artifactId>greenbus-edge-parent</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+        <relativePath>../</relativePath>
+    </parent>
+
+    <artifactId>greenbus-edge-protobuf</artifactId>
+    <packaging>jar</packaging>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>com.mycila.maven-license-plugin</groupId>
+                <artifactId>maven-license-plugin</artifactId>
+                <configuration>
+                    <header>../APACHE_FILE_HEADER</header>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.totalgrid.maven</groupId>
+                <artifactId>maven-protoc-plugin</artifactId>
+                <version>0.1.11</version>
+                <configuration>
+                    <protocExecutable>./protoclink</protocExecutable>
+                    <protoSourceRoot>src/main/proto</protoSourceRoot>
+                    <checkStaleness>true</checkStaleness>
+                    <outputDirectory>${project.build.directory}/generated-sources/java</outputDirectory>
+                    <!--<additionalProtoPathElements>
+                        <additionalProtoPathElement>
+                            proto-include/
+                        </additionalProtoPathElement>
+                    </additionalProtoPathElements>
+                    <plugins>
+                        <plugin>
+                            <name>msgscala</name>
+                            <outputDirectory>${project.build.directory}/generated-sources/scala</outputDirectory>
+                            <pluginCommand>protoc-gen-msgscala</pluginCommand>
+                        </plugin>
+                        <plugin>
+                            <name>msgjava</name>
+                            <outputDirectory>${project.build.directory}/generated-sources/java</outputDirectory>
+                            <pluginCommand>protoc-gen-msgjava</pluginCommand>
+                        </plugin>
+                    </plugins>-->
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>compile</goal>
+                            <goal>testCompile</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.greenbus.edge</groupId>
+            <artifactId>greenbus-edge-library</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+            <version>3.1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java-util</artifactId>
+            <version>3.1.0</version>
+        </dependency>
+    </dependencies>
+
+
+</project>
