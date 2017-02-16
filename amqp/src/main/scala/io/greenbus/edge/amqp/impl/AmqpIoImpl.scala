@@ -18,19 +18,16 @@
  */
 package io.greenbus.edge.amqp.impl
 
-import java.util.UUID
-
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.{ CallMarshaller, ChannelDescriptor, EdgeChannelClient, EdgeServerChannelHandler }
-import io.greenbus.edge.amqp.{ AmqpChannelServer, ChannelSessionSource }
-import io.greenbus.edge.channel.{ Sender => _, _ }
+import io.greenbus.edge.CallMarshaller
+import io.greenbus.edge.amqp.{ AmqpChannelServer, AmqpListener, AmqpService, ChannelSessionSource }
+import io.greenbus.edge.channel.{ Sender => _ }
 import org.apache.qpid.proton.Proton
-import org.apache.qpid.proton.engine.{ Receiver, _ }
-import org.apache.qpid.proton.reactor.Acceptor
+import org.apache.qpid.proton.engine._
 
 import scala.concurrent.{ Future, Promise }
 
-class AmqpIoImpl(idOpt: Option[String] = None) {
+class AmqpIoImpl(idOpt: Option[String] = None) extends AmqpService {
   private val opQueue = new OperationQueue
   private val baseHandler = new ReactorHandler
   private val r = Proton.reactor(baseHandler)

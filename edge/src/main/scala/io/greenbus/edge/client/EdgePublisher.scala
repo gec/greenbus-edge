@@ -34,7 +34,7 @@ trait EndpointPublisher {
 
   def flush(): Unit
 
-  def outputReceiver: Source[PublisherOutputRequestBatch]
+  def outputReceiver: Source[UserOutputRequestBatch]
 
   def subscribeToUpdates(): EventChannelReceiver[EndpointPublishMessage]
 
@@ -42,8 +42,8 @@ trait EndpointPublisher {
 
 }
 
-case class PublisherOutputRequest(key: Path, outputRequest: PublisherOutputParams, resultAsync: OutputResult => Unit)
-case class PublisherOutputRequestBatch(requests: Seq[PublisherOutputRequest])
+case class UserOutputRequest(key: Path, outputRequest: PublisherOutputParams, resultAsync: OutputResult => Unit)
+case class UserOutputRequestBatch(requests: Seq[UserOutputRequest])
 
 trait EndpointBuilder {
 
@@ -190,9 +190,9 @@ class EndpointPublisherImpl(
       endpointDesc.outputEntries.mapValues(v => OutputKeyDescriptor(v.meta.indexes, v.meta.metadata)))
   }
 
-  private val ouputReqSink = new SinkOwnedSourceJoin[PublisherOutputRequestBatch](eventThread)
+  private val ouputReqSink = new SinkOwnedSourceJoin[UserOutputRequestBatch](eventThread)
 
-  def outputReceiver: Source[PublisherOutputRequestBatch] = ouputReqSink
+  def outputReceiver: Source[UserOutputRequestBatch] = ouputReqSink
 
   private def buildSnapshot(): EndpointPublishMessage = {
     val record = EndpointDescriptorRecord(0, endpointId, endpointInfo)
@@ -232,9 +232,9 @@ class EndpointPublisherImpl(
 
   def handleOutput(outputMessage: PublisherOutputRequestMessage, asyncResult: (OutputResult, Long) => Unit): Unit = {
     val requests = outputMessage.requests.map { pubReq =>
-      PublisherOutputRequest(pubReq.key, pubReq.value, asyncResult(_, pubReq.correlation))
+      UserOutputRequest(pubReq.key, pubReq.value, asyncResult(_, pubReq.correlation))
     }
-    val batch = PublisherOutputRequestBatch(requests)
+    val batch = UserOutputRequestBatch(requests)
     ouputReqSink.push(batch)
   }
 

@@ -22,16 +22,12 @@ import java.util.concurrent.TimeoutException
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.{ CallMarshaller, channel }
-import io.greenbus.edge.amqp.AmqpChannelServer
+import io.greenbus.edge.amqp.{ AmqpChannelServer, AmqpListener }
 import io.greenbus.edge.channel.{ Receiver => _, Sender => _, _ }
 import org.apache.qpid.proton.engine._
 import org.apache.qpid.proton.reactor.Acceptor
 
 import scala.concurrent.{ Future, Promise }
-
-trait AmqpListener {
-  def close(): Unit
-}
 
 class ListenerImpl(ioThread: CallMarshaller, acceptor: Acceptor) extends AmqpListener {
   def close(): Unit = {

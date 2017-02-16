@@ -22,14 +22,12 @@ import java.util.UUID
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.EdgeChannels.ClientSubscriptionNotificationDesc
 import io.greenbus.edge._
-import io.greenbus.edge.amqp.ClientServerTest.logger
-import io.greenbus.edge.amqp.impl.{ AmqpIoImpl, AmqpListener, HandlerResource, ResourceRemoveObserver }
+import io.greenbus.edge.amqp.impl.AmqpIoImpl
 import io.greenbus.edge.channel.{ TransferChannelReceiver, TransferChannelSender }
 import io.greenbus.edge.proto.provider.EdgeProtobufProvider
-import org.apache.qpid.proton.engine.{ Receiver, Sender }
 
-import scala.concurrent.{ Await, Future }
 import scala.concurrent.duration._
+import scala.concurrent.{ Await, Future }
 
 object ProtoTest extends LazyLogging {
 

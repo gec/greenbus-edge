@@ -37,7 +37,7 @@ trait Sink[A] {
 
 trait Source[A] {
   def bind(handler: Handler[A]): Unit
-  def bind(f: A => Unit): Unit = {
+  def bindFun(f: A => Unit): Unit = {
     bind(new Handler[A] {
       def handle(obj: A): Unit = f(obj)
     })

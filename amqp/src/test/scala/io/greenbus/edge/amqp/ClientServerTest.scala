@@ -20,7 +20,7 @@ package io.greenbus.edge.amqp
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.ClientSubscriptionParamsMessage
-import io.greenbus.edge.amqp.impl.{ AmqpIoImpl, AmqpListener, HandlerResource, ResourceRemoveObserver }
+import io.greenbus.edge.amqp.impl.{ AmqpIoImpl, HandlerResource, ResourceRemoveObserver }
 import org.apache.qpid.proton.engine.{ Receiver, Sender }
 
 import scala.concurrent.duration._
