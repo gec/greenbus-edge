@@ -304,10 +304,7 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
     logger.info("Publisher closed: " + id)
     proxy.close()
     clientPublishers.remove(proxy)
-  }
-
-  def onClientPublisherClosed(sourceId: SourceId, sessionId: SessionId, endpointId: EndpointId): Unit = {
-    logger.info(s"Client publisher closed for $sourceId, $sessionId, $endpointId")
+    endpoints.get(id.endpointId).foreach(_.sourceRemoved(id.sourceId))
   }
 
   def onPeerOutputChannelOpened() = ???

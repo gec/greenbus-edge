@@ -81,6 +81,15 @@ class EndpointDb(id: EndpointId, dataDef: DataStreamSource) {
     state.map(_._2)
   }
 
+  def sourceRemoved(source: SourceId): Unit = {
+    state.foreach {
+      case (sourceOpt, sess, db) =>
+        if (sourceOpt.contains(source)) {
+          state = Some((None, sess, db))
+        }
+    }
+  }
+
   def allowPublisher(source: SourceId, sessionId: SessionId): Boolean = {
     state match {
       case None => true
@@ -162,7 +171,12 @@ class EndpointDb(id: EndpointId, dataDef: DataStreamSource) {
   }
 
   private def processSessionTransition(oldDb: EndpointSessionDb, nextSessionId: SessionId, snapshot: EndpointPublishSnapshot): (EndpointSessionDb, EndpointDb.ProcessResult) = {
-    ???
+    val sessionDb = new EndpointSessionDb(snapshot, dataDef)
+    val setUpdateOpt = if (oldDb.currentInfo()._1.indexes != snapshot.endpoint.descriptor.indexes) Some(EndpointSetEntry(snapshot.endpoint.endpointId, snapshot.endpoint.descriptor.indexes)) else None
+    val result = sessionDb.processSnapshotUpdate(snapshot)
+    val outputsWithSession = result.outputUpdates.map { case (path, cl) => (path, OutputValueStatus(nextSessionId, cl.sequence, cl.valueOpt)) }
+    val procResult = ProcessResult(setUpdate = setUpdateOpt, infoUpdateOpt = result.infoUpdateOpt, valueUpdates = result.valueUpdates, outputUpdates = outputsWithSession)
+    (sessionDb, procResult)
   }
 
 }
