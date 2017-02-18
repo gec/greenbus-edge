@@ -65,14 +65,24 @@ case class PersistenceSessionId(persistenceId: UUID, sequence: Long) extends Ses
 
 case class EndpointPath(endpoint: EndpointId, key: Path)
 
-case class EndpointKeySet()
+case class EndpointSetEntry(endpointId: EndpointId, indexes: Map[Path, IndexableValue])
 
-case class EndpointSetSnapshot()
-trait EndpointSetChange
+/*trait EndpointSetNotification
+case class EndpointSetSnapshot(prefix: Path, entries: Seq[EndpointSetEntry]) extends EndpointSetNotification
+case class EndpointSetChange(
+                              prefix: Path,
+                             added: Seq[EndpointSetEntry],
+                             modified: Seq[EndpointSetEntry],
+                             removed: Seq[EndpointId]) extends EndpointSetNotification*/
+
+case class EndpointSetSnapshot(entries: Seq[EndpointSetEntry])
 
 case class EndpointSetNotification(
+  prefix: Path,
   snapshotOpt: Option[EndpointSetSnapshot],
-  changes: Seq[EndpointSetChange])
+  added: Seq[EndpointSetEntry],
+  modified: Seq[EndpointSetEntry],
+  removed: Seq[EndpointId])
 
 case class EndpointDescriptorNotification(endpointId: EndpointId, descriptor: EndpointDescriptor, sequence: Long)
 

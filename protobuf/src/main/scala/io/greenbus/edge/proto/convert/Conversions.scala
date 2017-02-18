@@ -333,7 +333,8 @@ object Conversions {
     proto.EndpointSetNotification.newBuilder().build()
   }
   def fromProto(msg: proto.EndpointSetNotification): Either[String, edge.EndpointSetNotification] = {
-    Right(edge.EndpointSetNotification(None, Seq()))
+    ???
+    //Right(edge.EndpointSetNotification(None, Seq()))
   }
 
   def toProto(obj: (edge.Path, edge.IndexableValue)): proto.IndexKeyValue = {

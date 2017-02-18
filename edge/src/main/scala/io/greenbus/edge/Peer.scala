@@ -18,16 +18,26 @@
  */
 package io.greenbus.edge
 
-import java.util.concurrent.TimeoutException
-
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.channel.Responder
 
 import scala.concurrent.Promise
-import scala.util.{ Failure, Try }
 
 trait SourceId
 case class ClientSessionSourceId(sessionId: SessionId) extends SourceId
+
+class EndpointDbMgr {
+  private var endpoints = Map.empty[EndpointId, EndpointDb]
+
+  def lookup(path: Path): Seq[(EndpointId, EndpointDb)] = {
+    endpoints.toVector
+  }
+
+  def get(id: EndpointId): Option[EndpointDb] = endpoints.get(id)
+  def add(id: EndpointId, db: EndpointDb): Unit = {
+    endpoints += (id -> db)
+  }
+}
 
 /*
   // TODO: how does control move through peers?
@@ -46,7 +56,7 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
   output source db?
    */
   private val subscriptionDb = new ScanningSubscriptionDb[SubscriptionTarget]
-  private var endpoints = Map.empty[EndpointId, EndpointDb]
+  private var endpoints = new EndpointDbMgr
   private val clientPublishers: ClientPublisherProxyDb = new ClientPublisherProxyDbImpl
   private var aliveSubscribers = Set.empty[ClientSubscriberProxy]
   private val outputCorrelator = new Correlator[(ClientOutputProxy, Long)]
@@ -105,6 +115,13 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
 
   private def currentSubscriptionSnapshot(params: ClientSubscriptionParams): ClientSubscriptionNotification = {
 
+    val setNotifications = params.endpointSetPrefixes.map { prefix =>
+      val entries = endpoints.lookup(prefix).flatMap {
+        case (id, db) => db.currentInfo().map(info => EndpointSetEntry(id, info.descriptor.indexes))
+      }
+      EndpointSetNotification(prefix, Some(EndpointSetSnapshot(entries)), Seq(), Seq(), Seq())
+    }
+
     val records = params.infoSubscriptions.flatMap { id =>
       endpoints.get(id).flatMap { db =>
         db.currentInfo()
@@ -143,7 +160,7 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
     }
     val outputNotifications = outputB.result()
 
-    ClientSubscriptionNotification(Seq(), infoNotifications, dataNotifications, outputNotifications)
+    ClientSubscriptionNotification(setNotifications, infoNotifications, dataNotifications, outputNotifications)
   }
 
   private def handleBatchPublish(sourceId: SourceId, sessionId: SessionId, endpointId: EndpointId, batch: EndpointPublishMessage): Unit = {
@@ -155,6 +172,26 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
       var infoMap = Map.empty[SubscriptionTarget, EndpointDescriptorNotification]
       var dataMap = Map.empty[SubscriptionTarget, Seq[EndpointDataNotification]]
       var outputMap = Map.empty[SubscriptionTarget, Seq[EndpointOutputStatusNotification]]
+      var setMap = Map.empty[SubscriptionTarget, Seq[EndpointSetNotification]]
+
+      result.setUpdate.foreach { entry =>
+        subscriptionDb.queryForEndpointSetPrefixMatches(Path(Seq())).foreach {
+          case (prefix, subscribers) =>
+            val notification = if (result.added) {
+              EndpointSetNotification(prefix, None, Seq(entry), Seq(), Seq())
+            } else {
+              EndpointSetNotification(prefix, None, Seq(), Seq(entry), Seq())
+            }
+
+            subscribers.foreach { target =>
+              setMap.get(target) match {
+                case None => setMap += (target -> Seq(notification))
+                case Some(existing) => setMap += (target -> (existing :+ notification))
+              }
+              notifyMap += target
+            }
+        }
+      }
 
       result.infoUpdateOpt.foreach {
         case (seq, info) => {
@@ -195,13 +232,15 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
       }
 
       notifyMap.foreach { target =>
+        val setOpt = setMap.get(target)
         val infoOpt = infoMap.get(target)
         val dataOpt = dataMap.get(target)
         val outputOpt = outputMap.get(target)
+        val setSeq = setOpt.getOrElse(Seq())
         val infoSeq = infoOpt.map(Seq(_)).getOrElse(Seq())
         val dataSeq = dataOpt.getOrElse(Seq())
         val outputSeq = outputOpt.getOrElse(Seq())
-        val message = ClientSubscriptionNotification(Seq(), infoSeq, dataSeq, outputSeq)
+        val message = ClientSubscriptionNotification(setSeq, infoSeq, dataSeq, outputSeq)
         target.notify(message)
       }
     }
@@ -242,10 +281,10 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
       case None => {
         val db = new EndpointDb(endpointId, dataDef)
         if (db.allowPublisher(sourceId, sessionId)) {
-          endpoints += (endpointId -> db)
+          endpoints.add(endpointId, db)
           doOpen()
         } else {
-          logger.warn(s"Endpoint publisher for $id was disallowed")
+          logger.warn(s"Endpoint publisher was disallowed for $id")
           doReject()
         }
       }
@@ -253,7 +292,7 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
         if (db.allowPublisher(sourceId, sessionId)) {
           doOpen()
         } else {
-          logger.warn(s"Endpoint publisher for $id was disallowed")
+          logger.warn(s"Endpoint publisher was disallowed for $id")
           doReject()
         }
       }
@@ -318,71 +357,3 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
   }
 
 }
-
-/*
-a node has:
-- a set of user links, some of which are data sources, some are user subscriptions
-- "source endpoints" it is the gateway for
-- a set of links to peer nodes
-- a gossip manifest of endpoints accessible from other nodes (and itself)
-- a map of endpoints to active sessions providing their source
-- a set of endpoint key subscriptions maintained on behalf of users or peers
-- a set of endpoint data subscriptions maintained on behalf of users or peers
-
-channel:
-- local recv (sub)
-  - endpoint key sub list
-  - endpoint data sub list
-  - unsync'ed endpoint list
-- remote recv (pub)
-  - sub list
-  - remote endpoint syncs
-
-on established
---> gossip set
-<--
-
-
-sync sessions or endpoints?
-sessions... endpoints might have  other session sources that are fine
-a zombie session may keep "sending" valid sequences, this is fine and actually backfill...
-
-peer's view of:
-------------------
-link to session
-  - lifetime: life of link or until remote peer has no record of session
-record of session
-  - lifetime:
-data session streams
-  - lifetime: until all links have no further record of session
-  - lifetime: or until all subs disappear
-
-backfill updates, marked not-up-to-date?
-
-publish message:
-- endpoint update session-id
-  - data updates with individual seqs
-
-db:
-==================
-- set: input channels
-  - input channel
-    - active sessions
-      - sync state
-    - endpoint, session map
-
-- set: endpoints
-  - endpoint
-    - active primary session
-      - data series
-    - unsynced sessions (shown up, can't be ordered, awaiting sync)
-      - data series
-    - latent sessions (replaced as active, still alive in some peers)
-      - data series
-
-- set: output channel
-  - output channel
-    - subs
-
-value streams have a resume point that varies based on stream type?
- */

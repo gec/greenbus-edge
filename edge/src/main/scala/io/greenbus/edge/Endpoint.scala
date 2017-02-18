@@ -63,6 +63,8 @@ object EndpointDb {
    */
   case class ProcessResult(
     sourceRejected: Boolean = false,
+    setUpdate: Option[EndpointSetEntry] = None,
+    added: Boolean = false,
     infoUpdateOpt: Option[(Long, EndpointDescriptor)] = None,
     valueUpdates: Seq[(Path, DataValueUpdate)] = Seq(),
     outputUpdates: Seq[(Path, OutputValueStatus)] = Seq())
@@ -147,15 +149,16 @@ class EndpointDb(id: EndpointId, dataDef: DataStreamSource) {
   private def processFirst(sourceId: SourceId, sessionId: SessionId, snapshot: EndpointPublishSnapshot): EndpointDb.ProcessResult = {
     val sessionDb = new EndpointSessionDb(snapshot, dataDef)
     val result = sessionDb.processSnapshotUpdate(snapshot)
+    val setUpdate = EndpointSetEntry(snapshot.endpoint.endpointId, snapshot.endpoint.descriptor.indexes)
     val outputsWithSession = result.outputUpdates.map { case (path, cl) => (path, OutputValueStatus(sessionId, cl.sequence, cl.valueOpt)) }
     state = Some((Some(sourceId), sessionId, sessionDb))
-    ProcessResult(infoUpdateOpt = result.infoUpdateOpt, valueUpdates = result.valueUpdates, outputUpdates = outputsWithSession)
+    ProcessResult(added = true, setUpdate = Some(setUpdate), infoUpdateOpt = result.infoUpdateOpt, valueUpdates = result.valueUpdates, outputUpdates = outputsWithSession)
   }
 
   private def processUpdate(db: EndpointSessionDb, sessionId: SessionId, batch: EndpointPublishMessage): EndpointDb.ProcessResult = {
     val result = db.processUpdates(batch.infoUpdateOpt, batch.dataUpdates, batch.outputStatusUpdates)
     val outputsWithSession = result.outputUpdates.map { case (path, cl) => (path, OutputValueStatus(sessionId, cl.sequence, cl.valueOpt)) }
-    ProcessResult(infoUpdateOpt = result.infoUpdateOpt, valueUpdates = result.valueUpdates, outputUpdates = outputsWithSession)
+    ProcessResult(setUpdate = result.setUpdate, infoUpdateOpt = result.infoUpdateOpt, valueUpdates = result.valueUpdates, outputUpdates = outputsWithSession)
   }
 
   private def processSessionTransition(oldDb: EndpointSessionDb, nextSessionId: SessionId, snapshot: EndpointPublishSnapshot): (EndpointSessionDb, EndpointDb.ProcessResult) = {
@@ -165,7 +168,11 @@ class EndpointDb(id: EndpointId, dataDef: DataStreamSource) {
 }
 
 object EndpointSessionDb {
-  case class Result(infoUpdateOpt: Option[(Long, EndpointDescriptor)], valueUpdates: Seq[(Path, DataValueUpdate)], outputUpdates: Seq[(Path, PublisherOutputValueStatus)])
+  case class Result(
+    setUpdate: Option[EndpointSetEntry],
+    infoUpdateOpt: Option[(Long, EndpointDescriptor)],
+    valueUpdates: Seq[(Path, DataValueUpdate)],
+    outputUpdates: Seq[(Path, PublisherOutputValueStatus)])
 }
 class EndpointSessionDb(initial: EndpointPublishSnapshot, dataDef: DataStreamSource) {
   import EndpointSessionDb._
@@ -248,19 +255,20 @@ class EndpointSessionDb(initial: EndpointPublishSnapshot, dataDef: DataStreamSou
     dataMap.get(path).flatMap(_.processValueUpdate(update))
   }
 
-  private def processInfoUpdate(record: EndpointDescriptorRecord): Option[(Long, EndpointDescriptor)] = {
+  private def processInfoUpdate(record: EndpointDescriptorRecord): (Option[(Long, EndpointDescriptor)], Option[EndpointSetEntry]) = {
     if (record.sequence > infoSequence) {
+      val setUpdate = if (info.indexes != record.descriptor.indexes) Some(EndpointSetEntry(record.endpointId, record.descriptor.indexes)) else None
       infoSequence = record.sequence
       info = record.descriptor
       recalcValidKeys(info)
-      Some((record.sequence, info))
+      (Some((record.sequence, info)), setUpdate)
     } else {
-      None
+      (None, None)
     }
   }
 
   def processSnapshotUpdate(snapshot: EndpointPublishSnapshot): Result = {
-    val infoUpdateOpt = processInfoUpdate(snapshot.endpoint)
+    val (infoUpdateOpt, setUpdate) = processInfoUpdate(snapshot.endpoint)
 
     val valueUpdates = snapshot.data.flatMap {
       case (path, state) => processDataStateUpdate(path, state).map(up => (path, up))
@@ -270,11 +278,11 @@ class EndpointSessionDb(initial: EndpointPublishSnapshot, dataDef: DataStreamSou
       case (path, state) => processOutputStatusStateUpdate(path, state).map(up => (path, up))
     }.toVector
 
-    Result(infoUpdateOpt, valueUpdates, outputUpdates)
+    Result(setUpdate, infoUpdateOpt, valueUpdates, outputUpdates)
   }
 
   def processUpdates(infoUpdateOpt: Option[EndpointDescriptorRecord], dataUpdates: Seq[(Path, DataValueUpdate)], outputUpdates: Seq[(Path, PublisherOutputValueStatus)]): Result = {
-    val infoResultOpt = infoUpdateOpt.flatMap(processInfoUpdate)
+    val (infoResultOpt, setUpdate) = infoUpdateOpt.map(processInfoUpdate).getOrElse(None, None)
 
     val processedData = dataUpdates.flatMap {
       case (path, dvu) => processDataValueUpdate(path, dvu).map(up => (path, up))
@@ -284,7 +292,7 @@ class EndpointSessionDb(initial: EndpointPublishSnapshot, dataDef: DataStreamSou
       case (path, state) => processOutputStatusStateUpdate(path, state).map(up => (path, up))
     }.toVector
 
-    Result(infoResultOpt, processedData, processedOutputs)
+    Result(setUpdate, infoResultOpt, processedData, processedOutputs)
   }
 
 }
