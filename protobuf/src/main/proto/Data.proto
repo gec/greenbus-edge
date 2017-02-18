@@ -169,8 +169,21 @@ message EndpointDescriptor {
     repeated OutputKeyValue output_key_set = 4;
 }
 
+message EndpointSetEntry {
+    EndpointId endpointId = 1;
+    repeated IndexKeyValue indexes = 2;
+}
+
+message EndpointSetSnapshot {
+    repeated EndpointSetEntry entries = 1;
+}
+
 message EndpointSetNotification {
-    bool placeholder = 1;
+    Path prefix = 1;
+    EndpointSetSnapshot snapshot = 2; //optional
+    repeated EndpointSetEntry added = 3;
+    repeated EndpointSetEntry modified = 4;
+    repeated EndpointId removed = 5;
 }
 
 message EndpointDescriptorNotification {

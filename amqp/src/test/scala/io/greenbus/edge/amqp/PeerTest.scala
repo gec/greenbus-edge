@@ -55,6 +55,7 @@ object ClientTest extends LazyLogging {
     val id = testEndpointId
 
     val params = ClientSubscriptionParams(
+      endpointSetPrefixes = Seq(Path(Seq())),
       infoSubscriptions = Seq(id),
       dataSubscriptions = Seq(EndpointPath(id, Path("key01")), EndpointPath(id, Path("key02"))),
       outputSubscriptions = Seq(EndpointPath(id, Path("outKey01")), EndpointPath(id, Path("outKey02"))))

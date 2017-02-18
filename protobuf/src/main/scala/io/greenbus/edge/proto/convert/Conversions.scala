@@ -329,12 +329,60 @@ object Conversions {
     }
   }
 
+  def toProto(obj: edge.EndpointSetEntry): proto.EndpointSetEntry = {
+    val b = proto.EndpointSetEntry.newBuilder()
+    b.setEndpointId(toProto(obj.endpointId))
+    obj.indexes.map(toProto).foreach(b.addIndexes)
+    b.build()
+  }
+
+  def fromProto(msg: proto.EndpointSetEntry): Either[String, edge.EndpointSetEntry] = {
+    if (msg.hasEndpointId) {
+      for {
+        id <- fromProto(msg.getEndpointId)
+        indexes <- rightSequence(msg.getIndexesList.map(fromProto))
+      } yield {
+        edge.EndpointSetEntry(id, indexes.toMap)
+      }
+    } else {
+      Left("EndpointSetEntry missing endpoint id")
+    }
+  }
+
+  def toProto(obj: edge.EndpointSetSnapshot): proto.EndpointSetSnapshot = {
+    val b = proto.EndpointSetSnapshot.newBuilder()
+    obj.entries.map(toProto).foreach(b.addEntries)
+    b.build()
+  }
+  def fromProto(msg: proto.EndpointSetSnapshot): Either[String, edge.EndpointSetSnapshot] = {
+    rightSequence(msg.getEntriesList.map(fromProto)).map(r => edge.EndpointSetSnapshot(r))
+  }
+
   def toProto(obj: edge.EndpointSetNotification): proto.EndpointSetNotification = {
-    proto.EndpointSetNotification.newBuilder().build()
+    val b = proto.EndpointSetNotification.newBuilder()
+    b.setPrefix(toProto(obj.prefix))
+    obj.snapshotOpt.map(toProto).foreach(b.setSnapshot)
+    obj.added.map(toProto).foreach(b.addAdded)
+    obj.modified.map(toProto).foreach(b.addModified)
+    obj.removed.map(toProto).foreach(b.addRemoved)
+    b.build()
   }
   def fromProto(msg: proto.EndpointSetNotification): Either[String, edge.EndpointSetNotification] = {
-    ???
-    //Right(edge.EndpointSetNotification(None, Seq()))
+    if (msg.hasPrefix) {
+      val snapEither = if (msg.hasSnapshot) fromProto(msg.getSnapshot).map(r => Some(r)) else Right(None)
+
+      for {
+        prefix <- fromProto(msg.getPrefix)
+        snap <- snapEither
+        added <- rightSequence(msg.getAddedList.map(fromProto))
+        modified <- rightSequence(msg.getModifiedList.map(fromProto))
+        removed <- rightSequence(msg.getRemovedList.map(fromProto))
+      } yield {
+        edge.EndpointSetNotification(prefix, snap, added, modified, removed)
+      }
+    } else {
+      Left("EndpointSetNotification missing prefix")
+    }
   }
 
   def toProto(obj: (edge.Path, edge.IndexableValue)): proto.IndexKeyValue = {
