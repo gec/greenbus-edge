@@ -205,6 +205,24 @@ object Conversions {
     }
   }
 
+  def toProto(obj: edge.DataValueNotification): proto.DataValueNotification = {
+    val b = proto.DataValueNotification.newBuilder()
+    obj match {
+      case st: edge.DataValueState => b.setState(toProto(st))
+      case up: edge.DataValueUpdate => b.setUpdate(toProto(up))
+      case _ => throw new IllegalArgumentException("Data value notification unrecognized: " + obj)
+    }
+    b.build()
+  }
+  def fromProto(msg: proto.DataValueNotification): Either[String, edge.DataValueNotification] = {
+    msg.getNotificationsCase match {
+      case proto.DataValueNotification.NotificationsCase.STATE => fromProto(msg.getState)
+      case proto.DataValueNotification.NotificationsCase.UPDATE => fromProto(msg.getUpdate)
+      case proto.DataValueNotification.NotificationsCase.NOTIFICATIONS_NOT_SET =>
+        Left("DataValueNotification type unrecognized")
+    }
+  }
+
   def toProto(obj: edge.DataKeyDescriptor): proto.DataKeyDescriptor = {
     val b = proto.DataKeyDescriptor.newBuilder()
     obj.indexes.map(toProto).foreach(b.addIndexes)
@@ -504,14 +522,6 @@ object Conversions {
     } else {
       Left("EndpointDescriptorNotification missing id or descriptor")
     }
-  }
-
-  def toProto(obj: edge.DataValueNotification): proto.DataValueNotification = {
-    val b = proto.DataValueNotification.newBuilder()
-    b.build()
-  }
-  def fromProto(msg: proto.DataValueNotification): Either[String, edge.DataValueNotification] = {
-    Right(SequencedValue(0, ValueString("fixme")))
   }
 
   def toProto(obj: edge.OutputValueStatus): proto.OutputValueStatus = {
@@ -1176,5 +1186,13 @@ object Test {
     val msg = ClientToServerMessage.newBuilder().putSubscriptionsAdded(0, proto.ClientSubscriptionParams.newBuilder().addEndpointSetPrefix(proto.Path.newBuilder().addPart("part")).build())
     println(msg)
     println(printer.print(msg))
+
+    val path = proto.EndpointPath.newBuilder()
+      .setEndpointId(proto.EndpointId.newBuilder().setNamedId(proto.NamedEndpointId.newBuilder().setName("ESS1")))
+      .setKey(proto.Path.newBuilder().addPart("OutputPower").build())
+      .build()
+
+    println(path)
+    println(printer.print(path))
   }
 }
