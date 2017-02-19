@@ -25,6 +25,7 @@ import com.google.protobuf.{ ByteString, Message }
 import com.google.protobuf.util.JsonFormat
 import io.greenbus.edge._
 import io.greenbus.edge
+import io.greenbus.edge.proto.ClientToServerMessage
 
 import scala.collection.JavaConversions._
 
@@ -1172,5 +1173,8 @@ object Test {
     //    println(printer.print(cdouble))
     //    println(printer.print(cbool))
 
+    val msg = ClientToServerMessage.newBuilder().putSubscriptionsAdded(0, proto.ClientSubscriptionParams.newBuilder().addEndpointSetPrefix(proto.Path.newBuilder().addPart("part")).build())
+    println(msg)
+    println(printer.print(msg))
   }
 }

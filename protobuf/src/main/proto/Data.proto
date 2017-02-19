@@ -307,6 +307,18 @@ message ClientOutputResponseMessage {
     map<uint64, OutputResult> results = 1;
 }
 
+message ClientToServerMessage {
+    map<uint64, ClientSubscriptionParams> subscriptions_added = 1;
+    repeated uint64 subscriptions_removed = 2;
+
+    ClientOutputRequestMessage output_request = 5;
+}
+message ServerToClientMessage {
+    map<uint64, ClientSubscriptionNotification> subscription_notification = 1;
+    ClientOutputResponseMessage output_response = 5;
+}
+
+
 message SampleValue {
     oneof value_types {
         float float_value = 1;
