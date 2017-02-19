@@ -250,7 +250,7 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
   def onPeerInputChannelClosed() = ???
 
   def onClientPublish(id: EndpointPublisherId, batch: EndpointPublishMessage, promise: Promise[Boolean]): Unit = {
-    logger.info("got client publish: " + batch)
+    logger.debug("got client publish: " + batch)
     handleBatchPublish(id.sourceId, id.sessionId, id.endpointId, batch)
     promise.success(true)
   }
