@@ -76,7 +76,7 @@ case class ClientEndpointPublisherDesc(
   outputEntries: Map[Path, OutputEntry])
 
 class BatteryPublisher(b: EndpointBuilder) {
-  b.addIndexes(Map(Path("index1") -> ValueString("indexed")))
+  b.addIndexes(Map(Path("index1") -> ValueSimpleString("indexed")))
   b.addMetadata(Map(Path("metadata") -> ValueString("informative")))
 }
 

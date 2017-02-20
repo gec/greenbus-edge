@@ -43,14 +43,14 @@ object PublisherCommon {
       Path("key01") -> LatestKeyValueEntry(
         ValueString("the current value"),
         MetadataDesc(
-          Map(Path("keyIndex01") -> ValueString("a string")),
+          Map(Path("keyIndex01") -> ValueSimpleString("a string")),
           Map(Path("keyMeta01") -> ValueBool(false)))))
 
     val timeSeries = Map(
       Path("key02") -> TimeSeriesValueEntry(
         TimeSeriesSample(System.currentTimeMillis(), ValueDouble(3.14 * n)),
         MetadataDesc(
-          Map(Path("keyIndex02") -> ValueString("a string 2")),
+          Map(Path("keyIndex02") -> ValueSimpleString("a string 2")),
           Map(Path("keyMeta02") -> ValueBool(false)))))
 
     ClientEndpointPublisherDesc(indexes, meta, latestKvs, timeSeries, Map())

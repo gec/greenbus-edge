@@ -87,6 +87,7 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
   }
 
   def handleClientOutputValueRequest(outputProxy: ClientOutputProxy, message: ClientOutputRequestMessage, promise: Promise[Boolean]): Unit = {
+    logger.debug("handleClientOutputValueRequest" + message)
     message.requests.foreach { req =>
       val key = req.key
       val requestSessionOpt = req.value.sessionOpt

@@ -340,8 +340,8 @@ message IndexableValue {
         sint64 sint64_value = 5;
         uint64 uint64_value = 6;
         bool bool_value = 7;
-        StringValue string_value = 8;
-        BytesValue bytes_value = 9;
+        string string_value = 8;
+        bytes bytes_value = 9;
         UUID uuid_value = 10;
     }
 }
@@ -358,8 +358,10 @@ message Value {
         StringValue string_value = 8;
         BytesValue bytes_value = 9;
         UUID uuid_value = 10;
-        ArrayValue array_value = 11;
-        ObjectValue object_value = 12;
+        Path path_value = 11;
+        EndpointPath endpoint_path_value = 12;
+        ArrayValue array_value = 13;
+        ObjectValue object_value = 14;
     }
 }
 
