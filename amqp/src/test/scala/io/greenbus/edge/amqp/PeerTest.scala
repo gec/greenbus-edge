@@ -57,7 +57,7 @@ object ClientTest extends LazyLogging {
     val params = ClientSubscriptionParams(
       endpointSetPrefixes = Seq(Path(Seq())),
       infoSubscriptions = Seq(id),
-      dataSubscriptions = Seq(EndpointPath(id, Path("key01")), EndpointPath(id, Path("key02"))),
+      dataSubscriptions = Seq(EndpointPath(id, Path("key01")), EndpointPath(id, Path("key02")), EndpointPath(id, Path("key03")), EndpointPath(id, Path("key04"))),
       outputSubscriptions = Seq(EndpointPath(id, Path("outKey01")), EndpointPath(id, Path("outKey02"))))
 
     val subFut = conn.openSubscription(params)
@@ -121,6 +121,20 @@ object PublisherTest extends LazyLogging {
       }
     }
 
+    var i = 0
+    while (true) {
+
+      pub.eventStreams.get(Path("key03")).foreach(_.push(TopicEvent(Path(Seq("my", "topic")), Some(ValueString("a string " + i)))))
+
+      pub.activeSetStreams.get(Path("key04")).foreach { h =>
+        h.add(ValueString("blah " + i))
+      }
+
+      pub.flush()
+      Thread.sleep(2000)
+      i += 1
+    }
+
     System.in.read()
   }
 
@@ -163,6 +177,12 @@ object PublisherCommon {
           Map(Path("keyIndex02") -> ValueSimpleString("a string 2")),
           Map(Path("keyMeta02") -> ValueBool(false)))))
 
-    ClientEndpointPublisherDesc(indexes, meta, latestKvs, timeSeries, Map())
+    val eventTopic = Map(
+      Path("key03") -> EventEntry(MetadataDesc(Map(), Map())))
+
+    val activeSet = Map(
+      Path("key04") -> ActiveSetConfigEntry(MetadataDesc(Map(), Map())))
+
+    ClientEndpointPublisherDesc(indexes, meta, latestKvs, timeSeries, eventTopic, activeSet, Map())
   }
 }

@@ -81,7 +81,7 @@ class EndpointPublisherConnectionImpl(
     val fut = channel.sender.send(obj)
     fut.onFailure {
       case ex =>
-        logger.warn(s"Channel send failure for $id, closing")
+        logger.warn(s"Channel send failure for $id, closing: " + ex)
         eventThread.marshal {
           handleChannelClose()
         }

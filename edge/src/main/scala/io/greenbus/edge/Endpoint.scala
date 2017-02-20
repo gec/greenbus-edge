@@ -195,7 +195,7 @@ class EndpointSessionDb(initial: EndpointPublishSnapshot, dataDef: DataStreamSou
   private var infoSequence: Long = initial.endpoint.sequence
   private var info: EndpointDescriptor = initial.endpoint.descriptor
   private var validDataKeys: Set[Path] = initial.endpoint.descriptor.dataKeySet.keySet
-  private var dataMap: Map[Path, DataStreamDb] = initial.data.mapValues(dataDef.streamForState)
+  private var dataMap: Map[Path, DataStreamDb] = initial.data.mapValues(dataDef.streamForState).toVector.toMap // TODO: OMFG without toVector this calls streamForState every time. Odersky you are killing me
   private var validOutputKeys: Set[Path] = initial.endpoint.descriptor.outputKeySet.keySet
   private var outputStatusMap: Map[Path, PublisherOutputValueStatus] = initial.outputStatus
 
@@ -228,6 +228,8 @@ class EndpointSessionDb(initial: EndpointPublishSnapshot, dataDef: DataStreamSou
   private def recalcValidKeys(info: EndpointDescriptor): Unit = {
     validDataKeys = info.dataKeySet.keySet
     dataMap = dataMap.filterKeys(validDataKeys.contains)
+    validOutputKeys = info.outputKeySet.keySet
+    outputStatusMap = outputStatusMap.filterKeys(validOutputKeys.contains)
   }
 
   private def processDataStateUpdate(path: Path, state: DataValueState): Option[DataValueUpdate] = {
@@ -235,7 +237,8 @@ class EndpointSessionDb(initial: EndpointPublishSnapshot, dataDef: DataStreamSou
       case Some(db) => db.processStateUpdate(state)
       case None => {
         if (validDataKeys.contains(path)) {
-          dataMap += (path -> dataDef.streamForState(state))
+          val db: DataStreamDb = dataDef.streamForState(state)
+          dataMap += (path -> db)
           Some(state.asFirstUpdate)
         } else {
           None

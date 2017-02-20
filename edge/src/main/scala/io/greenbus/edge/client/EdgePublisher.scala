@@ -30,6 +30,8 @@ trait EndpointPublisher {
 
   def keyValueStreams: Map[Path, Sink[Value]]
   def timeSeriesStreams: Map[Path, Sink[TimeSeriesSample]]
+  def eventStreams: Map[Path, Sink[TopicEvent]]
+  def activeSetStreams: Map[Path, ActiveSetHandle]
   def outputStreams: Map[Path, OutputInteraction]
 
   def flush(): Unit
@@ -45,7 +47,7 @@ trait EndpointPublisher {
 case class UserOutputRequest(key: Path, outputRequest: PublisherOutputParams, resultAsync: OutputResult => Unit)
 case class UserOutputRequestBatch(requests: Seq[UserOutputRequest])
 
-trait EndpointBuilder {
+/*trait EndpointBuilder {
 
   def addIndexes(indexes: Map[Path, IndexableValue])
   def addMetadata(metadata: Map[Path, Value])
@@ -59,12 +61,23 @@ trait EndpointBuilder {
   def addOutput(key: Path, initialValue: PublisherOutputValueStatus, indexes: Map[Path, IndexableValue], metadata: Map[Path, Value]): (Sink[PublisherOutputValueStatus], Source[PublisherOutputParams])
 
   def build(): EndpointPublisher
+}*/
+
+/*class BatteryPublisher(b: EndpointBuilder) {
+  b.addIndexes(Map(Path("index1") -> ValueSimpleString("indexed")))
+  b.addMetadata(Map(Path("metadata") -> ValueString("informative")))
 }
+
+trait EdgeSession {
+  def endpointBuilder(): EndpointBuilder
+}*/
 
 case class MetadataDesc(indexes: Map[Path, IndexableValue], metadata: Map[Path, Value])
 
 case class LatestKeyValueEntry(initialValue: Value, meta: MetadataDesc)
 case class TimeSeriesValueEntry(initialValue: TimeSeriesSample, meta: MetadataDesc)
+case class EventEntry(meta: MetadataDesc)
+case class ActiveSetConfigEntry(meta: MetadataDesc)
 case class OutputEntry(initialValue: PublisherOutputValueStatus, meta: MetadataDesc)
 
 // TODO: this was probably a waste, can go to normal data infos, don't need initial values in client publisher?
@@ -73,16 +86,9 @@ case class ClientEndpointPublisherDesc(
   metadata: Map[Path, Value],
   latestKeyValueEntries: Map[Path, LatestKeyValueEntry],
   timeSeriesValueEntries: Map[Path, TimeSeriesValueEntry],
+  eventEntries: Map[Path, EventEntry],
+  activeSetEntries: Map[Path, ActiveSetConfigEntry],
   outputEntries: Map[Path, OutputEntry])
-
-class BatteryPublisher(b: EndpointBuilder) {
-  b.addIndexes(Map(Path("index1") -> ValueSimpleString("indexed")))
-  b.addMetadata(Map(Path("metadata") -> ValueString("informative")))
-}
-
-trait EdgeSession {
-  def endpointBuilder(): EndpointBuilder
-}
 
 trait ClientDataStreamDb {
   def snapshot(): DataValueState
@@ -138,6 +144,124 @@ class LatestSequenceDb(initial: Value) extends UpdateableClientDb[Value] {
   }
 }
 
+trait ActiveSetHandle {
+  def add(v: Value): Long
+  def replace(replaceId: Long, v: Value): Long
+  def remove(id: Long): Unit
+}
+
+class ActiveSetHandleDb() extends ClientDataStreamDb with ActiveSetHandle {
+  private val mutex = new Object
+  private var idSeq: Long = 0
+  private def nextId(): Long = {
+    val seq = idSeq
+    idSeq += 1
+    seq
+  }
+  private var sequence: Long = 0
+  private def nextSequence(): Long = {
+    val seq = sequence
+    sequence += 1
+    seq
+  }
+  //private var entries: Map[Long, Option[Value]]
+  private var entries = Map.empty[Long, Value]
+  private var added = Vector.empty[(Long, Value)]
+  private var removed = Vector.empty[Long]
+
+  private var signalOpt = Option.empty[() => Unit]
+
+  def setSignal(signalDirty: () => Unit) {
+    signalOpt = Some(signalDirty)
+  }
+
+  def add(v: Value): Long = {
+    mutex.synchronized {
+      val id = nextId()
+      added = added :+ ((id, v))
+      entries += (id -> v)
+      signalOpt.foreach(f => f())
+      id
+    }
+  }
+
+  def replace(replaceId: Long, v: Value): Long = {
+    mutex.synchronized {
+      if (entries.contains(replaceId)) {
+        removed = removed :+ replaceId
+      }
+      val id = nextId()
+      added = added :+ ((id, v))
+      entries += (id -> v)
+      signalOpt.foreach(f => f())
+      id
+    }
+  }
+
+  def remove(id: Long): Unit = {
+    mutex.synchronized {
+      if (entries.contains(id)) {
+        removed = removed :+ id
+        signalOpt.foreach(f => f())
+      }
+    }
+  }
+
+  def snapshot(): DataValueState = {
+    mutex.synchronized {
+      val seq = if (added.nonEmpty || removed.nonEmpty) {
+        added = Vector.empty[(Long, Value)]
+        removed = Vector.empty[Long]
+        nextSequence()
+      } else {
+        sequence
+      }
+
+      val elems = entries.map { case (k, v) => ActiveSetEntry(k, Some(v)) }.toVector
+      ActiveSetSnapshot(elems.sortBy(_.id), seq)
+    }
+  }
+
+  def dequeue(): DataValueUpdate = {
+    mutex.synchronized {
+      if (added.nonEmpty || removed.nonEmpty) {
+        val seq = nextSequence()
+        val addElems = added.map { case (k, v) => ActiveSetEntry(k, Some(v)) }
+        val rem = removed
+        val result = ActiveSetUpdate(addElems, rem, seq)
+
+        added = Vector.empty[(Long, Value)]
+        removed = Vector.empty[Long]
+        result
+
+      } else {
+        ActiveSetUpdate(Seq(), Seq(), sequence)
+      }
+    }
+  }
+}
+
+class EventStreamDb extends UpdateableClientDb[TopicEvent] {
+  private var queue = Vector.empty[TopicEvent]
+
+  def process(obj: TopicEvent): Boolean = {
+    queue = queue :+ obj
+    true
+  }
+
+  def snapshot(): DataValueState = {
+    val state = TopicEventBatch(queue)
+    queue = Vector.empty[TopicEvent]
+    state
+  }
+
+  def dequeue(): DataValueUpdate = {
+    val state = TopicEventBatch(queue)
+    queue = Vector.empty[TopicEvent]
+    state
+  }
+}
+
 class OutputValueStatusDb(initial: Value) extends UpdateableClientDb[Value] {
   private var sequence: Long = 1
   private var latest: PublisherOutputValueStatus = PublisherOutputValueStatus(0, Some(initial))
@@ -179,6 +303,22 @@ class EndpointPublisherImpl(
   }
   private val timeSeriesSinks: Map[Path, Sink[TimeSeriesSample]] = timeSeriesDbs.map { case (path, db) => (path, sinkForDb(path, db)) }
 
+  private val eventDbs: Map[Path, EventStreamDb] = {
+    endpointDesc.eventEntries.mapValues(entry => new EventStreamDb)
+  }
+
+  private val eventSinks: Map[Path, Sink[TopicEvent]] = eventDbs.map { case (path, db) => (path, sinkForDb(path, db)) }
+
+  private val activeSetDbs: Map[Path, ActiveSetHandleDb] = {
+    endpointDesc.activeSetEntries.map {
+      case (path, entry) =>
+        val db = new ActiveSetHandleDb
+        def signalDirty(): Unit = { eventThread.marshal { dirtyDataSet += (path -> db) } }
+        db.setSignal(signalDirty)
+        (path, db)
+    }
+  }
+
   private val outs = Map.empty[Path, OutputInteraction]
 
   private val endpointInfo = {
@@ -186,7 +326,9 @@ class EndpointPublisherImpl(
       endpointDesc.indexes,
       endpointDesc.metadata,
       endpointDesc.latestKeyValueEntries.mapValues(v => LatestKeyValueDescriptor(v.meta.indexes, v.meta.metadata)) ++
-        endpointDesc.timeSeriesValueEntries.mapValues(v => TimeSeriesValueDescriptor(v.meta.indexes, v.meta.metadata)),
+        endpointDesc.timeSeriesValueEntries.mapValues(v => TimeSeriesValueDescriptor(v.meta.indexes, v.meta.metadata)) ++
+        endpointDesc.eventEntries.mapValues(v => EventTopicValueDescriptor(v.meta.indexes, v.meta.metadata)) ++
+        endpointDesc.activeSetEntries.mapValues(v => ActiveSetValueDescriptor(v.meta.indexes, v.meta.metadata)),
       endpointDesc.outputEntries.mapValues(v => OutputKeyDescriptor(v.meta.indexes, v.meta.metadata)))
   }
 
@@ -197,7 +339,10 @@ class EndpointPublisherImpl(
   private def buildSnapshot(): EndpointPublishMessage = {
     val record = EndpointDescriptorRecord(0, endpointId, endpointInfo)
 
-    val dataSnap = keyValueDbs.mapValues(_.snapshot()) ++ timeSeriesDbs.mapValues(_.snapshot())
+    val dataSnap = keyValueDbs.mapValues(_.snapshot()) ++
+      timeSeriesDbs.mapValues(_.snapshot()) ++
+      eventDbs.mapValues(_.snapshot()) ++
+      activeSetDbs.mapValues(_.snapshot())
 
     val snapshot = EndpointPublishSnapshot(record, dataSnap, Map())
     EndpointPublishMessage(Some(snapshot), None, Seq(), Seq())
@@ -225,6 +370,7 @@ class EndpointPublisherImpl(
       val dataUpdates = dirtyDataSet.map {
         case (path, db) => (path, db.dequeue())
       }.toVector
+      dirtyDataSet = Set.empty[(Path, ClientDataStreamDb)]
       val message = EndpointPublishMessage(None, None, dataUpdates, Seq())
       dataDistributor.update(message)
     }
@@ -241,6 +387,10 @@ class EndpointPublisherImpl(
   def keyValueStreams: Map[Path, Sink[Value]] = keyValueSinks
 
   def timeSeriesStreams: Map[Path, Sink[TimeSeriesSample]] = timeSeriesSinks
+
+  def eventStreams: Map[Path, Sink[TopicEvent]] = eventSinks
+
+  def activeSetStreams: Map[Path, ActiveSetHandle] = activeSetDbs
 
   def outputStreams: Map[Path, OutputInteraction] = outs
 

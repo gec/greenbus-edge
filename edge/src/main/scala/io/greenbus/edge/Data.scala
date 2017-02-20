@@ -109,14 +109,6 @@ trait DataKeyDescriptor {
   def metadata: Map[Path, Value]
 }
 
-case class LatestKeyValueDescriptor(indexes: Map[Path, IndexableValue], metadata: Map[Path, Value]) extends DataKeyDescriptor
-case class TimeSeriesValueDescriptor(indexes: Map[Path, IndexableValue], metadata: Map[Path, Value]) extends DataKeyDescriptor
-case class UnrecognizedValueDescriptor(indexes: Map[Path, IndexableValue], metadata: Map[Path, Value]) extends DataKeyDescriptor
-
-/*case class DataKeyInfo(
-  indexes: Map[Path, IndexableValue],
-  metadata: Map[Path, Value])*/
-
 case class OutputKeyDescriptor(
   indexes: Map[Path, IndexableValue],
   metadata: Map[Path, Value])

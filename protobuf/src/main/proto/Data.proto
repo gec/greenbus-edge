@@ -22,7 +22,6 @@ package greenbus.client;
 
 
 option java_package = "io.greenbus.edge.proto";
-//option java_outer_classname = "EdgeProto";
 option java_multiple_files = true;
 
 
@@ -49,25 +48,78 @@ message TimeSeriesState {
     repeated SequencedTimeSeriesValue values = 1;
 }
 
-
-// TODO: make these
-message DataValueNotification {
-    oneof notifications {
-        DataValueState state = 1;
-        DataValueUpdate update = 2;
-    }
+message TopicEvent {
+    Path topic = 1;
+    Value value = 2;
 }
+
+message TopicEventBatch {
+    repeated TopicEvent events = 1;
+}
+
+message ActiveSetEntry {
+    uint64 id = 1;
+    Value value = 2;
+}
+
+message ActiveSetSnapshot {
+    repeated ActiveSetEntry entries = 1;
+    uint64 sequence = 2;
+}
+message ActiveSetUpdate {
+    repeated ActiveSetEntry added = 1;
+    repeated uint64 removed = 2;
+    uint64 sequence = 3;
+}
+
+
 
 message DataValueState {
     oneof state {
         SequencedValue sequenced_value_state = 1;
         TimeSeriesState time_series_state = 2;
+        TopicEventBatch topic_event_state = 3;
+        ActiveSetSnapshot active_set_state = 4;
     }
 }
 message DataValueUpdate {
     oneof update {
         SequencedValue sequenced_value_update = 1;
         TimeSeriesUpdate time_series_update = 2;
+        TopicEventBatch topic_event_update = 3;
+        ActiveSetUpdate active_set_update = 4;
+    }
+}
+
+message LatestKeyValueDescriptor {
+    bool placeholder = 1;
+}
+message TimeSeriesValueDescriptor {
+    bool placeholder = 1;
+}
+message EventTopicValueDescriptor {
+    bool placeholder = 1;
+}
+message ActiveSetValueDescriptor {
+    bool placeholder = 1;
+}
+
+message DataKeyDescriptor {
+    repeated IndexKeyValue indexes = 1;
+    repeated MetadataKeyValue metadata = 2;
+
+    oneof value_types {
+        LatestKeyValueDescriptor latest_key_value = 3;
+        TimeSeriesValueDescriptor time_series_value = 4;
+        EventTopicValueDescriptor event_topic_value = 5;
+        ActiveSetValueDescriptor active_set_value = 6;
+    }
+}
+
+message DataValueNotification {
+    oneof notifications {
+        DataValueState state = 1;
+        DataValueUpdate update = 2;
     }
 }
 
@@ -121,23 +173,6 @@ message PersistenceSessionId {
 
 message SessionId {
     PersistenceSessionId persistence_id = 1;
-}
-
-message LatestKeyValueDescriptor {
-    bool placeholder = 1;
-}
-message TimeSeriesValueDescriptor {
-    bool placeholder = 1;
-}
-
-message DataKeyDescriptor {
-    repeated IndexKeyValue indexes = 1;
-    repeated MetadataKeyValue metadata = 2;
-
-    oneof value_types {
-        LatestKeyValueDescriptor latest_key_value = 3;
-        TimeSeriesValueDescriptor time_series_value = 4;
-    }
 }
 
 message OutputKeyDescriptor {

@@ -53,7 +53,7 @@ object PublisherCommon {
           Map(Path("keyIndex02") -> ValueSimpleString("a string 2")),
           Map(Path("keyMeta02") -> ValueBool(false)))))
 
-    ClientEndpointPublisherDesc(indexes, meta, latestKvs, timeSeries, Map())
+    ClientEndpointPublisherDesc(indexes, meta, latestKvs, timeSeries, Map(), Map(), Map())
   }
 }
 

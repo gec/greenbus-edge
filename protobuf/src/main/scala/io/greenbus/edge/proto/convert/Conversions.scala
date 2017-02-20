@@ -166,11 +166,84 @@ object Conversions {
       .map(seq => edge.TimeSeriesUpdate(seq))
   }
 
+  def toProto(obj: edge.TopicEvent): proto.TopicEvent = {
+    val b = proto.TopicEvent.newBuilder()
+    b.setTopic(toProto(obj.topic))
+    obj.data.map(ValueConversions.toProto).foreach(b.setValue)
+    b.build()
+  }
+  def fromProto(msg: proto.TopicEvent): Either[String, edge.TopicEvent] = {
+    if (msg.hasTopic) {
+      for {
+        topic <- fromProto(msg.getTopic)
+        vOpt <- if (msg.hasValue) ValueConversions.fromProto(msg.getValue).map(r => Some(r)) else Right(None)
+      } yield {
+        edge.TopicEvent(topic, vOpt)
+      }
+    } else {
+      Left("TopicEvent missing topic")
+    }
+  }
+
+  def toProto(obj: edge.TopicEventBatch): proto.TopicEventBatch = {
+    val b = proto.TopicEventBatch.newBuilder()
+    obj.events.map(toProto).foreach(b.addEvents)
+    b.build()
+  }
+  def fromProto(msg: proto.TopicEventBatch): Either[String, edge.TopicEventBatch] = {
+    rightSequence(msg.getEventsList.map(fromProto)).map(seq => edge.TopicEventBatch(seq))
+  }
+
+  def toProto(obj: edge.ActiveSetEntry): proto.ActiveSetEntry = {
+    val b = proto.ActiveSetEntry.newBuilder()
+    b.setId(obj.id)
+    obj.value.map(ValueConversions.toProto).foreach(b.setValue)
+    b.build()
+  }
+  def fromProto(msg: proto.ActiveSetEntry): Either[String, edge.ActiveSetEntry] = {
+    for {
+      vOpt <- if (msg.hasValue) ValueConversions.fromProto(msg.getValue).map(r => Some(r)) else Right(None)
+    } yield {
+      edge.ActiveSetEntry(msg.getId, vOpt)
+    }
+  }
+
+  def toProto(obj: edge.ActiveSetSnapshot): proto.ActiveSetSnapshot = {
+    val b = proto.ActiveSetSnapshot.newBuilder()
+    obj.set.map(toProto).foreach(b.addEntries)
+    b.setSequence(obj.sequence)
+    b.build()
+  }
+  def fromProto(msg: proto.ActiveSetSnapshot): Either[String, edge.ActiveSetSnapshot] = {
+    for {
+      seq <- rightSequence(msg.getEntriesList.map(fromProto))
+    } yield {
+      edge.ActiveSetSnapshot(seq, msg.getSequence)
+    }
+  }
+
+  def toProto(obj: edge.ActiveSetUpdate): proto.ActiveSetUpdate = {
+    val b = proto.ActiveSetUpdate.newBuilder()
+    obj.added.map(toProto).foreach(b.addAdded)
+    obj.removed.foreach(b.addRemoved)
+    b.setSequence(obj.sequence)
+    b.build()
+  }
+  def fromProto(msg: proto.ActiveSetUpdate): Either[String, edge.ActiveSetUpdate] = {
+    for {
+      added <- rightSequence(msg.getAddedList.map(fromProto))
+    } yield {
+      edge.ActiveSetUpdate(added, msg.getRemovedList.map(_.toLong).toVector, msg.getSequence)
+    }
+  }
+
   def toProto(obj: edge.DataValueState): proto.DataValueState = {
     val b = proto.DataValueState.newBuilder()
     obj match {
       case v: edge.SequencedValue => b.setSequencedValueState(toProto(v))
       case v: edge.TimeSeriesState => b.setTimeSeriesState(toProto(v))
+      case v: edge.TopicEventBatch => b.setTopicEventState(toProto(v))
+      case v: edge.ActiveSetSnapshot => b.setActiveSetState(toProto(v))
       case _ => throw new IllegalArgumentException("Data value state unrecognized: " + obj)
     }
     b.build()
@@ -181,6 +254,10 @@ object Conversions {
         fromProto(msg.getSequencedValueState)
       case proto.DataValueState.StateCase.TIME_SERIES_STATE =>
         fromProto(msg.getTimeSeriesState)
+      case proto.DataValueState.StateCase.TOPIC_EVENT_STATE =>
+        fromProto(msg.getTopicEventState)
+      case proto.DataValueState.StateCase.ACTIVE_SET_STATE =>
+        fromProto(msg.getActiveSetState)
       case proto.DataValueState.StateCase.STATE_NOT_SET =>
         Left("DataValueState type unrecognized")
     }
@@ -190,6 +267,8 @@ object Conversions {
     obj match {
       case v: edge.SequencedValue => b.setSequencedValueUpdate(toProto(v))
       case v: edge.TimeSeriesUpdate => b.setTimeSeriesUpdate(toProto(v))
+      case v: edge.TopicEventBatch => b.setTopicEventUpdate(toProto(v))
+      case v: edge.ActiveSetUpdate => b.setActiveSetUpdate(toProto(v))
       case _ => throw new IllegalArgumentException("Data value state unrecognized: " + obj)
     }
     b.build()
@@ -200,6 +279,10 @@ object Conversions {
         fromProto(msg.getSequencedValueUpdate)
       case proto.DataValueUpdate.UpdateCase.TIME_SERIES_UPDATE =>
         fromProto(msg.getTimeSeriesUpdate)
+      case proto.DataValueUpdate.UpdateCase.TOPIC_EVENT_UPDATE =>
+        fromProto(msg.getTopicEventUpdate)
+      case proto.DataValueUpdate.UpdateCase.ACTIVE_SET_UPDATE =>
+        fromProto(msg.getActiveSetUpdate)
       case proto.DataValueUpdate.UpdateCase.UPDATE_NOT_SET =>
         Left("DataValueState type unrecognized")
     }
@@ -231,6 +314,8 @@ object Conversions {
     obj match {
       case d: edge.LatestKeyValueDescriptor => b.setLatestKeyValue(proto.LatestKeyValueDescriptor.newBuilder().build())
       case d: edge.TimeSeriesValueDescriptor => b.setTimeSeriesValue(proto.TimeSeriesValueDescriptor.newBuilder().build())
+      case d: edge.EventTopicValueDescriptor => b.setEventTopicValue(proto.EventTopicValueDescriptor.newBuilder().build())
+      case d: edge.ActiveSetValueDescriptor => b.setActiveSetValue(proto.ActiveSetValueDescriptor.newBuilder().build())
     }
     b.build()
   }
@@ -245,6 +330,10 @@ object Conversions {
           edge.LatestKeyValueDescriptor(indexes.toMap, metadata.toMap)
         case proto.DataKeyDescriptor.ValueTypesCase.TIME_SERIES_VALUE =>
           edge.TimeSeriesValueDescriptor(indexes.toMap, metadata.toMap)
+        case proto.DataKeyDescriptor.ValueTypesCase.EVENT_TOPIC_VALUE =>
+          edge.EventTopicValueDescriptor(indexes.toMap, metadata.toMap)
+        case proto.DataKeyDescriptor.ValueTypesCase.ACTIVE_SET_VALUE =>
+          edge.ActiveSetValueDescriptor(indexes.toMap, metadata.toMap)
         case _ =>
           edge.UnrecognizedValueDescriptor(indexes.toMap, metadata.toMap)
       }
