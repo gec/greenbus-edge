@@ -18,6 +18,8 @@
  */
 package io.greenbus.edge
 
+import com.typesafe.scalalogging.LazyLogging
+
 trait DataValueNotification
 trait DataValueState extends DataValueNotification {
   def asFirstUpdate: DataValueUpdate
@@ -41,7 +43,143 @@ class DefaultStreamSource extends DataStreamSource {
     state match {
       case st: SequencedValue => new SequencedValueDb(st)
       case st: TimeSeriesState => new TimeSeriesDb(st)
+      case st: TopicEventBatch => new TopicDb
+      case st: ActiveSetSnapshot => new ActiveSetDb(st)
     }
+  }
+}
+
+/*
+
+TODO: future, event and super-sets both subscribable by path prefix
+
+event:
+  - seq
+  - topic: path
+  - payload: value
+
+colfam/activeset/active column set/active super column/working super column family
+
+single:
+  - value set
+  - key-value set? key an indexable value? uint64 autoincr id? map a different kind of active set?
+
+uses:
+  - FEP: endpoint id, endpoint desc, protocol config
+  - MMC sim: name, json config
+
+sim query:
+  subscribe to config_endpoint://pvset
+    - get names/json
+
+super:
+  - path
+  - value set
+
+ */
+
+case class ActiveSetEntry(id: Long, value: Option[Value])
+case class ActiveSetSnapshot(set: Seq[ActiveSetEntry], sequence: Long) extends DataValueState {
+  def asFirstUpdate: DataValueUpdate = {
+    ActiveSetUpdate(set, Seq(), sequence)
+  }
+}
+case class ActiveSetUpdate(added: Seq[ActiveSetEntry], removed: Seq[Long], sequence: Long) extends DataValueUpdate
+
+class ActiveSetDb(start: ActiveSetSnapshot) extends DataStreamDb with LazyLogging {
+
+  private var seq: Long = start.sequence
+  private var entries: Map[Long, Option[Value]] = {
+    start.set.map(e => (e.id, e.value)).toMap
+  }
+
+  private def snapshotDiff(set: Seq[ActiveSetEntry], nextSequence: Long): ActiveSetUpdate = {
+    val currentKeys = entries.keySet
+    val snapKeys = set.map(_.id).toSet
+
+    val removeSet = currentKeys.diff(snapKeys)
+    val addEntries = set.filter(e => !currentKeys.contains(e.id))
+
+    entries = entries.filterKeys(k => !removeSet.contains(k)) ++ addEntries.map(e => (e.id, e.value)).toMap
+
+    ActiveSetUpdate(addEntries, removeSet.toVector, nextSequence)
+  }
+
+  private def computeUpdate(update: ActiveSetUpdate): Unit = {
+    val removeSet = update.removed.toSet
+    entries = entries.filterKeys(k => !removeSet.contains(k)) ++ update.added.map(e => (e.id, e.value)).toMap
+  }
+
+  def processStateUpdate(state: DataValueState): Option[DataValueUpdate] = {
+    state match {
+      case snap: ActiveSetSnapshot => {
+        if (snap.sequence > seq) {
+          seq = snap.sequence
+          Some(snapshotDiff(snap.set, snap.sequence))
+        } else {
+          None
+        }
+      }
+      case _ =>
+        logger.warn("Erroneous state type in ActiveSetDb: " + state)
+        None
+    }
+  }
+
+  def processValueUpdate(update: DataValueUpdate): Option[DataValueUpdate] = {
+    update match {
+      case up: ActiveSetUpdate => {
+        if (up.sequence > seq) {
+          seq = up.sequence
+          computeUpdate(up)
+          Some(up)
+        } else {
+          None
+        }
+      }
+      case _ =>
+        logger.warn("Erroneous state type in ActiveSetDb: " + update)
+        None
+    }
+  }
+
+  def currentSnapshot(requestOpt: Option[DataStateRequest]): DataValueState = {
+    val set = entries.map { case (id, vOpt) => ActiveSetEntry(id, vOpt) }.toVector
+    ActiveSetSnapshot(set, seq)
+  }
+}
+
+// TODO: sequenced
+case class TopicEvent(topic: Path, data: Option[Value])
+
+case class TopicEventBatch(events: Seq[TopicEvent]) extends DataValueUpdate with DataValueState {
+  def asFirstUpdate: DataValueUpdate = this
+}
+
+class TopicDb extends DataStreamDb with LazyLogging {
+
+  // TODO: currently pass-through
+
+  def processStateUpdate(state: DataValueState): Option[DataValueUpdate] = {
+    state match {
+      case b: TopicEventBatch => Some(b)
+      case _ =>
+        logger.warn("Erroneous state type in TopicDb: " + state)
+        None
+    }
+  }
+
+  def processValueUpdate(update: DataValueUpdate): Option[DataValueUpdate] = {
+    update match {
+      case b: TopicEventBatch => Some(b)
+      case _ =>
+        logger.warn("Erroneous update type in TopicDb: " + update)
+        None
+    }
+  }
+
+  def currentSnapshot(requestOpt: Option[DataStateRequest]): DataValueState = {
+    TopicEventBatch(Seq())
   }
 }
 

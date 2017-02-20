@@ -50,13 +50,6 @@ message TimeSeriesState {
 }
 
 
-// TODO: make these
-message DataValueNotification {
-    oneof notifications {
-        DataValueState state = 1;
-        DataValueUpdate update = 2;
-    }
-}
 
 message DataValueState {
     oneof state {
@@ -68,6 +61,30 @@ message DataValueUpdate {
     oneof update {
         SequencedValue sequenced_value_update = 1;
         TimeSeriesUpdate time_series_update = 2;
+    }
+}
+
+message LatestKeyValueDescriptor {
+    bool placeholder = 1;
+}
+message TimeSeriesValueDescriptor {
+    bool placeholder = 1;
+}
+
+message DataKeyDescriptor {
+    repeated IndexKeyValue indexes = 1;
+    repeated MetadataKeyValue metadata = 2;
+
+    oneof value_types {
+        LatestKeyValueDescriptor latest_key_value = 3;
+        TimeSeriesValueDescriptor time_series_value = 4;
+    }
+}
+
+message DataValueNotification {
+    oneof notifications {
+        DataValueState state = 1;
+        DataValueUpdate update = 2;
     }
 }
 
@@ -121,23 +138,6 @@ message PersistenceSessionId {
 
 message SessionId {
     PersistenceSessionId persistence_id = 1;
-}
-
-message LatestKeyValueDescriptor {
-    bool placeholder = 1;
-}
-message TimeSeriesValueDescriptor {
-    bool placeholder = 1;
-}
-
-message DataKeyDescriptor {
-    repeated IndexKeyValue indexes = 1;
-    repeated MetadataKeyValue metadata = 2;
-
-    oneof value_types {
-        LatestKeyValueDescriptor latest_key_value = 3;
-        TimeSeriesValueDescriptor time_series_value = 4;
-    }
 }
 
 message OutputKeyDescriptor {

@@ -65,6 +65,8 @@ case class MetadataDesc(indexes: Map[Path, IndexableValue], metadata: Map[Path, 
 
 case class LatestKeyValueEntry(initialValue: Value, meta: MetadataDesc)
 case class TimeSeriesValueEntry(initialValue: TimeSeriesSample, meta: MetadataDesc)
+case class EventKeyEntry(meta: MetadataDesc)
+case class ActiveSetEntry(initialValue: Seq[Option[Value]])
 case class OutputEntry(initialValue: PublisherOutputValueStatus, meta: MetadataDesc)
 
 // TODO: this was probably a waste, can go to normal data infos, don't need initial values in client publisher?
