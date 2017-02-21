@@ -67,14 +67,6 @@ case class EndpointPath(endpoint: EndpointId, key: Path)
 
 case class EndpointSetEntry(endpointId: EndpointId, indexes: Map[Path, IndexableValue])
 
-/*trait EndpointSetNotification
-case class EndpointSetSnapshot(prefix: Path, entries: Seq[EndpointSetEntry]) extends EndpointSetNotification
-case class EndpointSetChange(
-                              prefix: Path,
-                             added: Seq[EndpointSetEntry],
-                             modified: Seq[EndpointSetEntry],
-                             removed: Seq[EndpointId]) extends EndpointSetNotification*/
-
 case class EndpointSetSnapshot(entries: Seq[EndpointSetEntry])
 
 case class EndpointSetNotification(

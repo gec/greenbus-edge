@@ -28,8 +28,6 @@ case class IndexUpdate[A](specifier: IndexSpecifier, added: Set[A], removed: Set
 abstract class TypedIndexDb[A](endpointDbMgr: EndpointDbMgr) {
   private var activeSets = Map.empty[IndexSpecifier, Set[A]]
   private var elemMap = Map.empty[A, Set[IndexSpecifier]]
-  //protected var ownerMap = Map.empty[]
-  //protected var activeSets = Map.empty[Path, (Option[IndexableValue], Set[A])]
   private var queryToTarget = Map.empty[IndexSpecifier, Set[ClientSubscriberProxy]]
   private var targetToQuery = Map.empty[ClientSubscriberProxy, Set[IndexSpecifier]]
 
@@ -70,10 +68,6 @@ abstract class TypedIndexDb[A](endpointDbMgr: EndpointDbMgr) {
     }
   }
 
-  //protected def buildIndex(specifier: IndexSpecifier): Set[A]
-
-  //def observe(id: EndpointId, desc: EndpointDescriptor): Seq[IndexUpdate[A]]
-
   def addSubscription(specifier: IndexSpecifier, target: ClientSubscriberProxy): Set[A] = {
     queryToTarget.get(specifier) match {
       case None =>
@@ -96,13 +90,6 @@ abstract class TypedIndexDb[A](endpointDbMgr: EndpointDbMgr) {
         built
       case Some(set) => set
     }
-    /*activeSets.get(specifier.key) match {
-      case None =>
-        val built = buildIndex(specifier)
-        activeSets += (specifier.key -> (specifier.valueOpt, built))
-        built
-      case Some((vOpt, set)) => set
-    }*/
   }
 
   def removeTarget(target: ClientSubscriberProxy): Unit = {
@@ -126,13 +113,6 @@ abstract class TypedIndexDb[A](endpointDbMgr: EndpointDbMgr) {
   protected def identifyIndexSet(endpointId: EndpointId, descriptor: EndpointDescriptor): Seq[(A, Map[Path, IndexableValue])]
 
   private def buildIndex(specifier: IndexSpecifier): Set[A] = {
-
-    /*val elemToIndexMaps: Seq[(A, Map[Path, IndexableValue])] = endpointDbMgr.map.flatMap {
-      case (endId, db) => db.currentInfo().map(descRec => identifyIndexSet(endId, descRec.descriptor))
-    }.flatten.toVector
-
-    elemToIndexMaps.for*/
-    //identifyIndexSet()
 
     val elemMatchSet = Set.newBuilder[A]
 
@@ -158,52 +138,6 @@ abstract class TypedIndexDb[A](endpointDbMgr: EndpointDbMgr) {
   }
 
   def observe(id: EndpointId, desc: EndpointDescriptor): Seq[IndexUpdate[A]] = {
-
-    /*val elemAndIndexMaps = identifyIndexSet(id, desc)
-
-    val matchBuilder = Vector.newBuilder[(IndexSpecifier, A)]
-
-    elemAndIndexMaps.foreach {
-      case (elem, indexes) => {
-
-        indexes.filterKeys(activePaths.contains).foreach {
-          case (path, value) =>
-            if (activeMap.contains(IndexSpecifier(path, Some(value)))) {
-              matchBuilder += (IndexSpecifier(path, Some(value)) -> elem)
-            }
-            if (activeMap.contains(IndexSpecifier(path, None))) {
-              matchBuilder += (IndexSpecifier(path, None) -> elem)
-            }
-        }
-      }
-    }
-
-
-    val matchMap = {
-      val all = matchBuilder.result()
-      var map = Map.empty[IndexSpecifier, Set[A]]
-      all.foreach {
-        case (spec, elem) =>
-          map.get(spec) match {
-            case None => map += (spec -> Set(elem))
-            case Some(set) => map += (spec -> (set + elem))
-          }
-      }
-      map
-    }
-
-    matchMap.foreach {
-      case (spec, elemSet) =>
-        elemSet.foreach { elem =>
-
-
-        }
-    }*/
-    /*
-
-  private var activeSets = Map.empty[IndexSpecifier, Set[A]]
-  private var elemMap = Map.empty[A, Set[IndexSpecifier]]
-     */
 
     val elemAndIndexMaps = identifyIndexSet(id, desc)
 
@@ -241,8 +175,6 @@ abstract class TypedIndexDb[A](endpointDbMgr: EndpointDbMgr) {
     val removes = Vector.newBuilder[(A, IndexSpecifier)]
     val specAddsBuilder = MapSetBuilder.build[IndexSpecifier, A]
     val specRemovesBuilder = MapSetBuilder.build[IndexSpecifier, A]
-    //var specAdds = Map.empty[IndexSpecifier, Set[A]]
-    //var specRemoves = Map.empty[IndexSpecifier, Set[A]]
 
     matchMap.foreach {
       case (elem, matched) =>
@@ -250,23 +182,12 @@ abstract class TypedIndexDb[A](endpointDbMgr: EndpointDbMgr) {
         val added = matched -- current
         val removed = current -- matched
 
-        /*adds ++= added.map(spec => (elem, spec)).toVector
-        removes ++= removed.map(spec => (elem, spec)).toVector*/
-
         added.foreach { spec =>
-          /*specAdds.get(spec) match {
-            case None => specAdds += (spec -> Set(elem))
-            case Some(set) => specAdds += (spec -> (set + elem))
-          }*/
           specAddsBuilder += (spec -> elem)
           adds += (elem -> spec)
         }
 
         removed.foreach { spec =>
-          /*specRemoves.get(spec) match {
-            case None => specRemoves += (spec -> Set(elem))
-            case Some(set) => specRemoves += (spec -> (set + elem))
-          }*/
           specRemovesBuilder += (spec -> elem)
           removes += (elem -> spec)
         }
@@ -357,70 +278,6 @@ class EndpointIndexDb(endpointDbMgr: EndpointDbMgr) extends TypedIndexDb[Endpoin
   protected def identifyIndexSet(endpointId: EndpointId, descriptor: EndpointDescriptor): Seq[(EndpointId, Map[Path, IndexableValue])] = {
     Seq((endpointId, descriptor.indexes))
   }
-
-  /*protected def buildIndex(specifier: IndexSpecifier): Set[EndpointId] = {
-    val key = specifier.key
-    val vOpt = specifier.valueOpt
-
-    /*val setBuilder = Set.newBuilder[EndpointId]
-    endpointDbMgr.map.foreach {
-      case (endId, db) => db.currentInfo().foreach { descRec =>
-        descRec.descriptor.indexes
-
-      }
-    }*/
-
-    val set = endpointDbMgr.map.flatMap {
-      case (endId, db) => db.currentInfo().flatMap { descRec =>
-        descRec.descriptor.indexes.get(key).flatMap { v =>
-          if (vOpt.isEmpty || vOpt.contains(v)) {
-            Some(endId)
-          } else {
-            None
-          }
-        }
-      }
-    }.toSet
-
-    set.foreach(s => addToIndex(s, specifier))
-    set
-  }*/
-
-  /*def observe(id: EndpointId, desc: EndpointDescriptor): Seq[IndexUpdate[EndpointId]] = {
-
-    val indexes = desc.indexes
-
-    val matchBuilder = Set.newBuilder[IndexSpecifier]
-
-    indexes.filterKeys(activePaths.contains).foreach {
-      case (path, value) =>
-        if (activeMap.contains(IndexSpecifier(path, Some(value)))) {
-          matchBuilder += IndexSpecifier(path, Some(value))
-        }
-        if (activeMap.contains(IndexSpecifier(path, None))) {
-          matchBuilder += IndexSpecifier(path, None)
-        }
-    }
-
-    val matched = matchBuilder.result()
-
-    val current = elementMap.getOrElse(id, Set())
-
-    val added = matched -- current
-    val removed = current -- matched
-
-    val addResults = added.toVector.map { spec =>
-      IndexUpdate(spec, Set(id), Set(), targetsFor(spec))
-    }
-    val removeResults = removed.toVector.map { spec =>
-      IndexUpdate(spec, Set(), Set(id), targetsFor(spec))
-    }
-
-    added.foreach(spec => addToIndex(id, spec))
-    removed.foreach(spec => removeFromIndex(id, spec))
-
-    addResults ++ removeResults
-  }*/
 }
 
 class DataKeyIndexDb(endpointDbMgr: EndpointDbMgr) extends TypedIndexDb[EndpointPath](endpointDbMgr) {
@@ -445,36 +302,10 @@ class OutputKeyIndexDb(endpointDbMgr: EndpointDbMgr) extends TypedIndexDb[Endpoi
 
 class IndexSetDb(endpointDbMgr: EndpointDbMgr) {
 
-  /*private var activeEndpointIndexes = Map.empty[IndexSpecifier, Set[EndpointId]]
-  private var endpointTargets = Map.empty[IndexSpecifier, Set[ClientSubscriberProxy]]
-  private var targetToEndpoints = Map.empty[ClientSubscriberProxy, Set[IndexSpecifier]]*/
-
   val endpoints = new EndpointIndexDb(endpointDbMgr)
   val dataKeys = new DataKeyIndexDb(endpointDbMgr)
   val outputKeys = new OutputKeyIndexDb(endpointDbMgr)
 
-  /*def add(subscription: IndexSubscription): Set[EndpointId] = {
-    subscription match {
-      case sub: EndpointIndexSubscription => {
-        endpointDb.addSubscription(sub.specifier, sub.target)
-      }
-      case sub: DataIndexSubscription => {
-        dataDb.addSubscription(sub.specifier, sub.target)
-      }
-      case sub: OutputIndexSubscription => {
-        outputDb.addSubscription(sub.specifier, sub.target)
-      }
-    }
-
-  }*/
-  /*def remove(subscription: IndexSubscription): Unit = {
-    subscription match {
-      case sub: EndpointIndexSubscription => {
-        endpointDb.removeTarget(sub.specifier, sub.target)
-
-      }
-    }
-  }*/
   def removeTarget(target: ClientSubscriberProxy): Unit = {
     endpoints.removeTarget(target)
     dataKeys.removeTarget(target)

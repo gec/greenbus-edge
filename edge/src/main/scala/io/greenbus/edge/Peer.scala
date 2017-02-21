@@ -178,12 +178,6 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
       var outputMap = Map.empty[SubscriptionTarget, Seq[EndpointOutputStatusNotification]]
       var setMap = Map.empty[SubscriptionTarget, Seq[EndpointSetNotification]]
 
-      /*case class EndpointIndexNotification(specifier: IndexSpecifier, snapshot: Option[Set[EndpointId]], added: Set[EndpointId], removed: Set[EndpointId])
-      case class DataKeyIndexNotification(specifier: IndexSpecifier, snapshot: Option[Set[EndpointPath]], added: Set[EndpointPath], removed: Set[EndpointPath])
-      case class OutputKeyIndexNotification(specifier: IndexSpecifier, snapshot: Option[Set[EndpointPath]], added: Set[EndpointPath], removed: Set[EndpointPath])*/
-      /*val endIdxB = MapSetBuilder.build[SubscriptionTarget, (IndexSpecifier, Set[EndpointId], Set[EndpointId])]
-      val dataIdxB = MapSetBuilder.build[SubscriptionTarget, (IndexSpecifier, Set[EndpointPath], Set[EndpointPath])]
-      val outIdxB = MapSetBuilder.build[SubscriptionTarget, (IndexSpecifier, Set[EndpointPath], Set[EndpointPath])]*/
       val endIdxB = MapSeqBuilder.build[SubscriptionTarget, EndpointIndexNotification]
       val dataIdxB = MapSeqBuilder.build[SubscriptionTarget, DataKeyIndexNotification]
       val outIdxB = MapSeqBuilder.build[SubscriptionTarget, OutputKeyIndexNotification]
