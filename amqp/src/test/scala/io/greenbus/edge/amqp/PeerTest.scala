@@ -56,6 +56,9 @@ object ClientTest extends LazyLogging {
 
     val params = ClientSubscriptionParams(
       endpointSetPrefixes = Seq(Path(Seq())),
+      indexParams = ClientIndexSubscriptionParams(
+        endpointIndexes = Seq(IndexSpecifier(Path("gridDeviceType"), Some(ValueSimpleString("gen")))),
+        dataKeyIndexes = Seq(IndexSpecifier(Path("gridValueType"), None))),
       infoSubscriptions = Seq(id),
       dataSubscriptions = Seq(EndpointPath(id, Path("key01")), EndpointPath(id, Path("key02")), EndpointPath(id, Path("key03")), EndpointPath(id, Path("key04"))),
       outputSubscriptions = Seq(EndpointPath(id, Path("outKey01")), EndpointPath(id, Path("outKey02"))))

@@ -369,6 +369,19 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
     proxy.onClose.bind(() => onClientSubscriptionClosed(proxy))
   }
 
+  private def getIndexSnapshotAndSetupSubscription(proxy: ClientSubscriberProxy, indexSubscriptionParams: ClientIndexSubscriptionParams): ClientIndexNotification = {
+
+    val endIndexCurrent = indexSubscriptionParams.endpointIndexes.map(spec => (spec, indexSetDb.endpoints.addSubscription(spec, proxy)))
+    val dataIndexCurrent = indexSubscriptionParams.dataKeyIndexes.map(spec => (spec, indexSetDb.dataKeys.addSubscription(spec, proxy)))
+    val outputIndexCurrent = indexSubscriptionParams.outputKeyIndexes.map(spec => (spec, indexSetDb.outputKeys.addSubscription(spec, proxy)))
+
+    val endIdxSnaps = endIndexCurrent.map { case (spec, set) => EndpointIndexNotification(spec, Some(set), Set.empty[EndpointId], Set.empty[EndpointId]) }
+    val dataIdxSnaps = dataIndexCurrent.map { case (spec, set) => DataKeyIndexNotification(spec, Some(set), Set.empty[EndpointPath], Set.empty[EndpointPath]) }
+    val outputIdxSnaps = outputIndexCurrent.map { case (spec, set) => OutputKeyIndexNotification(spec, Some(set), Set.empty[EndpointPath], Set.empty[EndpointPath]) }
+
+    ClientIndexNotification(endIdxSnaps, dataIdxSnaps, outputIdxSnaps)
+  }
+
   private def onSubscriptionParamsUpdate(proxy: ClientSubscriberProxy, message: ClientSubscriptionParamsMessage, promise: Promise[Boolean]): Unit = {
     logger.info(s"Subscribing to ${message.params}")
     if (aliveSubscribers.contains(proxy)) {
@@ -377,17 +390,11 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
       subscriptionDb.add(message.params, proxy)
 
       indexSetDb.removeTarget(proxy)
-      val endIndexCurrent = message.params.indexParams.endpointIndexes.map(spec => (spec, indexSetDb.endpoints.addSubscription(spec, proxy)))
-      val dataIndexCurrent = message.params.indexParams.dataKeyIndexes.map(spec => (spec, indexSetDb.dataKeys.addSubscription(spec, proxy)))
-      val outputIndexCurrent = message.params.indexParams.outputKeyIndexes.map(spec => (spec, indexSetDb.outputKeys.addSubscription(spec, proxy)))
-
-      val endIdxSnaps = endIndexCurrent.map { case (spec, set) => EndpointIndexNotification(spec, Some(set), Set.empty[EndpointId], Set.empty[EndpointId]) }
-      val dataIdxSnaps = dataIndexCurrent.map { case (spec, set) => DataKeyIndexNotification(spec, Some(set), Set.empty[EndpointPath], Set.empty[EndpointPath]) }
-      val outputIdxSnaps = outputIndexCurrent.map { case (spec, set) => OutputKeyIndexNotification(spec, Some(set), Set.empty[EndpointPath], Set.empty[EndpointPath]) }
-
-      val indexNot = ClientIndexNotification(endIdxSnaps, dataIdxSnaps, outputIdxSnaps)
+      val indexNot = getIndexSnapshotAndSetupSubscription(proxy, message.params.indexParams)
+      println(indexNot)
 
       val current = currentSubscriptionSnapshot(message.params, indexNot)
+      println(current)
       proxy.notify(current)
 
       promise.success(true)

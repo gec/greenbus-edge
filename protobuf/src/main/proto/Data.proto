@@ -159,11 +159,55 @@ message EndpointPath {
     Path key = 2;
 }
 
+message IndexSpecifier {
+    Path key = 1;
+    IndexableValue value = 2;
+}
+
+message ClientIndexSubscriptionParams {
+    repeated IndexSpecifier endpoint_indexes = 1;
+    repeated IndexSpecifier data_key_indexes = 2;
+    repeated IndexSpecifier output_key_indexes = 3;
+}
+
+message EndpointIdSet {
+    repeated EndpointId endpoint_ids = 1;
+}
+message EndpointPathSet {
+    repeated EndpointPath endpoint_paths = 1;
+}
+
+message EndpointIndexNotification {
+    IndexSpecifier specifier = 1;
+    EndpointIdSet snapshot = 2;
+    repeated EndpointId added = 3;
+    repeated EndpointId removed = 4;
+}
+message DataKeyIndexNotification {
+    IndexSpecifier specifier = 1;
+    EndpointPathSet snapshot = 2;
+    repeated EndpointPath added = 3;
+    repeated EndpointPath removed = 4;
+}
+message OutputKeyIndexNotification {
+    IndexSpecifier specifier = 1;
+    EndpointPathSet snapshot = 2;
+    repeated EndpointPath added = 3;
+    repeated EndpointPath removed = 4;
+}
+
+message ClientIndexNotification {
+    repeated EndpointIndexNotification endpoint_notifications = 1;
+    repeated DataKeyIndexNotification data_key_notifications = 2;
+    repeated OutputKeyIndexNotification output_key_notifications = 3;
+}
+
 message ClientSubscriptionParams {
     repeated Path endpoint_set_prefix = 1;
-    repeated EndpointId info_subscription = 2;
-    repeated EndpointPath data_subscription = 3;
-    repeated EndpointPath output_subscription = 4;
+    ClientIndexSubscriptionParams index_params = 2;
+    repeated EndpointId info_subscription = 3;
+    repeated EndpointPath data_subscription = 4;
+    repeated EndpointPath output_subscription = 5;
 }
 
 message PersistenceSessionId {
@@ -256,9 +300,10 @@ message EndpointOutputStatusNotification {
 
 message ClientSubscriptionNotification {
     repeated EndpointSetNotification endpoint_set_notification = 1;
-    repeated EndpointDescriptorNotification descriptor_notification = 2;
-    repeated EndpointDataNotification data_notification = 3;
-    repeated EndpointOutputStatusNotification output_notification = 4;
+    ClientIndexNotification index_notification = 2;
+    repeated EndpointDescriptorNotification descriptor_notification = 3;
+    repeated EndpointDataNotification data_notification = 4;
+    repeated EndpointOutputStatusNotification output_notification = 5;
 }
 
 message ClientSubscriptionParamsMessage {

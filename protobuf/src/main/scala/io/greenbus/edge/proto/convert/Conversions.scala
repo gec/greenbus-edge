@@ -415,6 +415,7 @@ object Conversions {
     val b = proto.ClientSubscriptionParams.newBuilder()
 
     obj.endpointSetPrefixes.map(toProto).foreach(b.addEndpointSetPrefix)
+    b.setIndexParams(toProto(obj.indexParams))
     obj.infoSubscriptions.map(toProto).foreach(b.addInfoSubscription)
     obj.dataSubscriptions.map(toProto).foreach(b.addDataSubscription)
     obj.outputSubscriptions.map(toProto).foreach(b.addOutputSubscription)
@@ -425,12 +426,14 @@ object Conversions {
   def fromProto(msg: proto.ClientSubscriptionParams): Either[String, edge.ClientSubscriptionParams] = {
     for {
       endpointSetPrefixes <- rightSequence(msg.getEndpointSetPrefixList.map(fromProto))
+      indexParams <- if (msg.hasIndexParams) fromProto(msg.getIndexParams) else Right(edge.ClientIndexSubscriptionParams())
       infoSubscriptions <- rightSequence(msg.getInfoSubscriptionList.map(fromProto))
       dataSubscriptions <- rightSequence(msg.getDataSubscriptionList.map(fromProto))
       outputSubscriptions <- rightSequence(msg.getOutputSubscriptionList.map(fromProto))
     } yield {
       edge.ClientSubscriptionParams(
         endpointSetPrefixes = endpointSetPrefixes,
+        indexParams = indexParams,
         infoSubscriptions = infoSubscriptions,
         dataSubscriptions = dataSubscriptions,
         outputSubscriptions = outputSubscriptions)
@@ -704,9 +707,150 @@ object Conversions {
     }
   }
 
+  def toProto(obj: edge.ClientIndexSubscriptionParams): proto.ClientIndexSubscriptionParams = {
+    val b = proto.ClientIndexSubscriptionParams.newBuilder()
+    obj.endpointIndexes.map(toProto).foreach(b.addEndpointIndexes)
+    obj.dataKeyIndexes.map(toProto).foreach(b.addDataKeyIndexes)
+    obj.outputKeyIndexes.map(toProto).foreach(b.addOutputKeyIndexes)
+    b.build()
+  }
+  def fromProto(msg: proto.ClientIndexSubscriptionParams): Either[String, edge.ClientIndexSubscriptionParams] = {
+    for {
+      ends <- rightSequence(msg.getEndpointIndexesList.map(fromProto))
+      datas <- rightSequence(msg.getDataKeyIndexesList.map(fromProto))
+      outs <- rightSequence(msg.getOutputKeyIndexesList.map(fromProto))
+    } yield {
+      edge.ClientIndexSubscriptionParams(ends, datas, outs)
+    }
+  }
+
+  def toProto(obj: edge.IndexSpecifier): proto.IndexSpecifier = {
+    val b = proto.IndexSpecifier.newBuilder()
+    b.setKey(toProto(obj.key))
+    obj.valueOpt.map(ValueConversions.toProto).foreach(b.setValue)
+    b.build()
+  }
+
+  def fromProto(msg: proto.IndexSpecifier): Either[String, edge.IndexSpecifier] = {
+    if (msg.hasKey) {
+      for {
+        key <- fromProto(msg.getKey)
+        vOpt <- if (msg.hasValue) ValueConversions.fromProto(msg.getValue).map(r => Some(r)) else Right(None)
+      } yield {
+        edge.IndexSpecifier(key, vOpt)
+      }
+    } else {
+      Left("Index specifier missing key")
+    }
+  }
+
+  def endpointIdSetToProto(obj: Set[edge.EndpointId]): proto.EndpointIdSet = {
+    val b = proto.EndpointIdSet.newBuilder()
+    obj.map(toProto).foreach(b.addEndpointIds)
+    b.build()
+  }
+  def fromProto(msg: proto.EndpointIdSet): Either[String, Set[edge.EndpointId]] = {
+    rightSequence(msg.getEndpointIdsList.map(fromProto)).map(_.toSet)
+  }
+  def endpointPathSetToProto(obj: Set[edge.EndpointPath]): proto.EndpointPathSet = {
+    val b = proto.EndpointPathSet.newBuilder()
+    obj.map(toProto).foreach(b.addEndpointPaths)
+    b.build()
+  }
+  def fromProto(msg: proto.EndpointPathSet): Either[String, Set[edge.EndpointPath]] = {
+    rightSequence(msg.getEndpointPathsList.map(fromProto)).map(_.toSet)
+  }
+
+  def toProto(obj: edge.EndpointIndexNotification): proto.EndpointIndexNotification = {
+    val b = proto.EndpointIndexNotification.newBuilder()
+    b.setSpecifier(toProto(obj.specifier))
+    obj.snapshot.map(endpointIdSetToProto).foreach(b.setSnapshot)
+    obj.added.map(toProto).foreach(b.addAdded)
+    obj.removed.map(toProto).foreach(b.addRemoved)
+    b.build()
+  }
+  def fromProto(msg: proto.EndpointIndexNotification): Either[String, edge.EndpointIndexNotification] = {
+    if (msg.hasSpecifier) {
+      for {
+        spec <- fromProto(msg.getSpecifier)
+        snapOpt <- if (msg.hasSnapshot) fromProto(msg.getSnapshot).map(r => Some(r)) else Right(None)
+        adds <- rightSequence(msg.getAddedList.map(fromProto))
+        removes <- rightSequence(msg.getRemovedList.map(fromProto))
+      } yield {
+        edge.EndpointIndexNotification(spec, snapOpt, adds.toSet, removes.toSet)
+      }
+    } else {
+      Left("EndpointIndexNotification missing specifier")
+    }
+  }
+
+  def toProto(obj: edge.DataKeyIndexNotification): proto.DataKeyIndexNotification = {
+    val b = proto.DataKeyIndexNotification.newBuilder()
+    b.setSpecifier(toProto(obj.specifier))
+    obj.snapshot.map(endpointPathSetToProto).foreach(b.setSnapshot)
+    obj.added.map(toProto).foreach(b.addAdded)
+    obj.removed.map(toProto).foreach(b.addRemoved)
+    b.build()
+  }
+  def fromProto(msg: proto.DataKeyIndexNotification): Either[String, edge.DataKeyIndexNotification] = {
+    if (msg.hasSpecifier) {
+      for {
+        spec <- fromProto(msg.getSpecifier)
+        snapOpt <- if (msg.hasSnapshot) fromProto(msg.getSnapshot).map(r => Some(r)) else Right(None)
+        adds <- rightSequence(msg.getAddedList.map(fromProto))
+        removes <- rightSequence(msg.getRemovedList.map(fromProto))
+      } yield {
+        edge.DataKeyIndexNotification(spec, snapOpt, adds.toSet, removes.toSet)
+      }
+    } else {
+      Left("DataKeyIndexNotification missing specifier")
+    }
+  }
+
+  def toProto(obj: edge.OutputKeyIndexNotification): proto.OutputKeyIndexNotification = {
+    val b = proto.OutputKeyIndexNotification.newBuilder()
+    b.setSpecifier(toProto(obj.specifier))
+    obj.snapshot.map(endpointPathSetToProto).foreach(b.setSnapshot)
+    obj.added.map(toProto).foreach(b.addAdded)
+    obj.removed.map(toProto).foreach(b.addRemoved)
+    b.build()
+  }
+  def fromProto(msg: proto.OutputKeyIndexNotification): Either[String, edge.OutputKeyIndexNotification] = {
+    if (msg.hasSpecifier) {
+      for {
+        spec <- fromProto(msg.getSpecifier)
+        snapOpt <- if (msg.hasSnapshot) fromProto(msg.getSnapshot).map(r => Some(r)) else Right(None)
+        adds <- rightSequence(msg.getAddedList.map(fromProto))
+        removes <- rightSequence(msg.getRemovedList.map(fromProto))
+      } yield {
+        edge.OutputKeyIndexNotification(spec, snapOpt, adds.toSet, removes.toSet)
+      }
+    } else {
+      Left("OutputKeyIndexNotification missing specifier")
+    }
+  }
+
+  def toProto(obj: edge.ClientIndexNotification): proto.ClientIndexNotification = {
+    val b = proto.ClientIndexNotification.newBuilder()
+    obj.endpointNotifications.map(toProto).foreach(b.addEndpointNotifications)
+    obj.dataKeyNotifications.map(toProto).foreach(b.addDataKeyNotifications)
+    obj.outputKeyNotifications.map(toProto).foreach(b.addOutputKeyNotifications)
+    b.build()
+  }
+  def fromProto(msg: proto.ClientIndexNotification): Either[String, edge.ClientIndexNotification] = {
+    for {
+      ends <- rightSequence(msg.getEndpointNotificationsList.map(fromProto))
+      datas <- rightSequence(msg.getDataKeyNotificationsList.map(fromProto))
+      outs <- rightSequence(msg.getOutputKeyNotificationsList.map(fromProto))
+    } yield {
+      edge.ClientIndexNotification(ends, datas, outs)
+    }
+  }
+
   def toProto(obj: edge.ClientSubscriptionNotification): proto.ClientSubscriptionNotification = {
     val b = proto.ClientSubscriptionNotification.newBuilder()
     obj.setNotifications.map(toProto).foreach(b.addEndpointSetNotification)
+    b.setIndexNotification(toProto(obj.indexNotification))
     obj.descriptorNotifications.map(toProto).foreach(b.addDescriptorNotification)
     obj.dataNotifications.map(toProto).foreach(b.addDataNotification)
     obj.outputNotifications.map(toProto).foreach(b.addOutputNotification)
@@ -716,13 +860,14 @@ object Conversions {
   def fromProto(msg: proto.ClientSubscriptionNotification): Either[String, edge.ClientSubscriptionNotification] = {
     for {
       endpointSets <- rightSequence(msg.getEndpointSetNotificationList.map(fromProto))
+      indexNot <- if (msg.hasIndexNotification) fromProto(msg.getIndexNotification) else Right(edge.ClientIndexNotification())
       descriptors <- rightSequence(msg.getDescriptorNotificationList.map(fromProto))
       datas <- rightSequence(msg.getDataNotificationList.map(fromProto))
       outputs <- rightSequence(msg.getOutputNotificationList.map(fromProto))
     } yield {
       edge.ClientSubscriptionNotification(
         setNotifications = endpointSets,
-        clientIndexNotification = ClientIndexNotification(),
+        indexNotification = indexNot,
         descriptorNotifications = descriptors,
         dataNotifications = datas,
         outputNotifications = outputs)

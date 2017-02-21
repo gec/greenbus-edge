@@ -91,7 +91,7 @@ case class EndpointOutputStatusNotification(key: EndpointPath, status: OutputVal
 
 case class ClientSubscriptionNotification(
   setNotifications: Seq[EndpointSetNotification],
-  clientIndexNotification: ClientIndexNotification,
+  indexNotification: ClientIndexNotification,
   descriptorNotifications: Seq[EndpointDescriptorNotification],
   dataNotifications: Seq[EndpointDataNotification],
   outputNotifications: Seq[EndpointOutputStatusNotification])
