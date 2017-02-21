@@ -722,6 +722,7 @@ object Conversions {
     } yield {
       edge.ClientSubscriptionNotification(
         setNotifications = endpointSets,
+        clientIndexNotification = ClientIndexNotification(),
         descriptorNotifications = descriptors,
         dataNotifications = datas,
         outputNotifications = outputs)

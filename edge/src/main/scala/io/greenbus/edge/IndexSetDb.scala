@@ -1,7 +1,23 @@
+/**
+ * Copyright 2011-2017 Green Energy Corp.
+ *
+ * Licensed to Green Energy Corp (www.greenenergycorp.com) under one or more
+ * contributor license agreements. See the NOTICE file distributed with this
+ * work for additional information regarding copyright ownership. Green Energy
+ * Corp licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 package io.greenbus.edge
 
-
-case class IndexSpecifier(key: Path, valueOpt: Option[IndexableValue])
 sealed trait IndexSubscription
 case class EndpointIndexSubscription(specifier: IndexSpecifier, target: ClientSubscriberProxy) extends IndexSubscription
 case class DataIndexSubscription(specifier: IndexSpecifier, target: ClientSubscriberProxy) extends IndexSubscription
@@ -208,7 +224,6 @@ abstract class TypedIndexDb[A](endpointDbMgr: EndpointDbMgr) {
       }
     }
 
-
     val matchMap: Map[A, Set[IndexSpecifier]] = {
       val all = matchBuilder.result()
       var map = Map.empty[A, Set[IndexSpecifier]]
@@ -272,50 +287,12 @@ abstract class TypedIndexDb[A](endpointDbMgr: EndpointDbMgr) {
 
       IndexUpdate(spec, adds, removes, targetsFor(spec))
     }
-
-
-    //val matched = matchMap.keySet
-
-    //val current = elementMap.getOrElse(id, Set())
-
-    /*val indexes = desc.indexes
-
-    val matchBuilder = Set.newBuilder[IndexSpecifier]
-
-    indexes.filterKeys(activePaths.contains).foreach {
-      case (path, value) =>
-        if (activeMap.contains(IndexSpecifier(path, Some(value)))) {
-          matchBuilder += IndexSpecifier(path, Some(value))
-        }
-        if (activeMap.contains(IndexSpecifier(path, None))) {
-          matchBuilder += IndexSpecifier(path, None)
-        }
-    }
-
-    val matched = matchBuilder.result()
-
-    val current = elementMap.getOrElse(id, Set())
-
-    val added = matched -- current
-    val removed = current -- matched
-
-    val addResults = added.toVector.map { spec =>
-      IndexUpdate(spec, Set(id), Set(), targetsFor(spec))
-    }
-    val removeResults = removed.toVector.map { spec =>
-      IndexUpdate(spec, Set(), Set(id), targetsFor(spec))
-    }
-
-    added.foreach(spec => addToIndex(id, spec))
-    removed.foreach(spec => removeFromIndex(id, spec))
-
-    addResults ++ removeResults*/
   }
 }
 
 object MapSetBuilder {
 
-  def build[A,B] = {
+  def build[A, B] = {
     new Impl[A, B]
   }
 
@@ -342,6 +319,37 @@ trait MapSetBuilder[A, B] {
   def +=(a: A, b: B): Unit
   def +=(tup: (A, B)): Unit
   def result(): Map[A, Set[B]]
+}
+
+object MapSeqBuilder {
+
+  def build[A, B] = {
+    new Impl[A, B]
+  }
+
+  class Impl[A, B] extends MapSeqBuilder[A, B] {
+    private var map = Map.empty[A, Seq[B]]
+    def +=(a: A, b: B): Unit = {
+      map.get(a) match {
+        case None => map += (a -> Vector(b))
+        case Some(set) => map += (a -> (set :+ b))
+      }
+    }
+
+    def +=(tup: (A, B)): Unit = {
+      +=(tup._1, tup._2)
+    }
+
+    def result(): Map[A, Seq[B]] = {
+      map
+    }
+  }
+
+}
+trait MapSeqBuilder[A, B] {
+  def +=(a: A, b: B): Unit
+  def +=(tup: (A, B)): Unit
+  def result(): Map[A, Seq[B]]
 }
 
 class EndpointIndexDb(endpointDbMgr: EndpointDbMgr) extends TypedIndexDb[EndpointId](endpointDbMgr) {
@@ -415,7 +423,6 @@ class EndpointIndexDb(endpointDbMgr: EndpointDbMgr) extends TypedIndexDb[Endpoin
   }*/
 }
 
-
 class DataKeyIndexDb(endpointDbMgr: EndpointDbMgr) extends TypedIndexDb[EndpointPath](endpointDbMgr) {
 
   protected def identifyIndexSet(endpointId: EndpointId, descriptor: EndpointDescriptor): Seq[(EndpointPath, Map[Path, IndexableValue])] = {
@@ -435,7 +442,6 @@ class OutputKeyIndexDb(endpointDbMgr: EndpointDbMgr) extends TypedIndexDb[Endpoi
     }.toVector
   }
 }
-
 
 class IndexSetDb(endpointDbMgr: EndpointDbMgr) {
 
@@ -469,7 +475,7 @@ class IndexSetDb(endpointDbMgr: EndpointDbMgr) {
       }
     }
   }*/
-  def removeTarget(target: ClientSubscriberProxy): Unit ={
+  def removeTarget(target: ClientSubscriberProxy): Unit = {
     endpoints.removeTarget(target)
     dataKeys.removeTarget(target)
     outputKeys.removeTarget(target)

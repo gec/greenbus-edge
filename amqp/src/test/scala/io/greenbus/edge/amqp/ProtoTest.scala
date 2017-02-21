@@ -103,7 +103,7 @@ object ProtoTest extends LazyLogging {
           case d: ClientSubscriptionNotificationDesc =>
             channel.sender.send(
               ClientSubscriptionNotificationMessage(ClientSubscriptionNotification(
-                Seq(), Seq(), Seq(), Seq())))
+                Seq(), ClientIndexNotification(), Seq(), Seq(), Seq())))
         }
       }
     }
