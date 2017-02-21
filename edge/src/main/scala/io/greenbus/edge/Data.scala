@@ -67,14 +67,6 @@ case class EndpointPath(endpoint: EndpointId, key: Path)
 
 case class EndpointSetEntry(endpointId: EndpointId, indexes: Map[Path, IndexableValue])
 
-/*trait EndpointSetNotification
-case class EndpointSetSnapshot(prefix: Path, entries: Seq[EndpointSetEntry]) extends EndpointSetNotification
-case class EndpointSetChange(
-                              prefix: Path,
-                             added: Seq[EndpointSetEntry],
-                             modified: Seq[EndpointSetEntry],
-                             removed: Seq[EndpointId]) extends EndpointSetNotification*/
-
 case class EndpointSetSnapshot(entries: Seq[EndpointSetEntry])
 
 case class EndpointSetNotification(
@@ -91,12 +83,30 @@ case class EndpointOutputStatusNotification(key: EndpointPath, status: OutputVal
 
 case class ClientSubscriptionNotification(
   setNotifications: Seq[EndpointSetNotification],
+  indexNotification: ClientIndexNotification,
   descriptorNotifications: Seq[EndpointDescriptorNotification],
   dataNotifications: Seq[EndpointDataNotification],
   outputNotifications: Seq[EndpointOutputStatusNotification])
 
+case class IndexSpecifier(key: Path, valueOpt: Option[IndexableValue])
+
+case class ClientIndexSubscriptionParams(
+  endpointIndexes: Seq[IndexSpecifier] = Seq(),
+  dataKeyIndexes: Seq[IndexSpecifier] = Seq(),
+  outputKeyIndexes: Seq[IndexSpecifier] = Seq())
+
+case class EndpointIndexNotification(specifier: IndexSpecifier, snapshot: Option[Set[EndpointId]], added: Set[EndpointId], removed: Set[EndpointId])
+case class DataKeyIndexNotification(specifier: IndexSpecifier, snapshot: Option[Set[EndpointPath]], added: Set[EndpointPath], removed: Set[EndpointPath])
+case class OutputKeyIndexNotification(specifier: IndexSpecifier, snapshot: Option[Set[EndpointPath]], added: Set[EndpointPath], removed: Set[EndpointPath])
+
+case class ClientIndexNotification(
+  endpointNotifications: Seq[EndpointIndexNotification] = Seq(),
+  dataKeyNotifications: Seq[DataKeyIndexNotification] = Seq(),
+  outputKeyNotifications: Seq[OutputKeyIndexNotification] = Seq())
+
 case class ClientSubscriptionParams(
   endpointSetPrefixes: Seq[Path] = Seq(),
+  indexParams: ClientIndexSubscriptionParams = ClientIndexSubscriptionParams(),
   infoSubscriptions: Seq[EndpointId] = Seq(),
   dataSubscriptions: Seq[EndpointPath] = Seq(),
   outputSubscriptions: Seq[EndpointPath] = Seq())

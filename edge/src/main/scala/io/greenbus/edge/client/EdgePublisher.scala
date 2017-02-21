@@ -84,11 +84,11 @@ case class OutputEntry(initialValue: PublisherOutputValueStatus, meta: MetadataD
 case class ClientEndpointPublisherDesc(
   indexes: Map[Path, IndexableValue],
   metadata: Map[Path, Value],
-  latestKeyValueEntries: Map[Path, LatestKeyValueEntry],
-  timeSeriesValueEntries: Map[Path, TimeSeriesValueEntry],
-  eventEntries: Map[Path, EventEntry],
-  activeSetEntries: Map[Path, ActiveSetConfigEntry],
-  outputEntries: Map[Path, OutputEntry])
+  latestKeyValueEntries: Map[Path, LatestKeyValueEntry] = Map.empty[Path, LatestKeyValueEntry],
+  timeSeriesValueEntries: Map[Path, TimeSeriesValueEntry] = Map.empty[Path, TimeSeriesValueEntry],
+  eventEntries: Map[Path, EventEntry] = Map.empty[Path, EventEntry],
+  activeSetEntries: Map[Path, ActiveSetConfigEntry] = Map.empty[Path, ActiveSetConfigEntry],
+  outputEntries: Map[Path, OutputEntry] = Map.empty[Path, OutputEntry])
 
 trait ClientDataStreamDb {
   def snapshot(): DataValueState

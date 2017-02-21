@@ -33,6 +33,8 @@ class EndpointDbMgr {
     endpoints.toVector
   }
 
+  def map: Map[EndpointId, EndpointDb] = endpoints
+
   def get(id: EndpointId): Option[EndpointDb] = endpoints.get(id)
   def add(id: EndpointId, db: EndpointDb): Unit = {
     endpoints += (id -> db)
@@ -56,11 +58,12 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
   output source db?
    */
   private val subscriptionDb = new ScanningSubscriptionDb[SubscriptionTarget]
-  private var endpoints = new EndpointDbMgr
+  private val endpoints = new EndpointDbMgr
   private val clientPublishers: ClientPublisherProxyDb = new ClientPublisherProxyDbImpl
   private var aliveSubscribers = Set.empty[ClientSubscriberProxy]
   private val outputCorrelator = new Correlator[(ClientOutputProxy, Long)]
   private var aliveOutputClients = Set.empty[ClientOutputProxy]
+  private val indexSetDb = new IndexSetDb(endpoints)
 
   private def activeSessionForEndpoint(id: EndpointId): Option[SessionId] = {
     endpoints.get(id).flatMap(_.activeSession())
@@ -114,7 +117,7 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
     promise.success(true)
   }
 
-  private def currentSubscriptionSnapshot(params: ClientSubscriptionParams): ClientSubscriptionNotification = {
+  private def currentSubscriptionSnapshot(params: ClientSubscriptionParams, indexes: ClientIndexNotification): ClientSubscriptionNotification = {
 
     val setNotifications = params.endpointSetPrefixes.map { prefix =>
       val entries = endpoints.lookup(prefix).flatMap {
@@ -161,7 +164,7 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
     }
     val outputNotifications = outputB.result()
 
-    ClientSubscriptionNotification(setNotifications, infoNotifications, dataNotifications, outputNotifications)
+    ClientSubscriptionNotification(setNotifications, indexes, infoNotifications, dataNotifications, outputNotifications)
   }
 
   private def handleBatchPublish(sourceId: SourceId, sessionId: SessionId, endpointId: EndpointId, batch: EndpointPublishMessage): Unit = {
@@ -174,6 +177,10 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
       var dataMap = Map.empty[SubscriptionTarget, Seq[EndpointDataNotification]]
       var outputMap = Map.empty[SubscriptionTarget, Seq[EndpointOutputStatusNotification]]
       var setMap = Map.empty[SubscriptionTarget, Seq[EndpointSetNotification]]
+
+      val endIdxB = MapSeqBuilder.build[SubscriptionTarget, EndpointIndexNotification]
+      val dataIdxB = MapSeqBuilder.build[SubscriptionTarget, DataKeyIndexNotification]
+      val outIdxB = MapSeqBuilder.build[SubscriptionTarget, OutputKeyIndexNotification]
 
       result.setUpdate.foreach { entry =>
         subscriptionDb.queryForEndpointSetPrefixMatches(Path(Seq())).foreach {
@@ -200,6 +207,33 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
           subscribers.foreach { target =>
             infoMap += (target -> EndpointDescriptorNotification(endpointId, info, seq))
             notifyMap += target
+          }
+        }
+      }
+
+      result.infoUpdateOpt.foreach {
+        case (seq, info) => {
+          val endUpdates = indexSetDb.endpoints.observe(endpointId, info)
+          val dataUpdates = indexSetDb.dataKeys.observe(endpointId, info)
+          val outUpdates = indexSetDb.outputKeys.observe(endpointId, info)
+
+          endUpdates.foreach { up =>
+            up.targets.foreach { targ =>
+              endIdxB += (targ -> EndpointIndexNotification(up.specifier, None, up.added, up.removed))
+              notifyMap += targ
+            }
+          }
+          dataUpdates.foreach { up =>
+            up.targets.foreach { targ =>
+              dataIdxB += (targ -> DataKeyIndexNotification(up.specifier, None, up.added, up.removed))
+              notifyMap += targ
+            }
+          }
+          outUpdates.foreach { up =>
+            up.targets.foreach { targ =>
+              outIdxB += (targ -> OutputKeyIndexNotification(up.specifier, None, up.added, up.removed))
+              notifyMap += targ
+            }
           }
         }
       }
@@ -232,6 +266,10 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
           }
       }
 
+      val endIdxs = endIdxB.result()
+      val dataIdxs = dataIdxB.result()
+      val outputIdxs = outIdxB.result()
+
       notifyMap.foreach { target =>
         val setOpt = setMap.get(target)
         val infoOpt = infoMap.get(target)
@@ -241,7 +279,13 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
         val infoSeq = infoOpt.map(Seq(_)).getOrElse(Seq())
         val dataSeq = dataOpt.getOrElse(Seq())
         val outputSeq = outputOpt.getOrElse(Seq())
-        val message = ClientSubscriptionNotification(setSeq, infoSeq, dataSeq, outputSeq)
+
+        val idxNot = ClientIndexNotification(
+          endIdxs.getOrElse(target, Seq()),
+          dataIdxs.getOrElse(target, Seq()),
+          outputIdxs.getOrElse(target, Seq()))
+
+        val message = ClientSubscriptionNotification(setSeq, idxNot, infoSeq, dataSeq, outputSeq)
         target.notify(message)
       }
     }
@@ -319,6 +363,19 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
     proxy.onClose.bind(() => onClientSubscriptionClosed(proxy))
   }
 
+  private def getIndexSnapshotAndSetupSubscription(proxy: ClientSubscriberProxy, indexSubscriptionParams: ClientIndexSubscriptionParams): ClientIndexNotification = {
+
+    val endIndexCurrent = indexSubscriptionParams.endpointIndexes.map(spec => (spec, indexSetDb.endpoints.addSubscription(spec, proxy)))
+    val dataIndexCurrent = indexSubscriptionParams.dataKeyIndexes.map(spec => (spec, indexSetDb.dataKeys.addSubscription(spec, proxy)))
+    val outputIndexCurrent = indexSubscriptionParams.outputKeyIndexes.map(spec => (spec, indexSetDb.outputKeys.addSubscription(spec, proxy)))
+
+    val endIdxSnaps = endIndexCurrent.map { case (spec, set) => EndpointIndexNotification(spec, Some(set), Set.empty[EndpointId], Set.empty[EndpointId]) }
+    val dataIdxSnaps = dataIndexCurrent.map { case (spec, set) => DataKeyIndexNotification(spec, Some(set), Set.empty[EndpointPath], Set.empty[EndpointPath]) }
+    val outputIdxSnaps = outputIndexCurrent.map { case (spec, set) => OutputKeyIndexNotification(spec, Some(set), Set.empty[EndpointPath], Set.empty[EndpointPath]) }
+
+    ClientIndexNotification(endIdxSnaps, dataIdxSnaps, outputIdxSnaps)
+  }
+
   private def onSubscriptionParamsUpdate(proxy: ClientSubscriberProxy, message: ClientSubscriptionParamsMessage, promise: Promise[Boolean]): Unit = {
     logger.info(s"Subscribing to ${message.params}")
     if (aliveSubscribers.contains(proxy)) {
@@ -326,7 +383,12 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
       subscriptionDb.remove(proxy)
       subscriptionDb.add(message.params, proxy)
 
-      val current = currentSubscriptionSnapshot(message.params)
+      indexSetDb.removeTarget(proxy)
+      val indexNot = getIndexSnapshotAndSetupSubscription(proxy, message.params.indexParams)
+      println(indexNot)
+
+      val current = currentSubscriptionSnapshot(message.params, indexNot)
+      println(current)
       proxy.notify(current)
 
       promise.success(true)
