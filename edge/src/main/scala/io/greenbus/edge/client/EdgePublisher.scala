@@ -262,9 +262,10 @@ class EventStreamDb extends UpdateableClientDb[TopicEvent] {
   }
 }
 
-class OutputValueStatusDb(initial: Value) extends UpdateableClientDb[Value] {
+// TODO: redo all of this
+class OutputValueStatusDb(initial: Option[Value]) extends UpdateableClientDb[Value] {
   private var sequence: Long = 1
-  private var latest: PublisherOutputValueStatus = PublisherOutputValueStatus(0, Some(initial))
+  private var latest: PublisherOutputValueStatus = PublisherOutputValueStatus(0, initial)
 
   def process(obj: Value): Boolean = {
     val seq = sequence
@@ -273,11 +274,11 @@ class OutputValueStatusDb(initial: Value) extends UpdateableClientDb[Value] {
     true
   }
 
-  def snapshot(): DataValueState = {
+  def snapshot(): PublisherOutputValueStatus = {
     latest
   }
 
-  def dequeue(): DataValueUpdate = {
+  def dequeue(): PublisherOutputValueStatus = {
     latest
   }
 }
@@ -319,6 +320,8 @@ class EndpointPublisherImpl(
     }
   }
 
+  private val outputDbs: Map[Path, OutputValueStatusDb] = endpointDesc.outputEntries.mapValues(entry => new OutputValueStatusDb(entry.initialValue.valueOpt))
+
   private val outs = Map.empty[Path, OutputInteraction]
 
   private val endpointInfo = {
@@ -344,7 +347,7 @@ class EndpointPublisherImpl(
       eventDbs.mapValues(_.snapshot()) ++
       activeSetDbs.mapValues(_.snapshot())
 
-    val snapshot = EndpointPublishSnapshot(record, dataSnap, Map())
+    val snapshot = EndpointPublishSnapshot(record, dataSnap, outputDbs.mapValues(_.dequeue()))
     EndpointPublishMessage(Some(snapshot), None, Seq(), Seq())
   }
 

@@ -142,7 +142,10 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
           updateSetOpt.foreach { updateSet =>
             updateSet.foreach {
               case ((key, state)) =>
-                dataB += EndpointDataNotification(EndpointPath(id, key), state)
+                val endPath = EndpointPath(id, key)
+                val keyDescOpt = db.currentInfo().flatMap { info => info.descriptor.dataKeySet.get(key).map(desc => (desc, info.sequence)) }
+                val descNotOpt = keyDescOpt.map { case (desc, seq) => DataKeyDescriptorNotification(endPath, desc, seq) }
+                dataB += EndpointDataNotification(endPath, state, descNotOpt)
             }
           }
         }
@@ -157,7 +160,10 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
           updateSetOpt.foreach { updateSet =>
             updateSet.foreach {
               case ((key, state)) =>
-                outputB += EndpointOutputStatusNotification(EndpointPath(id, key), state)
+                val endPath = EndpointPath(id, key)
+                val keyDescOpt = db.currentInfo().flatMap { info => info.descriptor.outputKeySet.get(key).map(desc => (desc, info.sequence)) }
+                val descNotOpt = keyDescOpt.map { case (desc, seq) => OutputKeyDescriptorNotification(endPath, desc, seq) }
+                outputB += EndpointOutputStatusNotification(EndpointPath(id, key), state, descNotOpt)
             }
           }
         }
@@ -242,7 +248,7 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
         case (key, update) =>
           val endKey = EndpointPath(endpointId, key)
           val subscribers = subscriptionDb.queryDataSubscriptions(endKey)
-          val notification = EndpointDataNotification(endKey, update)
+          val notification = EndpointDataNotification(endKey, update, None) // TODO: info notifications
           subscribers.foreach { target =>
             dataMap.get(target) match {
               case None => dataMap += (target -> Seq(notification))
@@ -256,7 +262,7 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
         case (key, update) =>
           val endKey = EndpointPath(endpointId, key)
           val subscribers = subscriptionDb.queryOutputSubscriptions(endKey)
-          val notification = EndpointOutputStatusNotification(endKey, update)
+          val notification = EndpointOutputStatusNotification(endKey, update, None) // TODO: info notifications
           subscribers.foreach { target =>
             outputMap.get(target) match {
               case None => outputMap += (target -> Seq(notification))
@@ -385,10 +391,8 @@ class Peer(selfMarshaller: CallMarshaller, dataDef: DataStreamSource) extends La
 
       indexSetDb.removeTarget(proxy)
       val indexNot = getIndexSnapshotAndSetupSubscription(proxy, message.params.indexParams)
-      println(indexNot)
 
       val current = currentSubscriptionSnapshot(message.params, indexNot)
-      println(current)
       proxy.notify(current)
 
       promise.success(true)

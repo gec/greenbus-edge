@@ -271,6 +271,19 @@ message EndpointDescriptorNotification {
     uint64 sequence = 3;
 }
 
+message DataKeyDescriptorNotification {
+    EndpointPath endpoint_path = 1;
+    DataKeyDescriptor key_descriptor = 2;
+    uint64 sequence = 3;
+}
+
+message OutputKeyDescriptorNotification {
+    EndpointPath endpoint_path = 1;
+    OutputKeyDescriptor key_descriptor = 2;
+    uint64 sequence = 3;
+}
+
+
 message KeyedDataValueState {
     Path key = 1;
     DataValueState value = 2;
@@ -291,11 +304,13 @@ message KeyedPublisherOutputValue {
 message EndpointDataNotification {
     EndpointPath key = 1;
     DataValueNotification value = 2;
+    DataKeyDescriptorNotification descriptor_notification = 3;
 }
 
 message EndpointOutputStatusNotification {
     EndpointPath key = 1;
     OutputValueStatus value = 2;
+    OutputKeyDescriptorNotification descriptor_notification = 3;
 }
 
 message ClientSubscriptionNotification {

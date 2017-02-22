@@ -617,8 +617,53 @@ object Conversions {
     }
   }
 
+  def toProto(obj: edge.DataKeyDescriptorNotification): proto.DataKeyDescriptorNotification = {
+    val b = proto.DataKeyDescriptorNotification.newBuilder()
+    b.setEndpointPath(toProto(obj.endpointPath))
+    b.setKeyDescriptor(toProto(obj.descriptor))
+    b.setSequence(obj.sequence)
+    b.build()
+  }
+
+  def fromProto(msg: proto.DataKeyDescriptorNotification): Either[String, edge.DataKeyDescriptorNotification] = {
+    if (msg.hasEndpointPath && msg.hasKeyDescriptor) {
+      for {
+        id <- fromProto(msg.getEndpointPath)
+        desc <- fromProto(msg.getKeyDescriptor)
+      } yield {
+        edge.DataKeyDescriptorNotification(id, desc, msg.getSequence)
+      }
+    } else {
+      Left("DataKeyDescriptorNotification missing id or descriptor")
+    }
+  }
+
+  def toProto(obj: edge.OutputKeyDescriptorNotification): proto.OutputKeyDescriptorNotification = {
+    val b = proto.OutputKeyDescriptorNotification.newBuilder()
+    b.setEndpointPath(toProto(obj.endpointPath))
+    b.setKeyDescriptor(toProto(obj.descriptor))
+    b.setSequence(obj.sequence)
+    b.build()
+  }
+
+  def fromProto(msg: proto.OutputKeyDescriptorNotification): Either[String, edge.OutputKeyDescriptorNotification] = {
+    if (msg.hasEndpointPath && msg.hasKeyDescriptor) {
+      for {
+        id <- fromProto(msg.getEndpointPath)
+        desc <- fromProto(msg.getKeyDescriptor)
+      } yield {
+        edge.OutputKeyDescriptorNotification(id, desc, msg.getSequence)
+      }
+    } else {
+      Left("OutputKeyDescriptorNotification missing id or descriptor")
+    }
+  }
+
   def toProto(obj: edge.OutputValueStatus): proto.OutputValueStatus = {
     val b = proto.OutputValueStatus.newBuilder()
+    b.setSequence(obj.sequence)
+    b.setSessionId(toProto(obj.sessionId))
+    obj.valueOpt.map(ValueConversions.toProto).foreach(b.setValue)
     b.build()
   }
 
@@ -674,6 +719,7 @@ object Conversions {
     val b = proto.EndpointDataNotification.newBuilder()
     b.setKey(toProto(obj.key))
     b.setValue(toProto(obj.value))
+    obj.descriptorNotification.map(toProto).foreach(b.setDescriptorNotification)
     b.build()
   }
   def fromProto(msg: proto.EndpointDataNotification): Either[String, edge.EndpointDataNotification] = {
@@ -681,8 +727,9 @@ object Conversions {
       for {
         key <- fromProto(msg.getKey)
         value <- fromProto(msg.getValue)
+        desc <- if (msg.hasDescriptorNotification) fromProto(msg.getDescriptorNotification).map(r => Some(r)) else Right(None)
       } yield {
-        edge.EndpointDataNotification(key, value)
+        edge.EndpointDataNotification(key, value, desc)
       }
     } else {
       Left("EndpointDescriptorNotification missing id or descriptor")
@@ -693,6 +740,7 @@ object Conversions {
     val b = proto.EndpointOutputStatusNotification.newBuilder()
     b.setKey(toProto(obj.key))
     b.setValue(toProto(obj.status))
+    obj.descriptorNotification.map(toProto).foreach(b.setDescriptorNotification)
     b.build()
   }
   def fromProto(msg: proto.EndpointOutputStatusNotification): Either[String, edge.EndpointOutputStatusNotification] = {
@@ -700,8 +748,9 @@ object Conversions {
       for {
         key <- fromProto(msg.getKey)
         value <- fromProto(msg.getValue)
+        desc <- if (msg.hasDescriptorNotification) fromProto(msg.getDescriptorNotification).map(r => Some(r)) else Right(None)
       } yield {
-        edge.EndpointOutputStatusNotification(key, value)
+        edge.EndpointOutputStatusNotification(key, value, desc)
       }
     } else {
       Left("EndpointOutputStatusNotification missing id or descriptor")

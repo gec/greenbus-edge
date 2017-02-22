@@ -77,9 +77,11 @@ case class EndpointSetNotification(
   removed: Seq[EndpointId])
 
 case class EndpointDescriptorNotification(endpointId: EndpointId, descriptor: EndpointDescriptor, sequence: Long)
+case class DataKeyDescriptorNotification(endpointPath: EndpointPath, descriptor: DataKeyDescriptor, sequence: Long)
+case class OutputKeyDescriptorNotification(endpointPath: EndpointPath, descriptor: OutputKeyDescriptor, sequence: Long)
 
-case class EndpointDataNotification(key: EndpointPath, value: DataValueNotification)
-case class EndpointOutputStatusNotification(key: EndpointPath, status: OutputValueStatus)
+case class EndpointDataNotification(key: EndpointPath, value: DataValueNotification, descriptorNotification: Option[DataKeyDescriptorNotification])
+case class EndpointOutputStatusNotification(key: EndpointPath, status: OutputValueStatus, descriptorNotification: Option[OutputKeyDescriptorNotification])
 
 case class ClientSubscriptionNotification(
   setNotifications: Seq[EndpointSetNotification],
