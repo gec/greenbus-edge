@@ -160,7 +160,7 @@ object PublisherTest extends LazyLogging {
 }
 
 object PublisherCommon {
-  val testEndpointId = NamedEndpointId("my-test-endpoint")
+  val testEndpointId = NamedEndpointId(Path("my-test-endpoint"))
 
   def buildDesc(n: Int): ClientEndpointPublisherDesc = {
 

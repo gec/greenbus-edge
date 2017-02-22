@@ -147,7 +147,7 @@ message Path {
 }
 
 message NamedEndpointId {
-    string name = 1;
+    Path name = 1;
 }
 
 message EndpointId {

@@ -375,7 +375,7 @@ object Conversions {
     val b = proto.EndpointId.newBuilder()
 
     obj match {
-      case id: NamedEndpointId => b.setNamedId(proto.NamedEndpointId.newBuilder().setName(id.name))
+      case id: NamedEndpointId => b.setNamedId(proto.NamedEndpointId.newBuilder().setName(toProto(id.name)))
       case other => throw new IllegalArgumentException(s"Protobuf conversion did not recognize EndpointId $other")
     }
 
@@ -385,7 +385,8 @@ object Conversions {
   def fromProto(msg: proto.EndpointId): Either[String, edge.EndpointId] = {
     if (msg.hasNamedId) {
       val id = msg.getNamedId
-      Right(edge.NamedEndpointId(id.getName))
+      val pathEither = if (id.hasName) fromProto(id.getName) else Left("NamedEndpointId missing path")
+      pathEither.map(p => edge.NamedEndpointId(p))
     } else {
       Left("EndpointId unrecognized")
     }
@@ -1427,7 +1428,9 @@ object Test {
     println(printer.print(msg))
 
     val path = proto.EndpointPath.newBuilder()
-      .setEndpointId(proto.EndpointId.newBuilder().setNamedId(proto.NamedEndpointId.newBuilder().setName("ESS1")))
+      .setEndpointId(proto.EndpointId.newBuilder()
+        .setNamedId(proto.NamedEndpointId.newBuilder()
+          .setName(proto.Path.newBuilder().addPart("ESS1"))))
       .setKey(proto.Path.newBuilder().addPart("OutputPower").build())
       .build()
 

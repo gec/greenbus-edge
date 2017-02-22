@@ -69,7 +69,7 @@ object ProtoTest extends LazyLogging {
 
     logger.info("sender opened")
 
-    val id = NamedEndpointId("my-test-endpoint")
+    val id = NamedEndpointId(Path("my-test-endpoint"))
 
     val params = ClientSubscriptionParams(
       infoSubscriptions = Seq(id),

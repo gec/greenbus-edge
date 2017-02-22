@@ -65,7 +65,7 @@ object PublisherTest {
     val marshaller = new SameThreadMarshaller
 
     val desc = buildDesc(1)
-    val id = NamedEndpointId("my-test-endpoint")
+    val id = NamedEndpointId(Path("my-test-endpoint"))
     val pub = new EndpointPublisherImpl(marshaller, id, desc)
 
     val updateReceiver = pub.subscribeToUpdates()
@@ -122,7 +122,7 @@ object PublisherConnectTest {
 
     val desc = buildDesc(1)
     val sessionId = PersistenceSessionId(UUID.randomUUID(), 0)
-    val id = NamedEndpointId("my-test-endpoint")
+    val id = NamedEndpointId(Path("my-test-endpoint"))
     val pub = new EndpointPublisherImpl(eventThread, id, desc)
 
     val connFut = conn.connectPublisher(id, sessionId, pub)
@@ -161,7 +161,7 @@ object PublisherToPeerTest {
 
     val desc = buildDesc(1)
     val sessionId = PersistenceSessionId(UUID.randomUUID(), 0)
-    val id = NamedEndpointId("my-test-endpoint")
+    val id = NamedEndpointId(Path("my-test-endpoint"))
     val pub = new EndpointPublisherImpl(eventThread, id, desc)
 
     val connFut = conn.connectPublisher(id, sessionId, pub)
@@ -218,7 +218,7 @@ object PublisherToPeerWithControlTest {
 
     val desc = buildDesc(1)
     val sessionId = PersistenceSessionId(UUID.randomUUID(), 0)
-    val id = NamedEndpointId("my-test-endpoint")
+    val id = NamedEndpointId(Path("my-test-endpoint"))
     val pub = new EndpointPublisherImpl(eventThread, id, desc)
 
     val connFut = conn.connectPublisher(id, sessionId, pub)

@@ -27,7 +27,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.Try
 
 sealed trait EndpointId
-case class NamedEndpointId(name: String) extends EndpointId
+case class NamedEndpointId(name: Path) extends EndpointId
 
 object SessionId {
   sealed trait SessionRelation

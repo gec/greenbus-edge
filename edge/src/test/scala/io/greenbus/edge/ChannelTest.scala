@@ -51,7 +51,7 @@ object ChannelTest extends LazyLogging {
 
     val sessionId = PersistenceSessionId(UUID.randomUUID(), 0)
     val sourceId = ClientSessionSourceId(sessionId)
-    val endpointId = NamedEndpointId("my-test-endpoint")
+    val endpointId = NamedEndpointId(Path("my-test-endpoint"))
     val pubId = EndpointPublisherId(sourceId, sessionId, endpointId)
 
     import EdgeChannels._
