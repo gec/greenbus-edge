@@ -23,6 +23,7 @@ protocol extensibility
 
 can ouputs be re-modeled as non-singular publishes?
 
+Transmit indexes in peer manifest, not data keys?
 
 ideas:
 cql-like schema model, endpoints are "row sets"

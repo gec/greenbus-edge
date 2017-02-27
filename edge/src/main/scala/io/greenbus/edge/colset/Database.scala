@@ -1,5 +1,9 @@
 package io.greenbus.edge.colset
 
+import java.util.UUID
+
+import io.greenbus.edge.channel.CloseObservable
+
 
 /*
 
@@ -60,12 +64,84 @@ trait ModifiedKeyedSetTable {
   def rowKeyType: TypeDesc
 }
 
-trait SubscriberProxy {
+/*
+component: update-able subscriptions require the ability to either recognize a table row sub hasn't changed or
+go back and get more columns from a later query. need sub sequence in the subscription control / notification
+
+should all data/output keys optionally just be in the manifest???
+is transparent access to remote values necessary stage 1, desirable ultimately?
+
+!!! HOLD ON, why is everything not pull?
+- instead of publishers, "sources"
+- client connects: traditional pseudo-push
+- peer relay has list of "sources": greenbus endpoint protocol
+- related question: how do stores work? subscribe to all?
+
+local endpoint publisher:
+- establish publish to table row set (auth if amqp client)
+- establish initial state/values for all table rows
+- in peer, publisher registered for table row set
+- user layer??:
+  - endpoint manifest updated for peer
+  - indexes updated according to descriptor
+
+
+peer subscriber:
+- a two-way channel opens, local peer is the subscription provider
+- peer subscribes to tables: (endpoint set, endpoint index set, data index set, output index set) <--- THIS IS THE MANIFEST?? (these sets need to distinguish distance?)
+- peer subscribes to a set of rows,
+  - if local, snapshot is assembled and issued
+
+local subscriber:
+- a two-way channel opens, local peer is the subscription provider
+- client subscribes at will
+  - manifest tables reflect local, peer, and peer-derived
+  - subscriber finds out about peer and peer-derived data rows from indexes or endpoint descs
+    - !!! peer must infer presence of/path to remote data row from endpointId
+    - if not local and not in master peer manifest, must maintain in map of unresolved endpoints
+    - if local or remote publisher drops...? need activity state in notifications?
+      - remote peer responds to derived sub with either data or an inactive "marker", which is passed on to client
+
+peer source:
+- a two-way channel opens, local peer is the subscriber
+- subscribe to manifest table(s)
+- update our global manifest
+- update endpoint -> source path listing
+- check unresolved subscriptions, add subs as necessary
+
+local publisher removed:
+
+subscriber removed:
+
+
+
+
+ */
+
+class PeerColsetDb {
+
+  def onLocalPublisher(): Unit = ???
+
+  def onPeerSource(): Unit = ???
+
+  def onPeerSubscriber(): Unit = ???
+  def onLocalSubscriber(): Unit = ???
 
 }
 
+/*
+table ontology:
+
+sourced tables (end descs, data keys, 'real data', can be inactive if underlying source goes away)
+synthetic tables (endpoint sets, index sets, inactive makes no sense, generally?)
+dynamic typed tables, sourced/synth (active sets, value type is per-row)
 
 
+we need to escape to user layer to map descriptors to synthetic tables, is this unfortunate, i.e. we
+should think about putting the concepts of endpoints and indexes into the DB layer, or on the other hand
+does it allow us to create even more synthetic types
+
+ */
 trait Database {
 
   def create()
@@ -87,25 +163,61 @@ trait DatabaseView {
 
 }
 
+
+trait SubscriberProxy {
+}
+
+
+
+
 trait Subscription {
-  def dequeue(): NotificationBatch
+  def dequeue(): SubscriptionNotifications
   def close(): Unit
 }
 
+case class SessionColumnQuery(sessionId: SessId, sequence: TypeValue)
+
 case class ModifiedSetSubscription(table: String, rowKey: TypeValue)
-case class AppendSetSubscription(table: String, rowKey: TypeValue, columnQuery: TypeValue)
+case class LocalAppendSetSubscription(table: String, rowKey: TypeValue, columnQuery: Option[TypeValue])
+case class AppendSetSubscription(table: String, rowKey: TypeValue, columnQuery: Option[SessionColumnQuery])
 
 // TODO: should sequence just be long, should sessions be built in? where does session-awareness go in the layering?
-case class ModifiedSetNotification(table: String, rowKey: TypeValue, sequence: TypeValue, snapshot: Option[Set[TypeValue]], removes: Set[TypeValue], adds: Set[TypeValue])
+
+// TODO: IS THE WRITER TIMED OUT? can we do this within session notifications? no; how do we then handle disappearance of client publisher while peer still okay
+// TODO: pull table/rowKey out, value update is seq/payload, notification is: (table/row, option(value update), option(inactive))
+/*case class ModifiedSetNotification(table: String, rowKey: TypeValue, sequence: TypeValue, snapshot: Option[Set[TypeValue]], removes: Set[TypeValue], adds: Set[TypeValue])
 case class ModifiedKeyedSetNotification(table: String, rowKey: TypeValue, sequence: TypeValue, snapshot: Option[Map[TypeValue, TypeValue]], removes: Set[TypeValue], adds: Set[TypeValue])
-case class AppendSetNotification(table: String, rowKey: TypeValue, sequence: TypeValue)
+case class AppendSetNotification(table: String, rowKey: TypeValue, sequence: TypeValue, value: TypeValue)*/
+
+case class TableRowId(table: String, rowKey: TypeValue)
+case class ModifiedSetUpdate(sequence: TypeValue, snapshot: Option[Set[TypeValue]], removes: Set[TypeValue], adds: Set[TypeValue])
+case class ModifiedKeyedSetUpdate(sequence: TypeValue, snapshot: Option[Map[TypeValue, TypeValue]], removes: Set[TypeValue], adds: Set[TypeValue])
+case class AppendSetUpdate(sequence: TypeValue, value: TypeValue)
+
+case class ModifiedSetNotification(tableRowId: TableRowId, update: Option[ModifiedSetUpdate], inactiveFlag: Boolean)
+case class ModifiedKeyedSetNotification(tableRowId: TableRowId, update: Option[ModifiedKeyedSetUpdate], inactiveFlag: Boolean)
+case class AppendSetNotification(tableRowId: TableRowId, update: Option[AppendSetUpdate], inactiveFlag: Boolean)
+
 
 // Put "sequence succession" in notification?
 // Don't, session is like a sub-row, we handle sub rows in parallel
+// TERMINAL subscriptions that allow (re-)publishing peer to sequence w/o sessions?
 
+case class SessId(persistenceId: UUID, instanceId: Long)
 
-//case class NotificationSequence()
-case class NotificationBatch()
+case class NotificationBatch(sets: Seq[ModifiedSetNotification], keyedSets: Seq[ModifiedKeyedSetNotification], appendSets: Seq[AppendSetNotification])
+
+case class SessionNotificationSequence(session: SessId, batches: Seq[NotificationBatch])
+
+case class SubscriptionNotifications(
+                            localNotifications: Seq[NotificationBatch],
+                            sessionNotifications: Seq[SessionNotificationSequence])
+
+/*
+case class NotificationBatch(
+
+                            )
+*/
 
 /*
 Row Transfer Model (RTM)
