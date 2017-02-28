@@ -56,97 +56,10 @@ Peer Node:
  */
 
 //trait FieldDesc
-trait TypeDesc
-trait TypeValue
 
 trait ModifiedKeyedSetTable {
   def rowKeyType: TypeDesc
 }
-
-/*
-component: update-able subscriptions require the ability to either recognize a table row sub hasn't changed or
-go back and get more columns from a later query. need sub sequence in the subscription control / notification
-
-should all data/output keys optionally just be in the manifest???
-is transparent access to remote values necessary stage 1, desirable ultimately?
-
-!!! HOLD ON, why is everything not pull?
-- instead of publishers, "sources"
-- client connects: traditional pseudo-push
-- peer relay has list of "sources": greenbus endpoint protocol
-- related question: how do stores work? subscribe to all?
-
-local endpoint publisher:
-- establish publish to table row set (auth if amqp client)
-- establish initial state/values for all table rows
-- in peer, publisher registered for table row set
-- user layer??:
-  - endpoint manifest updated for peer
-  - indexes updated according to descriptor
-
-
-peer subscriber:
-- a two-way channel opens, local peer is the subscription provider
-- peer subscribes to tables: (endpoint set, endpoint index set, data index set, output index set) <--- THIS IS THE MANIFEST?? (these sets need to distinguish distance?)
-- peer subscribes to a set of rows,
-  - if local, snapshot is assembled and issued
-
-local subscriber:
-- a two-way channel opens, local peer is the subscription provider
-- client subscribes at will
-  - manifest tables reflect local, peer, and peer-derived
-  - subscriber finds out about peer and peer-derived data rows from indexes or endpoint descs
-    - !!! peer must infer presence of/path to remote data row from endpointId
-    - if not local and not in master peer manifest, must maintain in map of unresolved endpoints
-    - if local or remote publisher drops...? need activity state in notifications?
-      - remote peer responds to derived sub with either data or an inactive "marker", which is passed on to client
-
-peer source:
-- a two-way channel opens, local peer is the subscriber
-- subscribe to manifest table(s)
-- update our global manifest
-- update endpoint -> source path listing
-- check unresolved subscriptions, add subs as necessary
-
-local publisher removed:
-- update global manifest
-- update publisher-owned table rows with inactive flag
-
-peer remote manifest removes endpoint:
-- NO, do it when receive sub event on rows from remote peer // update endpoint table rows with inactive flag
-
-subscriber removed:
-- if last for remote row key
-  - set timeout to GC this sub
-
-OBJECTS:
-
-- peer source channels
-- peer source proxies
-
-- per-source manifest
-- global manifest
-
-- local (pubbed) rows
-- replicated rows
-  - subscriber list
-
-- peer subscriber proxies
-  - row queues
-
-- peer subscriber channels
-
-
-
-peer keyspace
-source keyspace
-
-
-subscription keyspace model
--> source/endpoint (with endpoint and row indexes)
--> edge logical endpoint model (proto descriptor, metadata, keys, outputs, data types)
-
- */
 
 /*
 table ontology:
@@ -163,19 +76,6 @@ does it allow us to create even more synthetic types
 
  */
 
-class SourcedEndpointPeer {
-
-  private val keySpace: Database = null
-
-  def onLocalPublisherOpened(): Unit = ???
-  def onLocalPublisherClosed(): Unit = ???
-
-  //def onPeerSource(): Unit = ???
-
-  def onPeerSubscriber(): Unit = ???
-  def onLocalSubscriber(): Unit = ???
-
-}
 
 trait Row {
 
@@ -201,7 +101,7 @@ trait Database {
 }
 
 trait PeerPullChannel {
-  def updateSubscriptionSet(modSubs: Seq[ModifiedSetSubscription], appendSubs: Seq[LocalAppendSetSubscription])
+  def updateSubscriptionSet(modSubs: Seq[ModifiedSetSubscription], appendSubs: Seq[AppendSetSubscription])
 }
 
 class PeerPullProxy {
@@ -215,7 +115,7 @@ trait DatabaseView {
   //def subscribeToSetModify(table: String, rowKey: TypeValue, notify: () => Unit)
   //def subscribeToSetAppend(table: String, rowKey: TypeValue, columnQuery: TypeValue, notify: () => Unit)
 
-  def subscribe(modSubs: Seq[ModifiedSetSubscription], appendSubs: Seq[LocalAppendSetSubscription], notify: () => Unit): Subscription
+  def subscribe(modSubs: Seq[ModifiedSetSubscription], appendSubs: Seq[AppendSetSubscription], notify: () => Unit): Subscription
 
 }
 
@@ -231,11 +131,13 @@ trait Subscription {
   def close(): Unit
 }
 
-case class SessionColumnQuery(sessionId: SessId, sequence: TypeValue)
+case class SessionColumnQuery(sessionId: PeerSessionId, sequence: TypeValue)
 
-case class ModifiedSetSubscription(table: String, rowKey: TypeValue)
-case class LocalAppendSetSubscription(table: String, rowKey: TypeValue, columnQuery: Option[TypeValue])
+case class ModifiedSetSubscription(tableRowId: TableRowId)
+case class AppendSetSubscription(tableRowId: TableRowId, columnQuery: Option[TypeValue])
 //case class AppendSetSubscription(table: String, rowKey: TypeValue, columnQuery: Option[SessionColumnQuery])
+
+case class SubscriptionParams(setSubs: Seq[ModifiedSetSubscription] = Vector(), appendSubs: Seq[AppendSetSubscription] = Vector())
 
 // TODO: should sequence just be long, should sessions be built in? where does session-awareness go in the layering?
 
@@ -245,7 +147,7 @@ case class LocalAppendSetSubscription(table: String, rowKey: TypeValue, columnQu
 case class ModifiedKeyedSetNotification(table: String, rowKey: TypeValue, sequence: TypeValue, snapshot: Option[Map[TypeValue, TypeValue]], removes: Set[TypeValue], adds: Set[TypeValue])
 case class AppendSetNotification(table: String, rowKey: TypeValue, sequence: TypeValue, value: TypeValue)*/
 
-case class TableRowId(table: String, rowKey: TypeValue)
+case class TableRowId(table: SymbolVal, rowKey: TypeValue)
 case class ModifiedSetUpdate(sequence: TypeValue, snapshot: Option[Set[TypeValue]], removes: Set[TypeValue], adds: Set[TypeValue])
 case class ModifiedKeyedSetUpdate(sequence: TypeValue, snapshot: Option[Map[TypeValue, TypeValue]], removes: Set[TypeValue], adds: Set[TypeValue])
 case class AppendSetUpdate(sequence: TypeValue, value: TypeValue)
@@ -254,19 +156,24 @@ case class ModifiedSetNotification(tableRowId: TableRowId, update: Option[Modifi
 case class ModifiedKeyedSetNotification(tableRowId: TableRowId, update: Option[ModifiedKeyedSetUpdate], inactiveFlag: Boolean)
 case class AppendSetNotification(tableRowId: TableRowId, update: Option[AppendSetUpdate], inactiveFlag: Boolean)
 
+case class ModifiedSetLocalNotification(tableRowId: TableRowId, update: ModifiedSetUpdate)
+case class ModifiedKeyedLocalSetNotification(tableRowId: TableRowId, update: ModifiedKeyedSetUpdate)
+case class AppendSetLocalNotification(tableRowId: TableRowId, update: AppendSetUpdate)
+
 
 // Put "sequence succession" in notification?
 // Don't, session is like a sub-row, we handle sub rows in parallel
 // TERMINAL subscriptions that allow (re-)publishing peer to sequence w/o sessions?
 
-case class SessId(persistenceId: UUID, instanceId: Long)
+case class PeerSessionId(persistenceId: UUID, instanceId: Long)
 
+case class LocalNotificationBatch(sets: Seq[ModifiedSetLocalNotification], keyedSets: Seq[ModifiedKeyedLocalSetNotification], appendSets: Seq[AppendSetLocalNotification])
 case class NotificationBatch(sets: Seq[ModifiedSetNotification], keyedSets: Seq[ModifiedKeyedSetNotification], appendSets: Seq[AppendSetNotification])
 
-case class SessionNotificationSequence(session: SessId, batches: Seq[NotificationBatch])
+case class SessionNotificationSequence(session: PeerSessionId, batches: Seq[NotificationBatch])
 
 case class SubscriptionNotifications(
-                            localNotifications: Seq[NotificationBatch],
+                            localNotifications: Seq[LocalNotificationBatch],
                             sessionNotifications: Seq[SessionNotificationSequence])
 
 /*

@@ -29,3 +29,7 @@ object CallMarshaller {
 trait CallMarshaller {
   def marshal(f: => Unit): Unit
 }
+
+trait SchedulableCallMarshaller extends CallMarshaller {
+  def delayed(durationMs: Long, f: => Unit): Unit
+}
