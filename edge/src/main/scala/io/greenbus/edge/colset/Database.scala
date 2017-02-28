@@ -2,7 +2,6 @@ package io.greenbus.edge.colset
 
 import java.util.UUID
 
-import io.greenbus.edge.channel.CloseObservable
 
 
 /*
@@ -110,46 +109,103 @@ peer source:
 - check unresolved subscriptions, add subs as necessary
 
 local publisher removed:
+- update global manifest
+- update publisher-owned table rows with inactive flag
+
+peer remote manifest removes endpoint:
+- NO, do it when receive sub event on rows from remote peer // update endpoint table rows with inactive flag
 
 subscriber removed:
+- if last for remote row key
+  - set timeout to GC this sub
+
+OBJECTS:
+
+- peer source channels
+- peer source proxies
+
+- per-source manifest
+- global manifest
+
+- local (pubbed) rows
+- replicated rows
+  - subscriber list
+
+- peer subscriber proxies
+  - row queues
+
+- peer subscriber channels
 
 
 
+peer keyspace
+source keyspace
+
+
+subscription keyspace model
+-> source/endpoint (with endpoint and row indexes)
+-> edge logical endpoint model (proto descriptor, metadata, keys, outputs, data types)
 
  */
-
-class PeerColsetDb {
-
-  def onLocalPublisher(): Unit = ???
-
-  def onPeerSource(): Unit = ???
-
-  def onPeerSubscriber(): Unit = ???
-  def onLocalSubscriber(): Unit = ???
-
-}
 
 /*
 table ontology:
 
-sourced tables (end descs, data keys, 'real data', can be inactive if underlying source goes away)
-synthetic tables (endpoint sets, index sets, inactive makes no sense, generally?)
-dynamic typed tables, sourced/synth (active sets, value type is per-row)
+- sourced tables (end descs, data keys, 'real data', can be inactive if underlying source goes away)
+- synthetic tables (endpoint sets, index sets, inactive makes no sense, generally?)
+- dynamic typed tables, sourced/synth (active sets, value type is per-row)
 
+is it really "synthetic" or just "immediate", it can't "go away" who cares whether it's "real"
 
 we need to escape to user layer to map descriptors to synthetic tables, is this unfortunate, i.e. we
 should think about putting the concepts of endpoints and indexes into the DB layer, or on the other hand
 does it allow us to create even more synthetic types
 
  */
+
+class SourcedEndpointPeer {
+
+  private val keySpace: Database = null
+
+  def onLocalPublisherOpened(): Unit = ???
+  def onLocalPublisherClosed(): Unit = ???
+
+  //def onPeerSource(): Unit = ???
+
+  def onPeerSubscriber(): Unit = ???
+  def onLocalSubscriber(): Unit = ???
+
+}
+
+trait Row {
+
+}
+
+sealed trait RowType
+case object ModifyRowType extends RowType
+
+// TODO: how do we abstract away session ids
 trait Database {
 
-  def create()
+  // create
+
+  def createModifiedSet(rowType: RowType, rowKeyDesc: TypeDesc): Unit
+
+  def createKeyedModifiedSet(rowType: RowType, rowKeyDesc: TypeDesc, elementKey: TypeDesc): Unit
+
+  def createAppendSet(rowType: RowType, rowKeyDesc: TypeDesc, columnKey: TypeDesc): Unit
 
   // for active sets
   def createDynamic()
 
-  def transaction()
+}
+
+trait PeerPullChannel {
+  def updateSubscriptionSet(modSubs: Seq[ModifiedSetSubscription], appendSubs: Seq[LocalAppendSetSubscription])
+}
+
+class PeerPullProxy {
+
 
 }
 
@@ -159,7 +215,7 @@ trait DatabaseView {
   //def subscribeToSetModify(table: String, rowKey: TypeValue, notify: () => Unit)
   //def subscribeToSetAppend(table: String, rowKey: TypeValue, columnQuery: TypeValue, notify: () => Unit)
 
-  def subscribe(modSubs: Seq[ModifiedSetSubscription], appendSubs: Seq[AppendSetSubscription], notify: () => Unit): Subscription
+  def subscribe(modSubs: Seq[ModifiedSetSubscription], appendSubs: Seq[LocalAppendSetSubscription], notify: () => Unit): Subscription
 
 }
 
@@ -179,7 +235,7 @@ case class SessionColumnQuery(sessionId: SessId, sequence: TypeValue)
 
 case class ModifiedSetSubscription(table: String, rowKey: TypeValue)
 case class LocalAppendSetSubscription(table: String, rowKey: TypeValue, columnQuery: Option[TypeValue])
-case class AppendSetSubscription(table: String, rowKey: TypeValue, columnQuery: Option[SessionColumnQuery])
+//case class AppendSetSubscription(table: String, rowKey: TypeValue, columnQuery: Option[SessionColumnQuery])
 
 // TODO: should sequence just be long, should sessions be built in? where does session-awareness go in the layering?
 
