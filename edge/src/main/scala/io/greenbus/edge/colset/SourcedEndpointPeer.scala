@@ -1,5 +1,8 @@
 package io.greenbus.edge.colset
 
+import java.util.UUID
+
+import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.{CallMarshaller, SchedulableCallMarshaller}
 import io.greenbus.edge.channel2._
 
@@ -94,6 +97,8 @@ is the subscriber-facing table generic, different peer library systems update ro
   - discontinuities understood?
     - loss of sync, changeover both refinements of discontinuity
 
+solution: routing key, i.e. cassandra partition key
+
 [peer A generic keyspace] <-[naming convention]-> [peer b remote proxy] <-> APP control/merge <->
 
 subscription keyspace model
@@ -120,6 +125,12 @@ trait RemoteSubscribable extends Closeable with CloseObservable {
 }
 
 
+case class RemotePeerChannels(
+                               subscriptionControl: SenderChannel[SubscriptionParams, Boolean],
+                               subscriptionReceive: ReceiverChannel[SubscriptionNotifications, Boolean]/*,
+                               outputRequests: SenderChannel[OutputRequest, Boolean],
+                               outputResponses: ReceiverChannel[OutputResponse, Boolean]*/)
+
 // TODO: "two-(multi-) way channel that combines closeability/closeobservableness and abstracts individual amqp links from actual two-way inter-process comms like websocket
 class RemoteSubscribableImpl(eventThread: SchedulableCallMarshaller, channels: RemotePeerChannels) extends RemoteSubscribable {
   def updateSubscription(params: SubscriptionParams): Unit = ???
@@ -134,11 +145,21 @@ class RemoteSubscribableImpl(eventThread: SchedulableCallMarshaller, channels: R
 case class ManifestUpdate()
 
 
-class RemotePeerSubscriptionLinkMgr(remoteId: PeerSessionId, subscriptionMgr: RemoteSubscribable) {
+trait RemotePeerSourceLink extends CloseObservable {
+  def link(): Unit
+  def remoteManifest: Source[ManifestUpdate]
+}
+
+class RemotePeerSubscriptionLinkMgr(remoteId: PeerSessionId, subscriptionMgr: RemoteSubscribable) extends /*RemotePeerSourceLink with*/ LazyLogging {
 
   private val endpointTableRow =  TableRowId(SourcedEndpointPeer.endpointTable, TypeValueConversions.toTypeValue(remoteId))
   private val endpointIndexesTableRow =  TableRowId(SourcedEndpointPeer.endpointIndexTable, TypeValueConversions.toTypeValue(remoteId))
   private val endpointKeyIndexesTableRow =  TableRowId(SourcedEndpointPeer.keyIndexTable, TypeValueConversions.toTypeValue(remoteId))
+
+  //private val endTableSetOpt = Option.empty[TypedSimpleSeqModifiedSetDb]
+  private val endTableSet = new UntypedSimpleSeqModifiedSetDb
+  private val endIndexesSet = new UntypedSimpleSeqModifiedSetDb
+  private val endKeysIndexesSet = new UntypedSimpleSeqModifiedSetDb
 
   def link(): Unit = {
     val endpoints = ModifiedSetSubscription(endpointTableRow)
@@ -153,22 +174,166 @@ class RemotePeerSubscriptionLinkMgr(remoteId: PeerSessionId, subscriptionMgr: Re
   def remoteManifest: Source[ManifestUpdate] = ???
 
   protected def handle(notifications: SubscriptionNotifications): Unit = {
+    val startEndTableSet = endTableSet.current
+    val startEndIndexesSet = endIndexesSet.current
+    val startKeysIndexesSet = endKeysIndexesSet.current
+
     notifications.localNotifications.foreach { batch =>
       batch.sets.foreach { set =>
         set.tableRowId match {
-          case `endpointTableRow` => set.update
+          case `endpointTableRow` => endTableSet.observe(set.update)
+          case `endpointIndexesTableRow` => endIndexesSet.observe(set.update)
+          case `endpointKeyIndexesTableRow` => endKeysIndexesSet.observe(set.update)
+          case _ => logger.warn("Unrecognized local set subscription: " + set.tableRowId)
         }
       }
+      batch.keyedSets.foreach { set =>
+        logger.warn("Unrecognized local keyed set subscription: " + set.tableRowId)
+      }
+      batch.appendSets.foreach { set =>
+        logger.warn("Unrecognized append set subscription: " + set.tableRowId)
+      }
     }
+
+    val updatedEndTableSet = endTableSet.current
+    val updatedEndIndexesSet = endIndexesSet.current
+    val updatedKeysIndexesSet = endKeysIndexesSet.current
+
   }
 }
 
-case class RemotePeerChannels(
-                               subscriptionControl: SenderChannel[SubscriptionParams, Boolean],
-                               subscriptionReceive: ReceiverChannel[SubscriptionNotifications, Boolean]/*,
-                               outputRequests: SenderChannel[OutputRequest, Boolean],
-                               outputResponses: ReceiverChannel[OutputResponse, Boolean]*/)
+/*
+dbs:
+links -> synthesizer -> retail
 
+sub => sub mgr -> sourcing (peers, local pubs)
+
+ */
+
+trait Subscriber {
+  def observe()
+}
+
+trait GenRowDb
+trait GenRowAppend
+
+trait MarkedRowView {
+  def dequeue()
+}
+
+class MultiSourcedRowDb {
+  private var link = Map.empty[RemotePeerSourceLink, GenRowDb]
+}
+
+class SessionedRowDb(id: TableRowId) {
+  private var active: PeerSessionId = null
+  private var sessions = Map.empty[PeerSessionId, MultiSourcedRowDb]
+}
+
+
+/*
+events:
+- link added
+  - link added and newly active session/row
+- link removed
+  - link removed and session now empty
+- updates
+- subscriber added
+- subscriber removed
+
+external results:
+- appends
+
+ */
+
+/*
+
+
+
+ */
+class SynthesizedTable {
+  private var rowSynthesizers = Map.empty[TableRowId, SessionedRowDb]
+  private var linkToRowSessions = Map.empty[RemotePeerSourceLink, Set[(TableRowId, SessionedRowDb)]]
+
+  private var retailRows = Map.empty[TableRowId, GenRowDb]
+
+  /*private var subscriptions = Map.empty[TableRowId, Set[Subscription]]
+  private var subscribers = Map.empty[Subscriber, Set[TableRowId]]*/
+
+  def sourceEvents(source: RemotePeerSourceLink, sessionNotifications: Seq[SessionNotificationSequence]): Unit = {
+
+  }
+
+  def sourceRemoved(source: RemotePeerSourceLink): Unit = {
+
+  }
+
+  def rowInactive(row: TableRowId): Unit = {
+
+  }
+
+  /*def subscriptionsRegistered(subscriber: Subscriber, subscriptions: Seq[GenericSetSubscription]): Unit = {
+
+  }*/
+
+
+  //private var db = Map.empty[TableRowId, Map[PeerSessionId, Map[RemotePeerSourceLink, GenRowDb]]]
+
+  //def linkRemoved(link: RemotePeerSourceLink): SynthesizeResult
+}
+
+case class SynthesizeResult(appends: Seq[(TableRowId, GenRowAppend)])
+
+/*sealed trait EndpointId
+case class UuidEndpointId(uuid: UUID) extends EndpointId
+case class SessionNamedEndpointId(name: String, session: PeerSessionId) extends EndpointId*/
+
+case class PeerManifest(endpointSet: Set[TypeValue], endpointIndexSet: Map[SymbolVal, IndexableTypeValue], keyIndexSet: Map[SymbolVal, IndexableTypeValue])
+
+class SourceLinksManifest {
+
+  def handleUpdate(link: PeerSessionId, manifest: PeerManifest): Unit = {
+
+  }
+
+  def linkRemoved(link: PeerSessionId): Unit = {
+
+  }
+}
+
+class PeerThing {
+  private val table = new SynthesizedTable
+
+  //private var
+
+  private var subscriptions = Map.empty[TableRowId, Set[Subscription]]
+  private var unresolvedSubs = Map.empty[TableRowId, Set[Subscription]]
+  private var subscribers = Map.empty[Subscriber, Set[TableRowId]]
+
+  def subscriptionsRegistered(subscriber: Subscriber, subscriptions: Seq[GenericSetSubscription]): Unit = {
+
+  }
+
+}
+
+
+/*class RowSynthesizer {
+  private var db = Map.empty[TableRowId, SessionedRowDb]
+  //private var db = Map.empty[TableRowId, Map[PeerSessionId, Map[RemotePeerSourceLink, GenRowDb]]]
+
+  //def linkRemoved(link: RemotePeerSourceLink): SynthesizeResult
+}*/
+
+/*class PeerRowMgr {
+
+  def peerSourceLinkOpened(peer: RemotePeerSourceLink): Unit = {
+
+  }
+
+  def subscriberOpened(): Unit = {
+
+  }
+}*/
 
 /*class RemotePeerProxyImpl(eventThread: SchedulableCallMarshaller, remoteId: PeerSessionId, channels: RemotePeerChannels) extends Closeable with CloseObservable {
 
@@ -187,12 +352,12 @@ case class RemotePeerChannels(
 }*/
 
 
-trait RemotePeerProxy {
+/*trait RemotePeerProxy {
   //def subscribeManifest()
 
   def manifest: Source[ManifestUpdate]
 
-}
+}*/
 
 object SourcedEndpointPeer {
   val tablePrefix = "sep"
@@ -209,7 +374,7 @@ class SourcedEndpointPeer {
   def onLocalPublisherOpened(): Unit = ???
   def onLocalPublisherClosed(): Unit = ???
 
-  def onRemotePeerOpened(proxy: RemotePeerProxy): Unit = ???
+  //def onRemotePeerOpened(proxy: RemotePeerProxy): Unit = ???
   def onRemotePeerClosed(): Unit = ???
 
   //def onPeerRemoteManifestUpdate()

@@ -31,6 +31,9 @@ def onPublish(batch) {
 /*
 SESSION MANAGEMENT
 
+NOTE!! (later) if the thing that breaks back-propagating liveness request is parallel frontend peers to many subscribers, could get this
+architecture by hooking the specific frontend peers to a leader-elected (locked) liveliness-determining master
+
 - back to back-propagating a demand for ordering, but with order relations between sessions being an immutable fact that can be re-published
 - communicate back a list of unresolved session orderings OR just your active session set
 - sessions of distance 1 are always synced by timeouts
@@ -120,18 +123,14 @@ trait DatabaseView {
 }
 
 
-trait SubscriberProxy {
-}
-
-
-
-
 trait Subscription {
   def dequeue(): SubscriptionNotifications
   def close(): Unit
 }
 
 case class SessionColumnQuery(sessionId: PeerSessionId, sequence: TypeValue)
+
+case class GenericSetSubscription(tableRowId: TableRowId, columnQuery: Option[TypeValue])
 
 case class ModifiedSetSubscription(tableRowId: TableRowId)
 case class AppendSetSubscription(tableRowId: TableRowId, columnQuery: Option[TypeValue])

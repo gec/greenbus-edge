@@ -17,6 +17,8 @@ trait SequencedTypeValue[Self] extends OrderedTypeValue[Self] {
   def next: Self
 }*/
 
+trait IndexableTypeValue
+
 trait OrderedTypeValue extends TypeValue {
   def isEqualTo(r: OrderedTypeValue): Boolean
   def isLessThan(r: OrderedTypeValue): Boolean
