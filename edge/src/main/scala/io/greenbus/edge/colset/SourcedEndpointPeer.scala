@@ -5,6 +5,7 @@ import java.util.UUID
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.{CallMarshaller, SchedulableCallMarshaller}
 import io.greenbus.edge.channel2._
+import io.greenbus.edge.collection.ValueTrackedSetMap
 
 /*
 component: update-able subscriptions require the ability to either recognize a table row sub hasn't changed or
@@ -152,9 +153,9 @@ trait RemotePeerSourceLink extends CloseObservable {
 
 class RemotePeerSubscriptionLinkMgr(remoteId: PeerSessionId, subscriptionMgr: RemoteSubscribable) extends /*RemotePeerSourceLink with*/ LazyLogging {
 
-  private val endpointTableRow =  TableRowId(SourcedEndpointPeer.endpointTable, TypeValueConversions.toTypeValue(remoteId))
-  private val endpointIndexesTableRow =  TableRowId(SourcedEndpointPeer.endpointIndexTable, TypeValueConversions.toTypeValue(remoteId))
-  private val endpointKeyIndexesTableRow =  TableRowId(SourcedEndpointPeer.keyIndexTable, TypeValueConversions.toTypeValue(remoteId))
+  private val endpointTableRow =  DirectTableRowId(SourcedEndpointPeer.endpointTable, TypeValueConversions.toTypeValue(remoteId))
+  private val endpointIndexesTableRow =  DirectTableRowId(SourcedEndpointPeer.endpointIndexTable, TypeValueConversions.toTypeValue(remoteId))
+  private val endpointKeyIndexesTableRow =  DirectTableRowId(SourcedEndpointPeer.keyIndexTable, TypeValueConversions.toTypeValue(remoteId))
 
   //private val endTableSetOpt = Option.empty[TypedSimpleSeqModifiedSetDb]
   private val endTableSet = new UntypedSimpleSeqModifiedSetDb
@@ -162,9 +163,9 @@ class RemotePeerSubscriptionLinkMgr(remoteId: PeerSessionId, subscriptionMgr: Re
   private val endKeysIndexesSet = new UntypedSimpleSeqModifiedSetDb
 
   def link(): Unit = {
-    val endpoints = ModifiedSetSubscription(endpointTableRow)
-    val endIndexes = ModifiedSetSubscription(endpointIndexesTableRow)
-    val endKeyIndexes = ModifiedSetSubscription(endpointKeyIndexesTableRow)
+    val endpoints = DirectSetSubscription(endpointTableRow, None)
+    val endIndexes = DirectSetSubscription(endpointIndexesTableRow, None)
+    val endKeyIndexes = DirectSetSubscription(endpointKeyIndexesTableRow, None)
     val params = SubscriptionParams(Seq(endpoints, endIndexes, endKeyIndexes))
 
     subscriptionMgr.updateSubscription(params)
@@ -225,7 +226,7 @@ class MultiSourcedRowDb {
   private var link = Map.empty[RemotePeerSourceLink, GenRowDb]
 }
 
-class SessionedRowDb(id: TableRowId) {
+class SessionedRowDb(id: RoutedTableRowId) {
   private var active: PeerSessionId = null
   private var sessions = Map.empty[PeerSessionId, MultiSourcedRowDb]
 }
@@ -252,10 +253,10 @@ external results:
 
  */
 class SynthesizedTable {
-  private var rowSynthesizers = Map.empty[TableRowId, SessionedRowDb]
-  private var linkToRowSessions = Map.empty[RemotePeerSourceLink, Set[(TableRowId, SessionedRowDb)]]
+  private var rowSynthesizers = Map.empty[RoutedTableRowId, SessionedRowDb]
+  private var linkToRowSessions = Map.empty[RemotePeerSourceLink, Set[(RoutedTableRowId, SessionedRowDb)]]
 
-  private var retailRows = Map.empty[TableRowId, GenRowDb]
+  private var retailRows = Map.empty[RoutedTableRowId, GenRowDb]
 
   /*private var subscriptions = Map.empty[TableRowId, Set[Subscription]]
   private var subscribers = Map.empty[Subscriber, Set[TableRowId]]*/
@@ -268,7 +269,7 @@ class SynthesizedTable {
 
   }
 
-  def rowInactive(row: TableRowId): Unit = {
+  def rowInactive(row: RoutedTableRowId): Unit = {
 
   }
 
@@ -282,35 +283,91 @@ class SynthesizedTable {
   //def linkRemoved(link: RemotePeerSourceLink): SynthesizeResult
 }
 
-case class SynthesizeResult(appends: Seq[(TableRowId, GenRowAppend)])
+case class SynthesizeResult(appends: Seq[(RoutedTableRowId, GenRowAppend)])
 
 /*sealed trait EndpointId
 case class UuidEndpointId(uuid: UUID) extends EndpointId
 case class SessionNamedEndpointId(name: String, session: PeerSessionId) extends EndpointId*/
 
-case class PeerManifest(endpointSet: Set[TypeValue], endpointIndexSet: Map[SymbolVal, IndexableTypeValue], keyIndexSet: Map[SymbolVal, IndexableTypeValue])
+case class IndexSpecifier(key: TypeValue, value: Option[IndexableTypeValue])
+//case class PeerManifest(routingKeySet: Set[TypeValue], endpointIndexSet: Map[IndexSpecifier, Set[RoutedTableRowId]], keyIndexSet: Map[IndexSpecifier, Set[RoutedTableRowId]])
+case class PeerManifest(routingKeySet: Set[TypeValue], indexSet: Set[IndexSpecifier])
 
-class SourceLinksManifest {
 
-  def handleUpdate(link: PeerSessionId, manifest: PeerManifest): Unit = {
+class SourceLinksManifest[Link] {
 
+  /*private var routingMap = Map.empty[TypeValue, Set[Link]]
+  private var indexMap = Map.empty[TypeValue, Set[Link]]
+
+  private var linkToRoute = Map.empty[]*/
+
+
+  private var routingMap = ValueTrackedSetMap.empty[TypeValue, Link]
+  private var indexMap = ValueTrackedSetMap.empty[IndexSpecifier, Link]
+
+  def routingKeys: Map[TypeValue, Set[Link]] = routingMap.keyToVal
+  def indexes: Map[IndexSpecifier, Set[Link]] = indexMap.keyToVal
+
+  def handleUpdate(link: Link, manifest: PeerManifest): Unit = {
+    routingMap = routingMap.reverseAdd(link, manifest.routingKeySet)
+    indexMap = indexMap.reverseAdd(link, manifest.indexSet)
   }
 
-  def linkRemoved(link: PeerSessionId): Unit = {
-
+  def linkRemoved(link: Link): Unit = {
+    routingMap = routingMap.remove(link)
+    indexMap = indexMap.remove(link)
   }
 }
 
+class LocalManifest[Publisher] {
+
+}
+
+class PeerMasterManifest {
+
+
+}
+
+/*
+
+Peer manifest
+Local manifest
+Already-active peer link subs, and their targets
+Unresolved subscriptions
+
+- Routing
+
+
+ */
+/*
+Publish:
+
+- routing/partition key
+- row values
+- row indexes
+
+effects:
+- update local manifest with routing as locally sourced, and indexes
+- update master manifest / push to direct database with routing/indexes
+- push to (routed? as self?) database
+
+update active on inactive subs?
+local set keeps updating current value when no subs, append has a window?
+could local pubs be in a local zone that is a source link for the routed table, bridged only when a sub happens?
+  - is this a better transition to pull-based clients
+
+ */
+
 class PeerThing {
-  private val table = new SynthesizedTable
+  private val routedTable = new SynthesizedTable
 
   //private var
 
-  private var subscriptions = Map.empty[TableRowId, Set[Subscription]]
-  private var unresolvedSubs = Map.empty[TableRowId, Set[Subscription]]
-  private var subscribers = Map.empty[Subscriber, Set[TableRowId]]
+  private var subscriptions = Map.empty[RoutedTableRowId, Set[Subscription]]
+  private var unresolvedSubs = Map.empty[RoutedTableRowId, Set[Subscription]]
+  private var subscribers = Map.empty[Subscriber, Set[RoutedTableRowId]]
 
-  def subscriptionsRegistered(subscriber: Subscriber, subscriptions: Seq[GenericSetSubscription]): Unit = {
+  def subscriptionsRegistered(subscriber: Subscriber, subscriptions: Seq[RoutedSetSubscription]): Unit = {
 
   }
 

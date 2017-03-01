@@ -103,9 +103,9 @@ trait Database {
 
 }
 
-trait PeerPullChannel {
+/*trait PeerPullChannel {
   def updateSubscriptionSet(modSubs: Seq[ModifiedSetSubscription], appendSubs: Seq[AppendSetSubscription])
-}
+}*/
 
 class PeerPullProxy {
 
@@ -113,14 +113,14 @@ class PeerPullProxy {
 }
 
 // TODO: subscribe direct vs. subscribe indirect (with session engine)
-trait DatabaseView {
+/*trait DatabaseView {
 
   //def subscribeToSetModify(table: String, rowKey: TypeValue, notify: () => Unit)
   //def subscribeToSetAppend(table: String, rowKey: TypeValue, columnQuery: TypeValue, notify: () => Unit)
 
   def subscribe(modSubs: Seq[ModifiedSetSubscription], appendSubs: Seq[AppendSetSubscription], notify: () => Unit): Subscription
 
-}
+}*/
 
 
 trait Subscription {
@@ -130,13 +130,14 @@ trait Subscription {
 
 case class SessionColumnQuery(sessionId: PeerSessionId, sequence: TypeValue)
 
-case class GenericSetSubscription(tableRowId: TableRowId, columnQuery: Option[TypeValue])
+case class RoutedSetSubscription(tableRowId: RoutedTableRowId, columnQuery: Option[TypeValue])
+case class DirectSetSubscription(tableRowId: DirectTableRowId, columnQuery: Option[TypeValue])
 
-case class ModifiedSetSubscription(tableRowId: TableRowId)
-case class AppendSetSubscription(tableRowId: TableRowId, columnQuery: Option[TypeValue])
+//case class ModifiedSetSubscription(tableRowId: RoutedTableRowId)
+//case class AppendSetSubscription(tableRowId: RoutedTableRowId, columnQuery: Option[TypeValue])
 //case class AppendSetSubscription(table: String, rowKey: TypeValue, columnQuery: Option[SessionColumnQuery])
 
-case class SubscriptionParams(setSubs: Seq[ModifiedSetSubscription] = Vector(), appendSubs: Seq[AppendSetSubscription] = Vector())
+case class SubscriptionParams(directSubs: Seq[DirectSetSubscription] = Vector(), routedSubs: Seq[RoutedSetSubscription] = Vector())
 
 // TODO: should sequence just be long, should sessions be built in? where does session-awareness go in the layering?
 
@@ -146,18 +147,19 @@ case class SubscriptionParams(setSubs: Seq[ModifiedSetSubscription] = Vector(), 
 case class ModifiedKeyedSetNotification(table: String, rowKey: TypeValue, sequence: TypeValue, snapshot: Option[Map[TypeValue, TypeValue]], removes: Set[TypeValue], adds: Set[TypeValue])
 case class AppendSetNotification(table: String, rowKey: TypeValue, sequence: TypeValue, value: TypeValue)*/
 
-case class TableRowId(table: SymbolVal, rowKey: TypeValue)
+case class RoutedTableRowId(table: SymbolVal, routingKey: TypeValue, rowKey: TypeValue)
 case class ModifiedSetUpdate(sequence: TypeValue, snapshot: Option[Set[TypeValue]], removes: Set[TypeValue], adds: Set[TypeValue])
 case class ModifiedKeyedSetUpdate(sequence: TypeValue, snapshot: Option[Map[TypeValue, TypeValue]], removes: Set[TypeValue], adds: Set[TypeValue])
 case class AppendSetUpdate(sequence: TypeValue, value: TypeValue)
 
-case class ModifiedSetNotification(tableRowId: TableRowId, update: Option[ModifiedSetUpdate], inactiveFlag: Boolean)
-case class ModifiedKeyedSetNotification(tableRowId: TableRowId, update: Option[ModifiedKeyedSetUpdate], inactiveFlag: Boolean)
-case class AppendSetNotification(tableRowId: TableRowId, update: Option[AppendSetUpdate], inactiveFlag: Boolean)
+case class ModifiedSetNotification(tableRowId: RoutedTableRowId, update: Option[ModifiedSetUpdate], inactiveFlag: Boolean)
+case class ModifiedKeyedSetNotification(tableRowId: RoutedTableRowId, update: Option[ModifiedKeyedSetUpdate], inactiveFlag: Boolean)
+case class AppendSetNotification(tableRowId: RoutedTableRowId, update: Option[AppendSetUpdate], inactiveFlag: Boolean)
 
-case class ModifiedSetLocalNotification(tableRowId: TableRowId, update: ModifiedSetUpdate)
-case class ModifiedKeyedLocalSetNotification(tableRowId: TableRowId, update: ModifiedKeyedSetUpdate)
-case class AppendSetLocalNotification(tableRowId: TableRowId, update: AppendSetUpdate)
+case class DirectTableRowId(table: SymbolVal, rowKey: TypeValue)
+case class DirectModifiedSetNotification(tableRowId: DirectTableRowId, update: ModifiedSetUpdate)
+case class DirectModifiedKeyedSetNotification(tableRowId: DirectTableRowId, update: ModifiedKeyedSetUpdate)
+case class DirectAppendSetNotification(tableRowId: DirectTableRowId, update: AppendSetUpdate)
 
 
 // Put "sequence succession" in notification?
@@ -166,7 +168,7 @@ case class AppendSetLocalNotification(tableRowId: TableRowId, update: AppendSetU
 
 case class PeerSessionId(persistenceId: UUID, instanceId: Long)
 
-case class LocalNotificationBatch(sets: Seq[ModifiedSetLocalNotification], keyedSets: Seq[ModifiedKeyedLocalSetNotification], appendSets: Seq[AppendSetLocalNotification])
+case class LocalNotificationBatch(sets: Seq[DirectModifiedSetNotification], keyedSets: Seq[DirectModifiedKeyedSetNotification], appendSets: Seq[DirectAppendSetNotification])
 case class NotificationBatch(sets: Seq[ModifiedSetNotification], keyedSets: Seq[ModifiedKeyedSetNotification], appendSets: Seq[AppendSetNotification])
 
 case class SessionNotificationSequence(session: PeerSessionId, batches: Seq[NotificationBatch])
