@@ -9,7 +9,7 @@ trait Source[A] {
 }
 
 trait Sink[A] {
-  def apply(obj: A): Unit
+  def push(obj: A): Unit
 }
 
 trait LatchSink {

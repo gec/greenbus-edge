@@ -148,13 +148,21 @@ case class ModifiedKeyedSetNotification(table: String, rowKey: TypeValue, sequen
 case class AppendSetNotification(table: String, rowKey: TypeValue, sequence: TypeValue, value: TypeValue)*/
 
 case class RoutedTableRowId(table: SymbolVal, routingKey: TypeValue, rowKey: TypeValue)
-case class ModifiedSetUpdate(sequence: TypeValue, snapshot: Option[Set[TypeValue]], removes: Set[TypeValue], adds: Set[TypeValue])
-case class ModifiedKeyedSetUpdate(sequence: TypeValue, snapshot: Option[Map[TypeValue, TypeValue]], removes: Set[TypeValue], adds: Set[TypeValue])
-case class AppendSetUpdate(sequence: TypeValue, value: TypeValue)
 
-case class ModifiedSetNotification(tableRowId: RoutedTableRowId, update: Option[ModifiedSetUpdate], inactiveFlag: Boolean)
+/*case class ModifiedSetUpdate(sequence: TypeValue, snapshot: Option[Set[TypeValue]], removes: Set[TypeValue], adds: Set[TypeValue])
+case class ModifiedKeyedSetUpdate(sequence: TypeValue, snapshot: Option[Map[TypeValue, TypeValue]], removes: Set[TypeValue], adds: Set[TypeValue])
+case class AppendSetUpdate(sequence: TypeValue, value: TypeValue)*/
+
+sealed trait SetUpdate
+case class ModifiedSetUpdate(sequence: TypeValue, snapshot: Option[Set[TypeValue]], removes: Set[TypeValue], adds: Set[TypeValue]) extends SetUpdate
+case class ModifiedKeyedSetUpdate(sequence: TypeValue, snapshot: Option[Map[TypeValue, TypeValue]], removes: Set[TypeValue], adds: Set[TypeValue]) extends SetUpdate
+case class AppendSetUpdate(sequence: TypeValue, value: TypeValue) extends SetUpdate
+
+/*case class ModifiedSetNotification(tableRowId: RoutedTableRowId, update: Option[ModifiedSetUpdate], inactiveFlag: Boolean)
 case class ModifiedKeyedSetNotification(tableRowId: RoutedTableRowId, update: Option[ModifiedKeyedSetUpdate], inactiveFlag: Boolean)
-case class AppendSetNotification(tableRowId: RoutedTableRowId, update: Option[AppendSetUpdate], inactiveFlag: Boolean)
+case class AppendSetNotification(tableRowId: RoutedTableRowId, update: Option[AppendSetUpdate], inactiveFlag: Boolean)*/
+
+case class SetNotification(tableRowId: RoutedTableRowId, update: Option[SetUpdate], inactiveFlag: Boolean)
 
 case class DirectTableRowId(table: SymbolVal, rowKey: TypeValue)
 case class DirectModifiedSetNotification(tableRowId: DirectTableRowId, update: ModifiedSetUpdate)
@@ -169,7 +177,8 @@ case class DirectAppendSetNotification(tableRowId: DirectTableRowId, update: App
 case class PeerSessionId(persistenceId: UUID, instanceId: Long)
 
 case class LocalNotificationBatch(sets: Seq[DirectModifiedSetNotification], keyedSets: Seq[DirectModifiedKeyedSetNotification], appendSets: Seq[DirectAppendSetNotification])
-case class NotificationBatch(sets: Seq[ModifiedSetNotification], keyedSets: Seq[ModifiedKeyedSetNotification], appendSets: Seq[AppendSetNotification])
+//case class NotificationBatch(sets: Seq[ModifiedSetNotification], keyedSets: Seq[ModifiedKeyedSetNotification], appendSets: Seq[AppendSetNotification])
+case class NotificationBatch(notifications: Seq[SetNotification])
 
 case class SessionNotificationSequence(session: PeerSessionId, batches: Seq[NotificationBatch])
 
