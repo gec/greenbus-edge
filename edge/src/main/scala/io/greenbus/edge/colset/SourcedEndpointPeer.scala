@@ -5,7 +5,7 @@ import java.util.UUID
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.{CallMarshaller, SchedulableCallMarshaller}
 import io.greenbus.edge.channel2._
-import io.greenbus.edge.collection.ValueTrackedSetMap
+import io.greenbus.edge.collection.{BiMultiMap, BiMultiMap$}
 
 /*
 component: update-able subscriptions require the ability to either recognize a table row sub hasn't changed or
@@ -262,10 +262,10 @@ sub => sub mgr -> sourcing (peers, local pubs)
 
  */
 
-case class StreamEvent(inactiveFlagSet: Boolean)
+//case class StreamEvent(inactiveFlagSet: Boolean)
 
 trait Subscriber {
-  def appends(directAppends: Seq[(DirectTableRowId, StreamEvent)], routedAppends: Seq[(RoutedTableRowId, StreamEvent)])
+  //def appends(directAppends: Seq[(DirectTableRowId, RowStreamEvent)], routedAppends: Seq[(RoutedTableRowId, RowStreamEvent)])
 }
 
 trait GenRowDb
@@ -332,12 +332,248 @@ use cases:
 - append
   - delta
   - rebase snapshot
-- active session change
-- inactive
+  - rebase session (with snapshot)
+- row (routing key?) inactive
 - backfill
 
  */
-case class LinkStreamEvent(rowKey: RoutedTableRowId)
+//case class LinkStreamEvent(rowKey: RoutedTableRowId)
+
+
+trait SetDelta
+trait SetSnapshot
+
+case class ModifiedSetDelta(sequence: SequencedTypeValue, removes: Set[TypeValue], adds: Set[TypeValue]) extends SetDelta
+case class ModifiedSetSnapshot(sequence: SequencedTypeValue, snapshot: Set[TypeValue]) extends SetSnapshot
+case class ModifiedKeyedSetDelta(sequence: SequencedTypeValue, removes: Set[TypeValue], adds: Set[TypeValue], modifies: Set[(TypeValue, TypeValue)]) extends SetDelta
+case class ModifiedKeyedSetSnapshot(sequence: SequencedTypeValue, snapshot: Map[TypeValue, TypeValue]) extends SetSnapshot
+case class AppendSetValue(sequence: SequencedTypeValue, value: TypeValue)
+case class AppendSetDelta(appends: Seq[AppendSetValue]) extends SetDelta with SetSnapshot
+//case class AppendSetSnapshot(appends: Seq[AppendSetValue]) extends SetSnapshot
+
+
+//sealed trait RowStreamEvent
+sealed trait AppendEvent
+case class StreamDelta(update: SetDelta) extends AppendEvent
+case class ResyncSnapshot(snapshot: SetSnapshot) extends AppendEvent
+case class ResyncSession(sessionId: PeerSessionId, snapshot: SetSnapshot) extends AppendEvent
+//case class Inactive
+
+case class RowId(routingKeyOpt: Option[TypeValue], table: SymbolVal, rowKey: TypeValue) {
+  def tableRow: TableRow = TableRow(table, rowKey)
+}
+case class TableRow(table: SymbolVal, rowKey: TypeValue)
+
+sealed trait StreamEvent
+/*case class RoutedRowAppendEvent(key: RoutedTableRowId, appendEvent: RowAppendEvent)*/
+case class RowAppendEvent(rowId: RowId, appendEvent: AppendEvent) extends StreamEvent
+case class RouteInactive(routingKey: TypeValue) extends StreamEvent
+
+case class StreamEventBatch(events: Seq[StreamEvent])
+case class StreamNotifications(batches: Seq[StreamEventBatch])
+
+
+/*
+Synthesizer,
+Retail stream cache,
+Subscriber retail streams
+
+ */
+
+class RowSynthTable {
+  private var routed = Map.empty[TypeValue, Map[TableRow, DbMgr]]
+  private var unrouted = Map.empty[TableRow, DbMgr]
+
+  def handleBatch(sourceLink: PeerSourceLink, events: Seq[StreamEvent]): Unit = {
+    events.foreach {
+      case ev: RowAppendEvent => {
+        val tableRow = ev.rowId.tableRow
+        ev.rowId.routingKeyOpt match {
+          case None => ??? //unrouted.get
+          case Some(routingKey) =>
+            routed.get(routingKey) match {
+              case None =>
+              case Some(rows) =>
+                rows.get(tableRow) match {
+                  case None =>
+                  case Some(db) =>
+                }
+            }
+        }
+      }
+      case in: RouteInactive =>
+    }
+  }
+}
+
+/*
+standby mgrs vs. active mgrs?
+
+ */
+
+trait DbMgr {
+  def append(event: AppendEvent): Option[AppendEvent]
+}
+
+class ModifyRowDbMgr(rowId: RowId, initSource: PeerSourceLink, initSess: PeerSessionId, initMgr: SessionModifyRowDbMgr) extends DbMgr with LazyLogging {
+  private var activeSession: PeerSessionId = initSess
+  private var activeDb: SessionModifyRowDbMgr = initMgr
+  //private var activeSources: Set[PeerSourceLink] = Set(initSource)
+
+  //private var standbySessions = Map.empty[PeerSessionId, (SessionModifyRowLog, Set[PeerSourceLink])]
+  private var standbySessions = Map.empty[PeerSessionId, SessionModifyRowLog]
+  private var sourceToSession: Map[PeerSourceLink, PeerSessionId] = Map(initSource, initSess)
+  //private var sourceMapping: ValueTrackedSetMap[PeerSessionId, PeerSourceLink] = ValueTrackedSetMap((initSess, initSource))
+
+  def append(source: PeerSourceLink, event: AppendEvent): Option[AppendEvent] = {
+    event match {
+      case delta: StreamDelta => {
+        sourceToSession.get(source) match {
+          case None => logger.warn(s"$rowId got delta for inactive source link $initSource"); None
+          case Some(sess) => {
+            if (sess == activeSession) {
+              activeDb.delta(delta.update).map(StreamDelta)
+            } else {
+              standbySessions.get(sess) match {
+                case None => logger.error(s"$rowId got delta for inactive source link $initSource")
+                case Some(log) => log.delta(delta.update)
+              }
+              None
+            }
+          }
+        }
+      }
+      case resync: ResyncSnapshot => {
+        sourceToSession.get(source) match {
+          case None => logger.warn(s"$rowId got snapshot for inactive source link $initSource"); None
+          case Some(sess) => {
+            if (sess == activeSession) {
+              activeDb.resync(resync.snapshot).map(ResyncSnapshot)
+            } else {
+              standbySessions.get(sess) match {
+                case None => logger.error(s"$rowId got delta for inactive source link $initSource")
+                case Some(log) => log.resync(resync.snapshot)
+              }
+              None
+            }
+          }
+        }
+      }
+      case sessionResync: ResyncSession => {
+
+        sourceToSession.get(source) match {
+          case None => logger.warn(s"$rowId got delta for inactive source link $initSource"); None
+          case Some(sess) => {
+
+          }
+        }
+
+        if (sessionResync.sessionId == activeSession) {
+
+
+
+
+        } else {
+
+        }
+
+        ???
+      }
+    }
+
+  }
+}
+
+class SessionModifyRowLog(rowId: RowId, sessionId: PeerSessionId, init: ModifiedSetSnapshot) extends LazyLogging {
+
+  private var sequence: SequencedTypeValue = init.sequence
+  private var current: Set[TypeValue] = init.snapshot
+
+  def activate(): (Seq[AppendEvent], SessionModifyRowDbMgr) = {
+    val snap = ModifiedSetSnapshot(sequence, current)
+    (Seq(ResyncSession(sessionId, snap)),
+      new SessionModifyRowDbMgr(rowId, sessionId, snap))
+  }
+
+  def delta(delta: SetDelta): Unit = {
+    delta match {
+      case d: ModifiedSetDelta =>
+        if (sequence.precedes(d.sequence)) {
+          sequence = d.sequence
+          current = (current -- d.removes) ++ d.adds
+        } else {
+          logger.debug(s"Set delta unsequenced for $rowId, session $sessionId, current: $sequence, delta: ${d.sequence}")
+          None
+        }
+      case _ =>
+        logger.warn(s"Unrecognized set delta event for $rowId, session $sessionId: $delta")
+        None
+    }
+  }
+
+  def resync(snapshot: SetSnapshot): Unit = {
+    snapshot match {
+      case d: ModifiedSetSnapshot =>
+        if (sequence.isLessThan(d.sequence)) {
+          sequence = d.sequence
+          current = d.snapshot
+        } else {
+          logger.debug(s"Set snapshot unsequenced for $rowId, session $sessionId, current: $sequence, snap: ${d.sequence}")
+          None
+        }
+      case _ =>
+        logger.warn(s"Unrecognized set snapshot event for $rowId, session $sessionId: $snapshot")
+        None
+    }
+  }
+}
+
+class SessionModifyRowDbMgr(rowId: RowId, sessionId: PeerSessionId, init: ModifiedSetSnapshot) extends LazyLogging {
+
+  private var sequence: SequencedTypeValue = init.sequence
+  private var current: Set[TypeValue] = init.snapshot
+
+  def delta(delta: SetDelta): Option[SetDelta] = {
+    delta match {
+      case d: ModifiedSetDelta => {
+        if (sequence.precedes(d.sequence)) {
+          sequence = d.sequence
+          current = (current -- d.removes) ++ d.adds
+          Some(delta)
+        } else {
+          logger.debug(s"Set delta unsequenced for $rowId, session $sessionId, current: $sequence, delta: ${d.sequence}")
+          None
+        }
+      }
+      case _ =>
+        logger.warn(s"Unrecognized set delta event for $rowId, session $sessionId: $delta")
+        None
+    }
+  }
+
+  def resync(snapshot: SetSnapshot): Option[SetSnapshot] = {
+    snapshot match {
+      case d: ModifiedSetSnapshot =>
+        if (sequence.isLessThan(d.sequence)) {
+          sequence = d.sequence
+          current = d.snapshot
+          Some(snapshot)
+        } else {
+          logger.debug(s"Set snapshot unsequenced for $rowId, session $sessionId, current: $sequence, snap: ${d.sequence}")
+          None
+        }
+      case _ =>
+        logger.warn(s"Unrecognized set snapshot event for $rowId, session $sessionId: $snapshot")
+        None
+    }
+  }
+}
+class SessionAppendRowDbMgr {
+
+  def resync(link: PeerSourceLink, snapshot: SetSnapshot) = ???
+}
+
+
 
 object SessionRowDbMgr {
   def build(link: PeerSourceLink, sessionId: PeerSessionId, rowKey: RoutedTableRowId, update: SetUpdate): Either[String, SessionRowDbMgr] = {
@@ -347,7 +583,7 @@ object SessionRowDbMgr {
 class SessionRowDbMgr(row: RoutedTableRowId, sessionId: PeerSessionId, origLink: PeerSourceLink, db: RowDb) {
   //private var linkMap: Map[PeerSourceLink, RowDb] = Map(orig)
 
-  def process()
+  //def process()
 
 }
 
@@ -524,8 +760,8 @@ case class PeerManifest(routingKeySet: Set[TypeValue], indexSet: Set[IndexSpecif
 
 class SourceLinksManifest[Link] {
 
-  private var routingMap = ValueTrackedSetMap.empty[TypeValue, Link]
-  private var indexMap = ValueTrackedSetMap.empty[IndexSpecifier, Link]
+  private var routingMap = BiMultiMap.empty[TypeValue, Link]
+  private var indexMap = BiMultiMap.empty[IndexSpecifier, Link]
 
   def routingKeys: Map[TypeValue, Set[Link]] = routingMap.keyToVal
   def indexes: Map[IndexSpecifier, Set[Link]] = indexMap.keyToVal

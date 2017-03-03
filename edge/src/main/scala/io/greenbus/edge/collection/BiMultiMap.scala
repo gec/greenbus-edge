@@ -1,12 +1,23 @@
 package io.greenbus.edge.collection
 
-object ValueTrackedSetMap {
+object BiMultiMap {
+
+  def apply[A, B](args: (A, B)*): BiMultiMap[A, B] = {
+    val kToV = MapSetBuilder.build[A, B]
+    val vToK = MapSetBuilder.build[B, A]
+    args.foreach {
+      case (k, v) =>
+        kToV += (k -> v)
+        vToK += (v -> k)
+    }
+    new BiMultiMap[A, B](kToV.result(), vToK.result())
+  }
 
   def empty[A, B] = {
-    new ValueTrackedSetMap[A, B](Map.empty[A, Set[B]], Map.empty[B, Set[A]])
+    new BiMultiMap[A, B](Map.empty[A, Set[B]], Map.empty[B, Set[A]])
   }
 }
-class ValueTrackedSetMap[A, B](val keyToVal: Map[A, Set[B]], val valToKey: Map[B, Set[A]]) {
+class BiMultiMap[A, B](val keyToVal: Map[A, Set[B]], val valToKey: Map[B, Set[A]]) {
   //private var keyToVal = Map.empty[A, Set[B]]
   //private var valToKey = Map.empty[B, Set[A]]
 
@@ -14,14 +25,14 @@ class ValueTrackedSetMap[A, B](val keyToVal: Map[A, Set[B]], val valToKey: Map[B
     keyToVal.get(key)
   }
 
-  def +(tup: (A, B)): ValueTrackedSetMap[A, B] = {
+  def +(tup: (A, B)): BiMultiMap[A, B] = {
     add(tup._1, tup._2)
   }
   /*def ++(tup: Seq[(A, B)]): ValueTrackedSetMap[A, B] = {
     //add(tup._1, tup._2)
   }*/
 
-  def reverseAdd(v: B, keys: Set[A]): ValueTrackedSetMap[A, B] = {
+  def reverseAdd(v: B, keys: Set[A]): BiMultiMap[A, B] = {
 
     val updates = Vector.newBuilder[(A, Set[B])]
     keys.foreach { key =>
@@ -38,10 +49,10 @@ class ValueTrackedSetMap[A, B](val keyToVal: Map[A, Set[B]], val valToKey: Map[B
       case Some(set) => valToKey.updated(v, set ++ keys)
     }
 
-    new ValueTrackedSetMap[A, B](kToV, vToK)
+    new BiMultiMap[A, B](kToV, vToK)
   }
 
-  def add(key: A, v: B): ValueTrackedSetMap[A, B] = {
+  def add(key: A, v: B): BiMultiMap[A, B] = {
     val kToV = keyToVal.get(key) match {
       case None => keyToVal.updated(key, Set(v))
       case Some(set) => keyToVal.updated(key, set + v)
@@ -51,10 +62,10 @@ class ValueTrackedSetMap[A, B](val keyToVal: Map[A, Set[B]], val valToKey: Map[B
       case Some(set) => valToKey.updated(v, set + key)
     }
 
-    new ValueTrackedSetMap[A, B](kToV, vToK)
+    new BiMultiMap[A, B](kToV, vToK)
   }
 
-  def remove(v: B): ValueTrackedSetMap[A, B] = {
+  def remove(v: B): BiMultiMap[A, B] = {
     valToKey.get(v) match {
       case None => this
       case Some(keySet) => {
@@ -74,7 +85,7 @@ class ValueTrackedSetMap[A, B](val keyToVal: Map[A, Set[B]], val valToKey: Map[B
 
         val kToV = (keyToVal -- removes.result()) ++ updates.result()
 
-        new ValueTrackedSetMap[A, B](kToV, valToKey - v)
+        new BiMultiMap[A, B](kToV, valToKey - v)
       }
     }
   }

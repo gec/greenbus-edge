@@ -80,6 +80,7 @@ does it allow us to create even more synthetic types
  */
 
 
+/*
 trait Row {
 
 }
@@ -102,15 +103,8 @@ trait Database {
   def createDynamic()
 
 }
+*/
 
-/*trait PeerPullChannel {
-  def updateSubscriptionSet(modSubs: Seq[ModifiedSetSubscription], appendSubs: Seq[AppendSetSubscription])
-}*/
-
-class PeerPullProxy {
-
-
-}
 
 // TODO: subscribe direct vs. subscribe indirect (with session engine)
 /*trait DatabaseView {
