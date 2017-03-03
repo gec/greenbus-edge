@@ -325,27 +325,44 @@ class AppendSetRowDb(orig: Set[TypeValue]) extends RowDb {
   }
 }
 
-object MultiSourcedRowDb {
-  def build(link: PeerSourceLink, id: RoutedTableRowId, update: SetUpdate): Either[String, MultiSourcedRowDb] = {
-    RowDb.build(id, update).map(db => new MultiSourcedRowDb(link, db))
+/*
+stream events:
+
+use cases:
+- append
+  - delta
+  - rebase snapshot
+- active session change
+- inactive
+- backfill
+
+ */
+case class LinkStreamEvent(rowKey: RoutedTableRowId)
+
+object SessionRowDbMgr {
+  def build(link: PeerSourceLink, sessionId: PeerSessionId, rowKey: RoutedTableRowId, update: SetUpdate): Either[String, SessionRowDbMgr] = {
+    RowDb.build(rowKey, update).map(db => new SessionRowDbMgr(rowKey, sessionId, link, db))
   }
 }
-class MultiSourcedRowDb(orig: (PeerSourceLink, RowDb)) {
-  private var linkMap: Map[PeerSourceLink, RowDb] = Map(orig)
+class SessionRowDbMgr(row: RoutedTableRowId, sessionId: PeerSessionId, origLink: PeerSourceLink, db: RowDb) {
+  //private var linkMap: Map[PeerSourceLink, RowDb] = Map(orig)
+
+  def process()
+
 }
 
-object SessionedRowDb {
+object MultiSessionRowDbMgr {
 
-  def build(link: PeerSourceLink, sessionId: PeerSessionId, id: RoutedTableRowId, update: SetUpdate): Either[String, SessionedRowDb] = {
-    MultiSourcedRowDb.build(link, id, update).map(db => new SessionedRowDb(id, (sessionId, db)))
+  def build(link: PeerSourceLink, sessionId: PeerSessionId, rowKey: RoutedTableRowId, update: SetUpdate): Either[String, MultiSessionRowDbMgr] = {
+    SessionRowDbMgr.build(link, sessionId, rowKey, update).map(db => new MultiSessionRowDbMgr(rowKey, (sessionId, db)))
   }
 }
 
-class SessionedRowDb(id: RoutedTableRowId, orig: (PeerSessionId, MultiSourcedRowDb)) {
+class MultiSessionRowDbMgr(id: RoutedTableRowId, orig: (PeerSessionId, SessionRowDbMgr)) {
   private var active: PeerSessionId = orig._1
-  private var sessions: Map[PeerSessionId, MultiSourcedRowDb] = Map(orig)
+  private var sessions: Map[PeerSessionId, SessionRowDbMgr] = Map(orig)
 
-  def sessionMap: Map[PeerSessionId, MultiSourcedRowDb] = sessions
+  def sessionMap: Map[PeerSessionId, SessionRowDbMgr] = sessions
 
   def process(session: PeerSessionId, link: PeerSourceLink, update: SetUpdate) = {
 
@@ -364,6 +381,7 @@ events:
 - link removed
   - link removed and session now empty
 - updates
+  - link transitions to different session
 - subscriber added
 - subscriber removed
 
@@ -379,8 +397,8 @@ object SourcedDataTable {
 
 }
 class SourcedDataTable {
-  private var rowSynthesizers = Map.empty[RoutedTableRowId, SessionedRowDb]
-  private var linkToRowSessions = Map.empty[PeerSourceLink, Set[(RoutedTableRowId, SessionedRowDb)]]
+  private var rowSynthesizers = Map.empty[RoutedTableRowId, MultiSessionRowDbMgr]
+  private var linkToRowSessions = Map.empty[PeerSourceLink, Set[(RoutedTableRowId, MultiSessionRowDbMgr)]]
 
   private var retailRows = Map.empty[RoutedTableRowId, GenRowDb]
 
@@ -390,7 +408,7 @@ class SourcedDataTable {
   private def process(source: PeerSourceLink, sessId: PeerSessionId, rowId: RoutedTableRowId, setUpdate: SetUpdate) = {
     rowSynthesizers.get(rowId) match {
       case None =>
-        SessionedRowDb.build(source, sessId, rowId, setUpdate) match {
+        MultiSessionRowDbMgr.build(source, sessId, rowId, setUpdate) match {
           case Left(err) =>
           case Right(db) =>
             rowSynthesizers += (rowId -> db)
