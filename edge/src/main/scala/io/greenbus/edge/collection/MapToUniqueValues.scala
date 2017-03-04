@@ -42,7 +42,13 @@ class MapToUniqueValues[A, B](val keyToVal: Map[A, Set[B]], val valToKey: Map[B,
       case Some(key) => {
         keyToVal.get(key) match {
           case None => keyToVal
-          case Some(set) => keyToVal.updated(key, set - v)
+          case Some(set) =>
+            val result = set - v
+            if (result.nonEmpty) {
+              keyToVal.updated(key, result)
+            } else {
+              keyToVal - key
+            }
         }
       }
     }
@@ -54,7 +60,13 @@ class MapToUniqueValues[A, B](val keyToVal: Map[A, Set[B]], val valToKey: Map[B,
       case Some(key) => {
         val kToV = keyToVal.get(key) match {
           case None => keyToVal
-          case Some(set) => keyToVal.updated(key, set - v)
+          case Some(set) =>
+            val result = set - v
+            if (result.nonEmpty) {
+              keyToVal.updated(key, result)
+            } else {
+              keyToVal - key
+            }
         }
         new MapToUniqueValues[A, B](kToV, valToKey - v)
       }
