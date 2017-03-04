@@ -65,7 +65,70 @@ class BiMultiMap[A, B](val keyToVal: Map[A, Set[B]], val valToKey: Map[B, Set[A]
     new BiMultiMap[A, B](kToV, vToK)
   }
 
-  def remove(v: B): BiMultiMap[A, B] = {
+
+  def removeMappings(k: A, vs: Set[B]): BiMultiMap[A, B] = {
+    keyToVal.get(k) match {
+      case None => this
+      case Some(allVsForK) => {
+        val result = allVsForK -- vs
+        val kToV = if (result.nonEmpty) {
+          keyToVal + (k -> result)
+        } else {
+          keyToVal - k
+        }
+
+        val vToK = removeKeyFromValues(k, vs)
+
+        new BiMultiMap[A, B](kToV, vToK)
+      }
+    }
+  }
+
+  private def removeKeyFromValues(k: A, vSet: Set[B]): Map[B, Set[A]] = {
+    val removes = Vector.newBuilder[B]
+    val updates = Vector.newBuilder[(B, Set[A])]
+
+    vSet.foreach { v =>
+      valToKey.get(v).foreach { set =>
+        val result = set - k
+        if (result.nonEmpty) {
+          updates += (v -> result)
+        } else {
+          removes += v
+        }
+      }
+    }
+
+    (valToKey -- removes.result()) ++ updates.result()
+  }
+
+  def removeKey(k: A): BiMultiMap[A, B] = {
+    keyToVal.get(k) match {
+      case None => this
+      case Some(values) => {
+        /*val removes = Vector.newBuilder[B]
+        val updates = Vector.newBuilder[(B, Set[A])]
+
+        values.foreach { v =>
+          valToKey.get(v).foreach { set =>
+            val result = set - k
+            if (result.nonEmpty) {
+              updates += (v -> result)
+            } else {
+              removes += v
+            }
+          }
+        }
+
+        val vToK = (valToKey -- removes.result()) ++ updates.result()*/
+        val vToK = removeKeyFromValues(k, values)
+
+        new BiMultiMap[A, B](keyToVal - k, vToK)
+      }
+    }
+  }
+
+  def removeValue(v: B): BiMultiMap[A, B] = {
     valToKey.get(v) match {
       case None => this
       case Some(keySet) => {

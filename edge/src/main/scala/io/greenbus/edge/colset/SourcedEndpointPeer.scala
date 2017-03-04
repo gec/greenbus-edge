@@ -161,7 +161,7 @@ case class SetChanges[A](snapshot: Set[A], adds: Set[A], removes: Set[A])
 
 case class ManifestUpdate(routingSet: Option[SetChanges[TypeValue]], indexSet: Option[SetChanges[IndexSpecifier]])
 
-case class PeerSourceEvents(manifestUpdate: Option[ManifestUpdate], sessionNotifications: Seq[SessionNotificationSequence])
+case class PeerSourceEvents(manifestUpdate: Option[ManifestUpdate], sessionNotifications: Seq[StreamEvent])
 
 trait PeerSourceLink {
   def id: PeerSessionId
@@ -243,7 +243,8 @@ class RemotePeerSubscriptionLinkMgr(remoteId: PeerSessionId, subscriptionMgr: Re
       None
     }
 
-    distributor.push(PeerSourceEvents(manifestUpdateOpt, notifications.sessionNotifications))
+    ???
+    //distributor.push(PeerSourceEvents(manifestUpdateOpt, notifications.sessionNotifications))
   }
 
   private def parseIndexSpecifier(tv: TypeValue): Option[IndexSpecifier] = {
@@ -268,8 +269,10 @@ trait Subscriber {
   //def appends(directAppends: Seq[(DirectTableRowId, RowStreamEvent)], routedAppends: Seq[(RoutedTableRowId, RowStreamEvent)])
 }
 
+/*
 trait GenRowDb
 trait GenRowAppend
+*/
 
 /*trait MarkedRowView {
   def dequeue()
@@ -367,7 +370,7 @@ case class TableRow(table: SymbolVal, rowKey: TypeValue)
 sealed trait StreamEvent
 /*case class RoutedRowAppendEvent(key: RoutedTableRowId, appendEvent: RowAppendEvent)*/
 case class RowAppendEvent(rowId: RowId, appendEvent: AppendEvent) extends StreamEvent
-case class RouteInactive(routingKey: TypeValue) extends StreamEvent
+case class RouteDesynced(routingKey: TypeValue) extends StreamEvent
 
 case class StreamEventBatch(events: Seq[StreamEvent])
 case class StreamNotifications(batches: Seq[StreamEventBatch])
@@ -375,33 +378,126 @@ case class StreamNotifications(batches: Seq[StreamEventBatch])
 
 /*
 Synthesizer,
-Retail stream cache,
-Subscriber retail streams
+Retail stream cache,streams
+Subscriber retail
 
  */
 
-class RowSynthTable {
+class RowSynthTable extends LazyLogging {
   private var routed = Map.empty[TypeValue, Map[TableRow, DbMgr]]
   private var unrouted = Map.empty[TableRow, DbMgr]
+  private var sourceToRow = BiMultiMap.empty[PeerSourceLink, RowId] //Map.empty[PeerSourceLink, RowId]
 
-  def handleBatch(sourceLink: PeerSourceLink, events: Seq[StreamEvent]): Unit = {
+  def handleBatch(sourceLink: PeerSourceLink, events: Seq[StreamEvent]): Seq[StreamEvent] = {
+    val results = Vector.newBuilder[StreamEvent]
+
     events.foreach {
       case ev: RowAppendEvent => {
         val tableRow = ev.rowId.tableRow
         ev.rowId.routingKeyOpt match {
-          case None => ??? //unrouted.get
+          case None => {
+            // TODO: What does this even mean???
+            /*unrouted.get(tableRow) match {
+              case None => {
+                ev.appendEvent match {
+                  case resync: ResyncSession =>
+                    val (db, events) = DbMgr.build(ev.rowId, sourceLink, resync.sessionId, resync.snapshot)
+                    unrouted += (tableRow -> db)
+                    results ++= events.map(v => RowAppendEvent(ev.rowId, v))
+                  case _ =>
+                    logger.warn(s"Initial row event was not resync session: $ev")
+                }
+              }
+              case Some(db) => db.append(sourceLink, ev.appendEvent)
+            }*/
+          }
           case Some(routingKey) =>
             routed.get(routingKey) match {
-              case None =>
-              case Some(rows) =>
-                rows.get(tableRow) match {
-                  case None =>
+              case None => {
+                results ++= addRouted(sourceLink, ev, routingKey, Map())
+                /*ev.appendEvent match {
+                  case resync: ResyncSession =>
+                    val (db, events) = DbMgr.build(ev.rowId, sourceLink, resync.sessionId, resync.snapshot)
+                    routed += (routingKey -> Map(tableRow -> db))
+                    results ++= events.map(v => RowAppendEvent(ev.rowId, v))
+                  case _ =>
+                    logger.warn(s"Initial row event was not resync session: $ev")
+                }*/
+              }
+              case Some(routingKeyRows) =>
+                routingKeyRows.get(tableRow) match {
+                  case None => {
+                    results ++= addRouted(sourceLink, ev, routingKey, routingKeyRows)
+                    /*ev.appendEvent match {
+                      case resync: ResyncSession =>
+                        val (db, events) = DbMgr.build(ev.rowId, sourceLink, resync.sessionId, resync.snapshot)
+                        routed += (routingKey -> (routingKeyRows + (tableRow -> db)))
+                        results ++= events.map(v => RowAppendEvent(ev.rowId, v))
+                      case _ =>
+                        logger.warn(s"Initial row event was not resync session: $ev")
+                    }*/
+                  }
                   case Some(db) =>
+                    db.append(sourceLink, ev.appendEvent)
                 }
             }
         }
       }
-      case in: RouteInactive =>
+      case in: RouteDesynced => {
+        routed.get(in.routingKey) match {
+          case None => Seq()
+          case Some(rows) => {
+            results ++= rows.toVector.sortBy(_._1).flatMap {
+              case (row, db) =>
+                val rowId = RowId(Some(in.routingKey), row.table, row.rowKey)
+                db.sourceRemoved(sourceLink)
+                  .map(append => RowAppendEvent(rowId, append))
+            }
+
+            val rowIds = rows.keys.map(tr => RowId(Some(in.routingKey), tr.table, tr.rowKey)).toSet
+            sourceToRow = sourceToRow.removeMappings(sourceLink, rowIds)
+          }
+        }
+      }
+    }
+
+    results.result()
+  }
+
+  def sourceRemoved(sourceLink: PeerSourceLink): Seq[StreamEvent] = {
+    val results = sourceToRow.keyToVal.get(sourceLink) match {
+      case None => Seq()
+      case Some(rowSet) =>
+        rowSet.toVector.sorted.flatMap { rowId =>
+          lookup(rowId)
+            .map(db => db.sourceRemoved(sourceLink).map(apEv => RowAppendEvent(rowId, apEv)))
+            .getOrElse(Seq())
+        }
+    }
+    sourceToRow = sourceToRow.removeKey(sourceLink)
+    results
+  }
+
+  private def lookup(rowId: RowId): Option[DbMgr] = {
+    rowId.routingKeyOpt match {
+      case None => unrouted.get(rowId.tableRow)
+      case Some(routingKey) =>
+        routed.get(routingKey).flatMap { map =>
+          map.get(rowId.tableRow)
+        }
+    }
+  }
+
+  private def addRouted(sourceLink: PeerSourceLink, ev: RowAppendEvent, routingKey: TypeValue, existingRows: Map[TableRow, DbMgr]): Seq[StreamEvent] = {
+    ev.appendEvent match {
+      case resync: ResyncSession =>
+        val (db, events) = DbMgr.build(ev.rowId, sourceLink, resync.sessionId, resync.snapshot)
+        routed += (routingKey -> (existingRows + (ev.rowId.tableRow -> db)))
+        sourceToRow += (sourceLink -> ev.rowId)
+        events.map(v => RowAppendEvent(ev.rowId, v))
+      case _ =>
+        logger.warn(s"Initial row event was not resync session: $ev")
+        Seq()
     }
   }
 }
@@ -411,6 +507,14 @@ standby mgrs vs. active mgrs?
 
  */
 
+object DbMgr {
+  def build(rowId: RowId, initSource: PeerSourceLink, initSess: PeerSessionId, snapshot: SetSnapshot): (DbMgr, Seq[AppendEvent]) = {
+    val log = SessionRowLog.build(rowId, initSess, snapshot)
+    val (events, db) = log.activate()
+    val synthesizer = new RowSynthesizerDb(rowId, initSource, initSess, db)
+    (synthesizer, events)
+  }
+}
 trait DbMgr {
   def append(source: PeerSourceLink, event: AppendEvent): Seq[AppendEvent]
   def sourceRemoved(source: PeerSourceLink): Seq[AppendEvent]
@@ -425,7 +529,7 @@ three modes a session can be in:
 "standby" is really "unresolved"? in other words it's not got a clear ordering from the active session
 
  */
-class RowSynthesizerDb(rowId: RowId, initSource: PeerSourceLink, initSess: PeerSessionId, initMgr: SessionModifyRowDbMgr) extends DbMgr with LazyLogging {
+class RowSynthesizerDb(rowId: RowId, initSource: PeerSourceLink, initSess: PeerSessionId, initMgr: SessionRowDb) extends DbMgr with LazyLogging {
 
   private var activeSession: PeerSessionId = initSess
   private var activeDb: SessionRowDb = initMgr
@@ -714,7 +818,7 @@ external results:
 - appends
 
  */
-case class DataTableResult()
+//case class DataTableResult()
 
 /*object SourcedDataTable {
 
@@ -797,7 +901,7 @@ class SourcedDataTable {
   //def linkRemoved(link: RemotePeerSourceLink): SynthesizeResult
 }*/
 
-case class SynthesizeResult(appends: Seq[(RoutedTableRowId, GenRowAppend)])
+//case class SynthesizeResult(appends: Seq[(RoutedTableRowId, GenRowAppend)])
 
 /*sealed trait EndpointId
 case class UuidEndpointId(uuid: UUID) extends EndpointId
@@ -861,8 +965,8 @@ class SourceLinksManifest[Link] {
   }
 
   def linkRemoved(link: Link): Unit = {
-    routingMap = routingMap.remove(link)
-    indexMap = indexMap.remove(link)
+    routingMap = routingMap.removeValue(link)
+    indexMap = indexMap.removeValue(link)
   }
 }
 
@@ -939,14 +1043,21 @@ unresolved row set: set[routed_row] OR set[routingKey -> set[row]]
  */
 
 case class PeerLinkEntry()
-class DirectDataTable
+
+
+/*
+Synthesizer,
+Retail stream cache,streams
+Subscriber retail
+
+ */
 
 class PeerThing {
 
   private val sourcedManifest = new SourceLinksManifest[PeerLinkEntry]
 
   //private val sourcedTable = new SourcedDataTable
-  private val directTable = new DirectDataTable
+  //private val directTable = new DirectDataTable
 
   //private var
 
@@ -954,17 +1065,23 @@ class PeerThing {
   private var unresolvedSubs = Map.empty[RoutedTableRowId, Set[Subscription]]
   //private var subscribers = Map.empty[Subscriber, Set[RoutedTableRowId]]
 
-  def peerSourceEvents(link: PeerSourceLink, events: PeerSourceEvents): Unit = {
-    /*events.manifestUpdate.foreach { update =>
-      update.routingSet.foreach { routingUpdate =>
+  /*
+    update manifest
+      - resolve resolveable unresolved subscriptions
+      - apply to manifest subscribers' logs
 
-      }
-      update.indexSet.foreach { indexUpdate =>
+    get events yielded by applying this source's events
+      - apply to retail caches
+      - apply to subscribers' logs
 
-      }
-    }
-    val sourceTableResults = sourcedTable.sourceEvents(link, events.sessionNotifications)*/
+    manifest component just another subscriber, do event before commit to subscribers?
+   */
+  def peerSourceEvents(link: PeerSourceLink, events: Seq[StreamEvent]): Unit = {
+
   }
+  /*def peerSourceEvents(link: PeerSourceLink, events: PeerSourceEvents): Unit = {
+
+  }*/
 
   def subscriptionsRegistered(subscriber: Subscriber, params: SubscriptionParams): Unit = {
 
