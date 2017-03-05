@@ -14,36 +14,18 @@ class SynthesizerTable extends LazyLogging {
     events.foreach {
       case ev: RowAppendEvent => {
         val tableRow = ev.rowId.tableRow
-        ev.rowId.routingKeyOpt match {
+        val routingKey = ev.routingKey
+        routed.get(routingKey) match {
           case None => {
-            // TODO: What does this even mean???
-            /*unrouted.get(tableRow) match {
-              case None => {
-                ev.appendEvent match {
-                  case resync: ResyncSession =>
-                    val (db, events) = DbMgr.build(ev.rowId, sourceLink, resync.sessionId, resync.snapshot)
-                    unrouted += (tableRow -> db)
-                    results ++= events.map(v => RowAppendEvent(ev.rowId, v))
-                  case _ =>
-                    logger.warn(s"Initial row event was not resync session: $ev")
-                }
-              }
-              case Some(db) => db.append(sourceLink, ev.appendEvent)
-            }*/
+            results ++= addRouted(sourceLink, ev, routingKey, Map())
           }
-          case Some(routingKey) =>
-            routed.get(routingKey) match {
+          case Some(routingKeyRows) =>
+            routingKeyRows.get(tableRow) match {
               case None => {
-                results ++= addRouted(sourceLink, ev, routingKey, Map())
+                results ++= addRouted(sourceLink, ev, routingKey, routingKeyRows)
               }
-              case Some(routingKeyRows) =>
-                routingKeyRows.get(tableRow) match {
-                  case None => {
-                    results ++= addRouted(sourceLink, ev, routingKey, routingKeyRows)
-                  }
-                  case Some(db) =>
-                    db.append(sourceLink, ev.appendEvent)
-                }
+              case Some(db) =>
+                db.append(sourceLink, ev.appendEvent)
             }
         }
       }
@@ -54,12 +36,12 @@ class SynthesizerTable extends LazyLogging {
             // TODO: stable sort?
             results ++= rows.toVector.flatMap {
               case (row, db) =>
-                val rowId = RowId(Some(in.routingKey), row.table, row.rowKey)
+                val rowId = RowId(in.routingKey, row.table, row.rowKey)
                 db.sourceRemoved(sourceLink)
                   .map(append => RowAppendEvent(rowId, append))
             }
 
-            val rowIds = rows.keys.map(tr => RowId(Some(in.routingKey), tr.table, tr.rowKey)).toSet
+            val rowIds = rows.keys.map(tr => RowId(in.routingKey, tr.table, tr.rowKey)).toSet
             sourceToRow = sourceToRow.removeMappings(sourceLink, rowIds)
           }
         }
@@ -85,12 +67,8 @@ class SynthesizerTable extends LazyLogging {
   }
 
   private def lookup(rowId: RowId): Option[DbMgr] = {
-    rowId.routingKeyOpt match {
-      case None => unrouted.get(rowId.tableRow)
-      case Some(routingKey) =>
-        routed.get(routingKey).flatMap { map =>
-          map.get(rowId.tableRow)
-        }
+    routed.get(rowId.routingKey).flatMap { map =>
+      map.get(rowId.tableRow)
     }
   }
 

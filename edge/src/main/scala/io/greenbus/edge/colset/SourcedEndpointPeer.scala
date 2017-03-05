@@ -376,7 +376,6 @@ trait RetailRowLog {
 
 class RetailCacheTable extends LazyLogging {
   private var rows = Map.empty[TypeValue, Map[TableRow, RetailRowLog]]
-  private var unrouted = Map.empty[TableRow, RetailRowLog]
 
   def getSync(row: RowId): Seq[StreamEvent] = {
     lookup(row).map(log => log.sync())
@@ -388,11 +387,8 @@ class RetailCacheTable extends LazyLogging {
     events.foreach {
       case ev: RowAppendEvent => {
         lookup(ev.rowId) match {
-          case None => //
-            ev.rowId.routingKeyOpt match {
-              case None => ???
-              case Some(routingKey) => addRouted(ev, routingKey, rows.getOrElse(routingKey, Map()))
-            }
+          case None =>
+            addRouted(ev, ev.rowId.routingKey, rows.getOrElse(ev.rowId.routingKey, Map()))
           case Some(log) => log.handle(ev.appendEvent)
         }
       }
@@ -401,12 +397,8 @@ class RetailCacheTable extends LazyLogging {
   }
 
   private def lookup(rowId: RowId): Option[RetailRowLog] = {
-    rowId.routingKeyOpt match {
-      case None => unrouted.get(rowId.tableRow)
-      case Some(routingKey) =>
-        rows.get(routingKey).flatMap { map =>
-          map.get(rowId.tableRow)
-        }
+    rows.get(rowId.routingKey).flatMap { map =>
+      map.get(rowId.tableRow)
     }
   }
 
@@ -475,10 +467,10 @@ object SourceMgr {
   val tablePrefix = "__manifest"
 
   def peerRouteRow(peerId: PeerSessionId): RowId = {
-    RowId(Some(TypeValueConversions.toTypeValue(peerId)), SymbolVal(s"$tablePrefix"), SymbolVal("routes"))
+    RowId(TypeValueConversions.toTypeValue(peerId), SymbolVal(s"$tablePrefix"), SymbolVal("routes"))
   }
   def peerIndexRow(peerId: PeerSessionId): RowId = {
-    RowId(Some(TypeValueConversions.toTypeValue(peerId)), SymbolVal(s"$tablePrefix"), SymbolVal("indexes"))
+    RowId(TypeValueConversions.toTypeValue(peerId), SymbolVal(s"$tablePrefix"), SymbolVal("indexes"))
   }
 
   def manifestRows(peerId: PeerSessionId): Set[RowId] = {
@@ -619,10 +611,7 @@ class PeerStreamEngine extends LazyLogging {
   }
 
   private def handleSourcingUpdate(mgr: SourceMgr, events: Seq[StreamEvent]): Unit = {
-    val manifestEvents = events.filter {
-      case RowAppendEvent(row, ev) => row.routingKeyOpt.contains(mgr.manifestRoute)
-      case _ => false
-    }
+    val manifestEvents = events.filter(_.routingKey == mgr.manifestRoute)
     val diff = mgr.handleSelfEvents(manifestEvents)
     diff.removed.foreach(removeSourceRoute(mgr, _))
 
@@ -736,7 +725,7 @@ class PeerStreamEngine extends LazyLogging {
         routeSourcingMap -= route
       }
 
-      val addIds = adds.map(tr => RowId(Some(route), tr.table, tr.rowKey))
+      val addIds = adds.map(tr => RowId(route, tr.table, tr.rowKey))
 
       // For every row, either route is unresolved, sub was already active and cached, or subscribe above will
       // cause a sync/unavail event at a later time, meanwhile that row is pending for the subscriber
@@ -757,7 +746,7 @@ class PeerStreamEngine extends LazyLogging {
   }
 
   def subscriberRemoved(subscriber: SubscriptionTarget): Unit = {
-    val routesForSub = rowsForSub.getOrElse(subscriber, Set()).map(_.routingKeyOpt.get).toSet
+    val routesForSub = rowsForSub.getOrElse(subscriber, Set()).map(_.routingKey).toSet
     routesForSub.foreach { route =>
       routeSourcingMap.get(route).foreach { sourcing =>
         sourcing.subscriberRemoved(subscriber)

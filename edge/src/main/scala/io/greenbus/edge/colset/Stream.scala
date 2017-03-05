@@ -25,11 +25,11 @@ case class ResyncSession(sessionId: PeerSessionId, snapshot: SetSnapshot) extend
 object RowId {
   def setToRouteMap(rows: Set[RowId]): Map[TypeValue, Set[TableRow]] = {
     val b = MapSetBuilder.newBuilder[TypeValue, TableRow]
-    rows.foreach { row => row.routingKeyOpt.foreach(routingKey => b += (routingKey -> row.tableRow)) }
+    rows.foreach { row => b += (row.routingKey -> row.tableRow) }
     b.result()
   }
 }
-case class RowId(routingKeyOpt: Option[TypeValue], table: SymbolVal, rowKey: TypeValue) {
+case class RowId(routingKey: TypeValue, table: SymbolVal, rowKey: TypeValue) {
   def tableRow: TableRow = TableRow(table, rowKey)
 }
 case class TableRow(table: SymbolVal, rowKey: TypeValue)
@@ -39,7 +39,7 @@ sealed trait StreamEvent {
 }
 
 case class RowAppendEvent(rowId: RowId, appendEvent: AppendEvent) extends StreamEvent {
-  def routingKey = rowId.routingKeyOpt.get
+  def routingKey = rowId.routingKey
 }
 
 // TODO: rowunavailable event?
