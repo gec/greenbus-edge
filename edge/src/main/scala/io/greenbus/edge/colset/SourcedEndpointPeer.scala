@@ -259,10 +259,6 @@ sub => sub mgr -> sourcing (peers, local pubs)
 
 //case class StreamEvent(inactiveFlagSet: Boolean)
 
-trait Subscriber {
-  //def appends(directAppends: Seq[(DirectTableRowId, RowStreamEvent)], routedAppends: Seq[(RoutedTableRowId, RowStreamEvent)])
-}
-
 
 /*
 stream events:
@@ -313,7 +309,8 @@ case class StreamNotifications(batches: Seq[StreamEventBatch])
 
 case class IndexSpecifier(key: TypeValue, value: Option[IndexableTypeValue])
 
-case class StreamSubscriptionParams()
+case class RowSubscriptionParams(rowId: RowId, columnQuery: Option[SessionColumnQuery])
+case class StreamSubscriptionParams(rows: Seq[RowSubscriptionParams])
 
 
 
@@ -569,17 +566,38 @@ manifest rows -> source (manifest)
 
 
  */
-class SourcingMgr {
+/*class SourcingMgr {
   private var sourceToSubs = Map.empty[PeerSourceLink, Set[RowId]]
-  private var manifestRowsToSource
+  //private var manifestRowsToSource
+
+  private var routesToSource = Map.empty[TypeValue, PeerSourceLink]
 
   def manifestRows: Set[RowId]
 
-}
+  def handleSynthesizedEvents(events: Seq[StreamEvent]): Unit = {
+
+  }
+
+}*/
 
 trait SubscriptionTarget {
-  def queues: Map[TypeValue, Map[TableRow, RetailRowQueue]]
+  //def queues: Map[TypeValue, Map[TableRow, RetailRowQueue]]
+  def handleBatch(events: Seq[StreamEvent])
 }
+
+class SubMgr(target: SubscriptionTarget) {
+
+  /*def handleBatch(events: Seq[StreamEvent]): Unit = {
+    target.handleBatch(events)
+  }*/
+  def paramsUpdate(params: StreamSubscriptionParams): (Seq[RowSubscriptionParams], Set[RowId]) = {
+
+  }
+}
+
+/*trait RowSubscription {
+  def queue: RetailRowQueue
+}*/
 
 object PeerStreamEngine {
 
@@ -592,9 +610,26 @@ class PeerStreamEngine {
 
   private val sourcedManifest = new SourceLinksManifest[PeerLinkEntry]
 
-  private var subscriptions = Map.empty[RoutedTableRowId, Set[Subscription]]
-  private var unresolvedSubs = Map.empty[RoutedTableRowId, Set[Subscription]]
+  //private var subscriptions = Map.empty[RoutedTableRowId, Set[Subscription]]
+  //private var unresolvedSubs = Map.empty[RoutedTableRowId, Set[Subscription]]
   //private var subscribers = Map.empty[Subscriber, Set[RoutedTableRowId]]
+
+  // MANIFEST
+  private var routesToSource = Map.empty[TypeValue, PeerSourceLink]
+
+
+  // SUB MGMT
+  private var activeSubscriptions = Map.empty[TypeValue, Map[TableRow, (Set[SubscriptionTarget], Set[PeerSourceLink])]]
+  private var activeForSub = Map.empty[SubscriptionTarget, Set[RowId]]
+  private var activeForSource = Map.empty[PeerSourceLink, Set[RowId]]
+
+  private var unresolvedSubRoutes = Map.empty[TypeValue, Map[SubscriptionTarget, Set[TableRow]]]
+  private var unresolvedForSub = Map.empty[SubscriptionTarget, Map[TypeValue, Map[TableRow, Option[SessionColumnQuery]]]]
+
+  //private var subscriptions = Map.empty[RowId, Set[Subscription]]
+  //private var subscriptionsRouted = Map.empty[TypeValue, Map[TableRow, Set[SubMgr]]]
+
+  //private var targetToMgr = Map.empty[SubscriptionTarget, SubMgr]
 
   /*
     update manifest
@@ -627,8 +662,67 @@ class PeerStreamEngine {
     handleSynthesizedEvents(emitted)
   }
 
-  def subscriptionsRegistered(subscriber: Subscriber, params: SubscriptionParams): Unit = {
+  private def handleSubAdds(subMgr: SubMgr, adds: Map[RowId, Option[SessionColumnQuery]]): Unit = {
+    adds.foreach {
+      case (rowId, queryOpt) =>
+        rowId.routingKeyOpt match {
+          case None => ???
+          case Some(routingKey) => {
 
+
+            routesToSource.get(routingKey) match {
+              case None =>
+              case Some(source) => {
+
+              }
+            }
+          }
+        }
+    }
+  }
+
+  private def handleSubRemoves(subMgr: SubMgr, removes: Set[RowId]): Unit = {
+
+  }
+
+  // - sub appears: resolve routes, enqueue unresolved or add subscription to a source
+  def subscriptionsRegistered(subscriber: SubscriptionTarget, params: StreamSubscriptionParams): Unit = {
+
+    val paramMap: Map[RowId, Option[SessionColumnQuery]] = params.rows.map(p => (p.rowId, p.columnQuery)).toMap
+
+    val active: Set[RowId] = activeForSub.getOrElse(subscriber, Set())
+    val unresolved = unresolvedForSub.getOrElse(subscriber, Set())
+    val unresolvedMap: Map[RowId, Option[SessionColumnQuery]] = unresolved.flatMap { case (route, rowQueries) => rowQueries.map { case (tr, optQuery) => (RowId(Some(route), tr.table, tr.rowKey), optQuery) } }.toMap
+
+    val activeRemoves = active -- paramMap.keySet
+
+    val unresolvedRemoves = unresolvedMap.keySet -- paramMap.keySet
+
+
+
+
+    /*val (removes, adds) = activeForSub.get(subscriber) match {
+      case None => (Set(), paramMap)
+      case Some(rows) =>
+    }*/
+
+    /*val subMgr = targetToMgr.getOrElse(subscriber, {
+      val subMgr = new SubMgr(subscriber)
+      targetToMgr += (subscriber -> subMgr)
+      subMgr
+    })
+
+    val (requests, removes) = subMgr.paramsUpdate(params)
+    handleSubRemoves(subMgr, removes)*/
+
+    /*targetToMgr.get(subscriber) match {
+      case None =>
+        val subMgr = new SubMgr(subscriber)
+        targetToMgr += (subscriber -> subMgr)
+        val (requests, removes) = subMgr.paramsUpdate(params)
+      case Some(subMgr) =>
+        val (requests, removes) = subMgr.paramsUpdate(params)
+    }*/
   }
 
 }

@@ -117,10 +117,10 @@ trait Database {
 }*/
 
 
-trait Subscription {
+/*trait Subscription {
   def dequeue(): SubscriptionNotifications
   def close(): Unit
-}
+}*/
 
 case class SessionColumnQuery(sessionId: PeerSessionId, sequence: TypeValue)
 
