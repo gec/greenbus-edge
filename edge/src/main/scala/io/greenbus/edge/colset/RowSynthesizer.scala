@@ -47,7 +47,7 @@ class SynthesizerTable extends LazyLogging {
             }
         }
       }
-      case in: RouteDesynced => {
+      case in: RouteUnresolved => {
         routed.get(in.routingKey) match {
           case None => Seq()
           case Some(rows) => {
@@ -131,6 +131,7 @@ three modes a session can be in:
 "standby" is really "unresolved"? in other words it's not got a clear ordering from the active session
 
  */
+// TODO: emit desync when no sources left
 class RowSynthesizerDb(rowId: RowId, initSource: PeerSourceLink, initSess: PeerSessionId, initMgr: SessionRowDb) extends DbMgr with LazyLogging {
 
   private var activeSession: PeerSessionId = initSess

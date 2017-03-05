@@ -163,12 +163,6 @@ case class ManifestUpdate(routingSet: Option[SetChanges[TypeValue]], indexSet: O
 
 case class PeerSourceEvents(manifestUpdate: Option[ManifestUpdate], sessionNotifications: Seq[StreamEvent])
 
-trait PeerSourceLink {
-  def id: PeerSessionId
-  def addSubscriptions(params: Map[RoutedTableRowId, Option[TypeValue]]): Unit
-  def removedSubscriptions(rows: Set[RoutedTableRowId]): Unit
-  def sourced: Set[RoutedTableRowId]
-}
 
 trait RemotePeerSourceLink extends CloseObservable {
   def link(): Unit
@@ -312,22 +306,16 @@ case class TableRow(table: SymbolVal, rowKey: TypeValue)
 sealed trait StreamEvent
 /*case class RoutedRowAppendEvent(key: RoutedTableRowId, appendEvent: RowAppendEvent)*/
 case class RowAppendEvent(rowId: RowId, appendEvent: AppendEvent) extends StreamEvent
-case class RouteDesynced(routingKey: TypeValue) extends StreamEvent
+case class RouteUnresolved(routingKey: TypeValue) extends StreamEvent
 
 case class StreamEventBatch(events: Seq[StreamEvent])
 case class StreamNotifications(batches: Seq[StreamEventBatch])
 
-
 case class IndexSpecifier(key: TypeValue, value: Option[IndexableTypeValue])
 
+case class StreamSubscriptionParams()
 
 
-class RetailCacheTable extends LazyLogging {
-  private var routed = Map.empty[TypeValue, Map[TableRow, DbMgr]]
-
-  //def handle
-
-}
 
 /*
 Synthesizer,
@@ -460,6 +448,70 @@ unresolved row set: set[routed_row] OR set[routingKey -> set[row]]
 case class PeerLinkEntry()
 
 
+
+trait RetailRowQueue {
+
+  def handle(append: AppendEvent): Unit
+
+  def dequeue(): Seq[AppendEvent]
+}
+
+object RetailRowLog {
+  def build(rowId: RowId, sessionId: PeerSessionId, init: SetSnapshot): RetailRowLog = {
+    ???
+  }
+}
+trait RetailRowLog {
+
+  def handle(append: AppendEvent): Unit
+
+  def query(): Seq[AppendEvent]
+}
+
+
+class RetailCacheTable extends LazyLogging {
+  private var rows = Map.empty[TypeValue, Map[TableRow, RetailRowLog]]
+  private var unrouted = Map.empty[TableRow, RetailRowLog]
+
+  def handleBatch(events: Seq[StreamEvent]): Unit = {
+    events.foreach {
+      case ev: RowAppendEvent => {
+        lookup(ev.rowId) match {
+          case None => //
+            ev.rowId.routingKeyOpt match {
+              case None => ???
+              case Some(routingKey) => addRouted(ev, routingKey, rows.getOrElse(routingKey, Map()))
+            }
+          case Some(log) => log.handle(ev.appendEvent)
+        }
+      }
+      case ev: RouteUnresolved =>
+    }
+  }
+
+  private def lookup(rowId: RowId): Option[RetailRowLog] = {
+    rowId.routingKeyOpt match {
+      case None => unrouted.get(rowId.tableRow)
+      case Some(routingKey) =>
+        rows.get(routingKey).flatMap { map =>
+          map.get(rowId.tableRow)
+        }
+    }
+  }
+
+
+  private def addRouted(ev: RowAppendEvent, routingKey: TypeValue, existingRows: Map[TableRow, RetailRowLog]): Unit = {
+    ev.appendEvent match {
+      case resync: ResyncSession =>
+        val log = RetailRowLog.build(ev.rowId, resync.sessionId, resync.snapshot)
+        rows += (routingKey -> (existingRows + (ev.rowId.tableRow -> log)))
+      case _ =>
+        logger.warn(s"Initial row event was not resync session: $ev")
+    }
+  }
+}
+
+
 /*
 Synthesizer,
 Retail stream cache,streams
@@ -467,16 +519,78 @@ Subscriber retail
 
  */
 
-class PeerThing {
+/*trait PeerSourceLink {
+  def id: PeerSessionId
+  def addSubscriptions(params: Map[RoutedTableRowId, Option[TypeValue]]): Unit
+  def removedSubscriptions(rows: Set[RoutedTableRowId]): Unit
+  def sourced: Set[RoutedTableRowId]
+}*/
+trait PeerSourceLink {
+  def setSubscriptions(rows: Set[(RowId, Option[SessionColumnQuery])]): Unit
+  //def sourcedRoutes: Set[TypeValue]
+  //def sourcedRows: Set[RowId]
+}
+
+object SourceMgr {
+  val tablePrefix = "__manifest"
+
+  def peerRouteRow(peerId: PeerSessionId): RowId = {
+    RowId(Some(TypeValueConversions.toTypeValue(peerId)), SymbolVal(s"$tablePrefix"), SymbolVal("routes"))
+  }
+  def peerIndexRow(peerId: PeerSessionId): RowId = {
+    RowId(Some(TypeValueConversions.toTypeValue(peerId)), SymbolVal(s"$tablePrefix"), SymbolVal("indexes"))
+  }
+
+  def manifestRows(peerId: PeerSessionId): Set[RowId] = {
+    Set(peerRouteRow(peerId), peerIndexRow(peerId))
+  }
+}
+class SourceMgr(peerId: PeerSessionId, source: PeerSourceLink) {
+
+  private val manifestKeys: Set[RowId] = SourceMgr.manifestRows(peerId)
+
+  def init(): Unit = {
+    source.setSubscriptions(manifestKeys.map(k => (k, None)))
+  }
+
+}
+
+/*
+
+handles:
+- sub appears: resolve routes, enqueue unresolved or add subscription to a source
+- sub disappears: unmark source subs, remove if unnecessary
+- source appears: add to manifest rows to observe
+- source manifest update: resolve unresolved, add/remove known routes
+- source disappears: check for now-unsourced routes, switch to a different source or emit unresolved.
+!!!NOTE: conflict with the synthesizer's concept of unresolved
+
+manifest rows -> source (manifest)
+
+
+ */
+class SourcingMgr {
+  private var sourceToSubs = Map.empty[PeerSourceLink, Set[RowId]]
+  private var manifestRowsToSource
+
+  def manifestRows: Set[RowId]
+
+}
+
+trait SubscriptionTarget {
+  def queues: Map[TypeValue, Map[TableRow, RetailRowQueue]]
+}
+
+object PeerStreamEngine {
+
+}
+class PeerStreamEngine {
 
   private val synthesizer = new SynthesizerTable
 
+  private val retailCacheTable = new RetailCacheTable
+
   private val sourcedManifest = new SourceLinksManifest[PeerLinkEntry]
-
-  //private val sourcedTable = new SourcedDataTable
-  //private val directTable = new DirectDataTable
-
-  //private var
 
   private var subscriptions = Map.empty[RoutedTableRowId, Set[Subscription]]
   private var unresolvedSubs = Map.empty[RoutedTableRowId, Set[Subscription]]
@@ -495,13 +609,23 @@ class PeerThing {
    */
   def peerSourceEvents(link: PeerSourceLink, events: Seq[StreamEvent]): Unit = {
     val emitted = synthesizer.handleBatch(link, events)
+    handleSynthesizedEvents(emitted)
+  }
+
+  private def handleSynthesizedEvents(events: Seq[StreamEvent]): Unit = {
 
 
+    retailCacheTable.handleBatch(events)
+  }
+
+  def sourceConnected(link: PeerSourceLink): Unit = {
 
   }
-  /*def peerSourceEvents(link: PeerSourceLink, events: PeerSourceEvents): Unit = {
 
-  }*/
+  def sourceDisconnected(link: PeerSourceLink): Unit = {
+    val emitted = synthesizer.sourceRemoved(link)
+    handleSynthesizedEvents(emitted)
+  }
 
   def subscriptionsRegistered(subscriber: Subscriber, params: SubscriptionParams): Unit = {
 
@@ -509,6 +633,16 @@ class PeerThing {
 
 }
 
+/*
+Highest level
+
+App Entry
+- Peer
+  - Subscription protocol engine
+  - Output forwarding engine
+- Link management / I/O
+
+ */
 
 
 
