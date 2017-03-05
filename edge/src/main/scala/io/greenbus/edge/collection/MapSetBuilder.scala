@@ -2,7 +2,7 @@ package io.greenbus.edge.collection
 
 object MapSetBuilder {
 
-  def build[A, B] = {
+  def newBuilder[A, B] = {
     new Impl[A, B]
   }
 

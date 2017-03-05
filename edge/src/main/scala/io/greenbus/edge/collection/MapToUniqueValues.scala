@@ -3,7 +3,7 @@ package io.greenbus.edge.collection
 object MapToUniqueValues {
 
   def apply[A, B](args: (A, B)*): MapToUniqueValues[A, B] = {
-    val kToV = MapSetBuilder.build[A, B]
+    val kToV = MapSetBuilder.newBuilder[A, B]
     val vToK = Map.newBuilder[B, A]
     args.foreach {
       case (k, v) =>

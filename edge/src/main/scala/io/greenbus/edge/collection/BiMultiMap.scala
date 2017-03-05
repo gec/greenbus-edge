@@ -3,8 +3,8 @@ package io.greenbus.edge.collection
 object BiMultiMap {
 
   def apply[A, B](args: (A, B)*): BiMultiMap[A, B] = {
-    val kToV = MapSetBuilder.build[A, B]
-    val vToK = MapSetBuilder.build[B, A]
+    val kToV = MapSetBuilder.newBuilder[A, B]
+    val vToK = MapSetBuilder.newBuilder[B, A]
     args.foreach {
       case (k, v) =>
         kToV += (k -> v)

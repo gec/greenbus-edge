@@ -5,7 +5,7 @@ import java.util.UUID
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.{CallMarshaller, SchedulableCallMarshaller}
 import io.greenbus.edge.channel2._
-import io.greenbus.edge.collection.{BiMultiMap, MapToUniqueValues}
+import io.greenbus.edge.collection.{BiMultiMap, MapSetBuilder, MapToUniqueValues}
 
 /*
 component: update-able subscriptions require the ability to either recognize a table row sub hasn't changed or
@@ -275,43 +275,6 @@ use cases:
 //case class LinkStreamEvent(rowKey: RoutedTableRowId)
 
 
-trait SetDelta
-trait SetSnapshot
-
-case class ModifiedSetDelta(sequence: SequencedTypeValue, removes: Set[TypeValue], adds: Set[TypeValue]) extends SetDelta
-case class ModifiedSetSnapshot(sequence: SequencedTypeValue, snapshot: Set[TypeValue]) extends SetSnapshot
-case class ModifiedKeyedSetDelta(sequence: SequencedTypeValue, removes: Set[TypeValue], adds: Set[TypeValue], modifies: Set[(TypeValue, TypeValue)]) extends SetDelta
-case class ModifiedKeyedSetSnapshot(sequence: SequencedTypeValue, snapshot: Map[TypeValue, TypeValue]) extends SetSnapshot
-case class AppendSetValue(sequence: SequencedTypeValue, value: TypeValue)
-case class AppendSetDelta(appends: Seq[AppendSetValue]) extends SetDelta with SetSnapshot
-//case class AppendSetSnapshot(appends: Seq[AppendSetValue]) extends SetSnapshot
-
-
-//sealed trait RowStreamEvent
-sealed trait AppendEvent
-case class StreamDelta(update: SetDelta) extends AppendEvent
-case class ResyncSnapshot(snapshot: SetSnapshot) extends AppendEvent
-case class ResyncSession(sessionId: PeerSessionId, snapshot: SetSnapshot) extends AppendEvent
-//case class Inactive
-
-case class RowId(routingKeyOpt: Option[TypeValue], table: SymbolVal, rowKey: TypeValue) {
-  def tableRow: TableRow = TableRow(table, rowKey)
-}
-case class TableRow(table: SymbolVal, rowKey: TypeValue)
-
-sealed trait StreamEvent
-/*case class RoutedRowAppendEvent(key: RoutedTableRowId, appendEvent: RowAppendEvent)*/
-case class RowAppendEvent(rowId: RowId, appendEvent: AppendEvent) extends StreamEvent
-case class RouteUnresolved(routingKey: TypeValue) extends StreamEvent
-
-case class StreamEventBatch(events: Seq[StreamEvent])
-case class StreamNotifications(batches: Seq[StreamEventBatch])
-
-case class IndexSpecifier(key: TypeValue, value: Option[IndexableTypeValue])
-
-case class RowSubscriptionParams(rowId: RowId, columnQuery: Option[SessionColumnQuery])
-case class StreamSubscriptionParams(rows: Seq[RowSubscriptionParams])
-
 
 
 /*
@@ -321,62 +284,6 @@ Subscriber retail
 
  */
 
-object PeerManifest {
-
-  def eitherSomeIsRightOrNone[L, R](vOpt: Option[Either[L, R]]): Either[L, Option[R]] = {
-    vOpt.map(_.map(r => Some(r))).getOrElse(Right(Option.empty[R]))
-  }
-
-  def parseIndexableTypeValue(tv: TypeValue): Either[String, IndexableTypeValue] = {
-    tv match {
-      case v: IndexableTypeValue => Right(v)
-      case _ => Left(s"Unrecognized indexable type value: $tv")
-    }
-  }
-
-  def parseIndexSpecifier(tv: TypeValue): Either[String, IndexSpecifier] = {
-    tv match {
-      case TupleVal(seq) =>
-        if (seq.size >= 2) {
-          val key = seq(0)
-          seq(1) match {
-            case v: OptionVal =>
-              eitherSomeIsRightOrNone(v.element.map(parseIndexableTypeValue))
-                  .map(vOpt => IndexSpecifier(key, vOpt))
-            case _ => Left(s"Unrecognized index type: $tv")
-          }
-        } else {
-          Left(s"Unrecognized index type: $tv")
-        }
-      case _ => Left(s"Unrecognized index type: $tv")
-    }
-  }
-}
-case class PeerManifest(routingKeySet: Set[TypeValue], indexSet: Set[IndexSpecifier])
-
-
-class SourceLinksManifest[Link] {
-
-  private var routingMap = BiMultiMap.empty[TypeValue, Link]
-  private var indexMap = BiMultiMap.empty[IndexSpecifier, Link]
-
-  def routingKeys: Map[TypeValue, Set[Link]] = routingMap.keyToVal
-  def indexes: Map[IndexSpecifier, Set[Link]] = indexMap.keyToVal
-
-  def handleUpdate(link: Link, manifest: PeerManifest): Unit = {
-    routingMap = routingMap.reverseAdd(link, manifest.routingKeySet)
-    indexMap = indexMap.reverseAdd(link, manifest.indexSet)
-  }
-
-  def linkRemoved(link: Link): Unit = {
-    routingMap = routingMap.removeValue(link)
-    indexMap = indexMap.removeValue(link)
-  }
-}
-
-class LocalManifest[Publisher] {
-
-}
 
 
 /*
@@ -462,13 +369,20 @@ trait RetailRowLog {
 
   def handle(append: AppendEvent): Unit
 
-  def query(): Seq[AppendEvent]
+  def sync(): Set[AppendEvent]
+  //def query(): Seq[AppendEvent]
 }
 
 
 class RetailCacheTable extends LazyLogging {
   private var rows = Map.empty[TypeValue, Map[TableRow, RetailRowLog]]
   private var unrouted = Map.empty[TableRow, RetailRowLog]
+
+  def getSync(row: RowId): Seq[StreamEvent] = {
+    lookup(row).map(log => log.sync())
+      .map(_.map(apEv => RowAppendEvent(row, apEv)).toVector)
+      .getOrElse(Seq())
+  }
 
   def handleBatch(events: Seq[StreamEvent]): Unit = {
     events.foreach {
@@ -496,7 +410,6 @@ class RetailCacheTable extends LazyLogging {
     }
   }
 
-
   private def addRouted(ev: RowAppendEvent, routingKey: TypeValue, existingRows: Map[TableRow, RetailRowLog]): Unit = {
     ev.appendEvent match {
       case resync: ResyncSession =>
@@ -516,6 +429,35 @@ Subscriber retail
 
  */
 
+object KeyedSetHandler {
+  def build: KeyedSetHandler = {
+    ???
+  }
+}
+trait KeyedSetHandler {
+
+  def handle(event: AppendEvent): Unit
+  def snapshot(): Map[TypeValue, TypeValue]
+}
+
+case class KeyedSetDiff[A, B](snapshot: Map[A, B], removed: Set[A], added: Set[A], modified: Set[A])
+object RenderedKeyedSet {
+  def build[A, B](): RenderedKeyedSet[A, B] = {
+    ???
+  }
+}
+trait RenderedKeyedSet[A, B] {
+  def handle(event: AppendEvent): Unit
+  def snapshot(): Map[A, B]
+  def dequeueDiff(): KeyedSetDiff[A, B]
+}
+
+object RouteManifestSet {
+  def build: RouteManifestSet = ???
+}
+trait RouteManifestSet extends RenderedKeyedSet[TypeValue, SourceManifestRouteEntry] {
+}
+
 /*trait PeerSourceLink {
   def id: PeerSessionId
   def addSubscriptions(params: Map[RoutedTableRowId, Option[TypeValue]]): Unit
@@ -523,7 +465,8 @@ Subscriber retail
   def sourced: Set[RoutedTableRowId]
 }*/
 trait PeerSourceLink {
-  def setSubscriptions(rows: Set[(RowId, Option[SessionColumnQuery])]): Unit
+  def setSubscriptions(rows: Set[RowId]): Unit
+  //def setSubscriptions(rows: Set[(RowId, Option[SessionColumnQuery])]): Unit
   //def sourcedRoutes: Set[TypeValue]
   //def sourcedRows: Set[RowId]
 }
@@ -542,14 +485,38 @@ object SourceMgr {
     Set(peerRouteRow(peerId), peerIndexRow(peerId))
   }
 }
-class SourceMgr(peerId: PeerSessionId, source: PeerSourceLink) {
+class SourceMgr(peerId: PeerSessionId, source: PeerSourceLink) extends LazyLogging {
 
-  private val manifestKeys: Set[RowId] = SourceMgr.manifestRows(peerId)
+  private val routeRow = SourceMgr.peerRouteRow(peerId)
+  private val indexRow = SourceMgr.peerIndexRow(peerId)
+
+  private val routeLog = RouteManifestSet.build
+
+  private val keys: Set[RowId] = Set(routeRow, indexRow)
+  def manifestKeys: Set[RowId] = keys
+  def manifestRoute: TypeValue = TypeValueConversions.toTypeValue(peerId)
 
   def init(): Unit = {
-    source.setSubscriptions(manifestKeys.map(k => (k, None)))
+    source.setSubscriptions(manifestKeys)
   }
 
+  def snapshot(): Map[TypeValue, SourceManifestRouteEntry] = {
+    routeLog.snapshot()
+  }
+
+  def handleSelfEvents(events: Seq[StreamEvent]): KeyedSetDiff[TypeValue, SourceManifestRouteEntry] = {
+    events.foreach {
+      case RowAppendEvent(row, ev) =>
+        row match {
+          case `routeRow` => routeLog.handle(ev)
+          case `indexRow` =>
+          case other => logger.debug(s"Unexpected row in $peerId manifest events: $other")
+        }
+      case sev =>
+        logger.warn(s"Unexpected self event for $peerId: $sev")
+    }
+    routeLog.dequeueDiff()
+  }
 }
 
 /*
@@ -585,7 +552,7 @@ trait SubscriptionTarget {
   def handleBatch(events: Seq[StreamEvent])
 }
 
-class SubMgr(target: SubscriptionTarget) {
+/*class SubMgr(target: SubscriptionTarget) {
 
   /*def handleBatch(events: Seq[StreamEvent]): Unit = {
     target.handleBatch(events)
@@ -593,43 +560,88 @@ class SubMgr(target: SubscriptionTarget) {
   def paramsUpdate(params: StreamSubscriptionParams): (Seq[RowSubscriptionParams], Set[RowId]) = {
 
   }
-}
+}*/
 
 /*trait RowSubscription {
   def queue: RetailRowQueue
 }*/
 
+case class SourceManifestRouteEntry()
+
+class RouteSourcingMgr {
+  def activeRows: Set[TableRow] = ???
+  def activeRowIds: Set[RowId] = ???
+  def sources: Set[PeerSourceLink] = ???
+  def unused(): Boolean = ???
+
+  def handleBatch(events: Seq[StreamEvent]): Unit = ???
+
+  def subscribe(subscriber: SubscriptionTarget, rows: Set[TableRow]): Unit = ???
+  def unsubscribe(subscriber: SubscriptionTarget, rows: Set[TableRow]): Unit = ???
+  def subscriberRemoved(subscriber: SubscriptionTarget): Unit = ???
+  def sourceAdded(source: SourceMgr, desc: SourceManifestRouteEntry): Unit = ???
+  def sourceRemoved(source: SourceMgr): Unit = ???
+}
+
+
 object PeerStreamEngine {
 
 }
-class PeerStreamEngine {
+class PeerStreamEngine extends LazyLogging {
 
   private val synthesizer = new SynthesizerTable
 
   private val retailCacheTable = new RetailCacheTable
 
-  private val sourcedManifest = new SourceLinksManifest[PeerLinkEntry]
+  private var routeSourcingMap = Map.empty[TypeValue, RouteSourcingMgr]
+  private var rowsForSub = Map.empty[SubscriptionTarget, Set[RowId]]
+  //private var rowsForSource = Map.empty[PeerSourceLink, Set[RowId]]
+  private var routesForSource = Map.empty[SourceMgr, Set[TypeValue]]
 
-  //private var subscriptions = Map.empty[RoutedTableRowId, Set[Subscription]]
-  //private var unresolvedSubs = Map.empty[RoutedTableRowId, Set[Subscription]]
-  //private var subscribers = Map.empty[Subscriber, Set[RoutedTableRowId]]
-
-  // MANIFEST
-  private var routesToSource = Map.empty[TypeValue, PeerSourceLink]
+  private var sourceMgrs = Map.empty[PeerSourceLink, SourceMgr]
+  //private var routeToSource = Map.empty[TypeValue, SourceMgr]
 
 
-  // SUB MGMT
-  private var activeSubscriptions = Map.empty[TypeValue, Map[TableRow, (Set[SubscriptionTarget], Set[PeerSourceLink])]]
-  private var activeForSub = Map.empty[SubscriptionTarget, Set[RowId]]
-  private var activeForSource = Map.empty[PeerSourceLink, Set[RowId]]
+  private def addOrUpdateSourceRoute(source: SourceMgr, route: TypeValue, entry: SourceManifestRouteEntry): Unit = {
+    val mgr = routeSourcingMap.getOrElse(route, {
+      val sourcing = new RouteSourcingMgr
+      routeSourcingMap += (route -> sourcing)
+      sourcing
+    })
 
-  private var unresolvedSubRoutes = Map.empty[TypeValue, Map[SubscriptionTarget, Set[TableRow]]]
-  private var unresolvedForSub = Map.empty[SubscriptionTarget, Map[TypeValue, Map[TableRow, Option[SessionColumnQuery]]]]
+    mgr.sourceAdded(source, entry)
+  }
 
-  //private var subscriptions = Map.empty[RowId, Set[Subscription]]
-  //private var subscriptionsRouted = Map.empty[TypeValue, Map[TableRow, Set[SubMgr]]]
+  private def removeSourceRoute(source: SourceMgr, route: TypeValue): Unit = {
+    routeSourcingMap.get(route).foreach { sourcing =>
+      sourcing.sourceRemoved(source)
+    }
+  }
 
-  //private var targetToMgr = Map.empty[SubscriptionTarget, SubMgr]
+  private def handleSourcingUpdate(mgr: SourceMgr, events: Seq[StreamEvent]): Unit = {
+    val manifestEvents = events.filter {
+      case RowAppendEvent(row, ev) => row.routingKeyOpt.contains(mgr.manifestRoute)
+      case _ => false
+    }
+    val diff = mgr.handleSelfEvents(manifestEvents)
+    diff.removed.foreach(removeSourceRoute(mgr, _))
+
+    val updates = diff.added ++ diff.modified
+    updates.flatMap(route => diff.snapshot.get(route).map(entry => (route, entry))).foreach {
+      case (route, entry) => addOrUpdateSourceRoute(mgr, route, entry)
+    }
+
+    routesForSource += (mgr -> diff.snapshot.keySet)
+  }
+
+  private def removeSourceFromSourcing(mgr: SourceMgr, route: TypeValue): Unit = {
+    routeSourcingMap.get(route).foreach { sourcing =>
+      sourcing.sourceRemoved(mgr)
+      if (sourcing.unused()) {
+        routeSourcingMap -= route
+      }
+    }
+  }
 
   /*
     update manifest
@@ -644,86 +656,190 @@ class PeerStreamEngine {
    */
   def peerSourceEvents(link: PeerSourceLink, events: Seq[StreamEvent]): Unit = {
     val emitted = synthesizer.handleBatch(link, events)
+
+    sourceMgrs.get(link) match {
+      case None => logger.warn(s"No source manager for link: $link")
+      case Some(mgr) => handleSourcingUpdate(mgr, emitted)
+    }
+
     handleSynthesizedEvents(emitted)
   }
 
   private def handleSynthesizedEvents(events: Seq[StreamEvent]): Unit = {
-
-
     retailCacheTable.handleBatch(events)
+
+    // TODO: maintain ordering across routes?
+    events.groupBy(_.routingKey).foreach {
+      case (route, routeEvents) =>
+        routeSourcingMap.get(route).foreach { mgr => mgr.handleBatch(routeEvents) }
+    }
   }
 
-  def sourceConnected(link: PeerSourceLink): Unit = {
-
+  def sourceConnected(peerSessionId: PeerSessionId, link: PeerSourceLink): Unit = {
+    sourceMgrs.get(link) match {
+      case None => {
+        val mgr = new SourceMgr(peerSessionId, link)
+        mgr.init()
+        sourceMgrs += (link -> mgr)
+      }
+      case Some(mgr) =>
+        logger.warn(s"Link for $peerSessionId had connect event but already existed")
+    }
   }
 
   def sourceDisconnected(link: PeerSourceLink): Unit = {
+    sourceMgrs.get(link).foreach { mgr =>
+      val routes = routesForSource.getOrElse(mgr, Set())
+      routes.foreach(removeSourceFromSourcing(mgr, _))
+      routesForSource -= mgr
+    }
+    sourceMgrs -= link
+
     val emitted = synthesizer.sourceRemoved(link)
     handleSynthesizedEvents(emitted)
   }
 
-  private def handleSubAdds(subMgr: SubMgr, adds: Map[RowId, Option[SessionColumnQuery]]): Unit = {
-    adds.foreach {
-      case (rowId, queryOpt) =>
-        rowId.routingKeyOpt match {
-          case None => ???
-          case Some(routingKey) => {
-
-
-            routesToSource.get(routingKey) match {
-              case None =>
-              case Some(source) => {
-
-              }
-            }
-          }
-        }
-    }
-  }
-
-  private def handleSubRemoves(subMgr: SubMgr, removes: Set[RowId]): Unit = {
-
-  }
 
   // - sub appears: resolve routes, enqueue unresolved or add subscription to a source
   def subscriptionsRegistered(subscriber: SubscriptionTarget, params: StreamSubscriptionParams): Unit = {
 
-    val paramMap: Map[RowId, Option[SessionColumnQuery]] = params.rows.map(p => (p.rowId, p.columnQuery)).toMap
+    val rows = params.rows.toSet
 
-    val active: Set[RowId] = activeForSub.getOrElse(subscriber, Set())
-    val unresolved = unresolvedForSub.getOrElse(subscriber, Set())
-    val unresolvedMap: Map[RowId, Option[SessionColumnQuery]] = unresolved.flatMap { case (route, rowQueries) => rowQueries.map { case (tr, optQuery) => (RowId(Some(route), tr.table, tr.rowKey), optQuery) } }.toMap
+    val existing = rowsForSub.getOrElse(subscriber, Set())
 
-    val activeRemoves = active -- paramMap.keySet
+    val added = rows -- existing
+    val removed = existing -- rows
 
-    val unresolvedRemoves = unresolvedMap.keySet -- paramMap.keySet
+    val removedRouteMap: Map[TypeValue, Set[TableRow]] = RowId.setToRouteMap(removed)
+    val addedRouteMap: Map[TypeValue, Set[TableRow]] = RowId.setToRouteMap(added)
 
+    val updatedRoutes = removedRouteMap.keySet ++ addedRouteMap.keySet
 
+    val streamEvents = Vector.newBuilder[StreamEvent]
 
+    updatedRoutes.foreach { route =>
 
-    /*val (removes, adds) = activeForSub.get(subscriber) match {
-      case None => (Set(), paramMap)
-      case Some(rows) =>
-    }*/
+      val removes = removedRouteMap.getOrElse(route, Set())
+      val adds = addedRouteMap.getOrElse(route, Set())
 
-    /*val subMgr = targetToMgr.getOrElse(subscriber, {
-      val subMgr = new SubMgr(subscriber)
-      targetToMgr += (subscriber -> subMgr)
-      subMgr
-    })
+      val sourcing = routeSourcingMap.getOrElse(route, {
+        val routeSourcingMgr = new RouteSourcingMgr
+        routeSourcingMap += (route -> routeSourcingMgr)
+        routeSourcingMgr
+      })
 
-    val (requests, removes) = subMgr.paramsUpdate(params)
-    handleSubRemoves(subMgr, removes)*/
+      sourcing.unsubscribe(subscriber, removes)
+      sourcing.subscribe(subscriber, adds)
 
-    /*targetToMgr.get(subscriber) match {
-      case None =>
-        val subMgr = new SubMgr(subscriber)
-        targetToMgr += (subscriber -> subMgr)
-        val (requests, removes) = subMgr.paramsUpdate(params)
-      case Some(subMgr) =>
-        val (requests, removes) = subMgr.paramsUpdate(params)
-    }*/
+      // TODO: branch above to prevent dumb add/remove
+      if (sourcing.unused()) {
+        routeSourcingMap -= route
+      }
+
+      val addIds = adds.map(tr => RowId(Some(route), tr.table, tr.rowKey))
+
+      // For every row, either route is unresolved, sub was already active and cached, or subscribe above will
+      // cause a sync/unavail event at a later time, meanwhile that row is pending for the subscriber
+      if (sourcing.sources.nonEmpty) {
+        streamEvents ++= addIds.flatMap(row => retailCacheTable.getSync(row))
+      } else {
+        streamEvents +=  RouteUnresolved(route)
+      }
+    }
+
+    rowsForSub += (subscriber -> rows)
+
+    val events = streamEvents.result()
+    if (events.nonEmpty) {
+      subscriber.handleBatch(events)
+    }
+
   }
+
+  def subscriberRemoved(subscriber: SubscriptionTarget): Unit = {
+    val routesForSub = rowsForSub.getOrElse(subscriber, Set()).map(_.routingKeyOpt.get).toSet
+    routesForSub.foreach { route =>
+      routeSourcingMap.get(route).foreach { sourcing =>
+        sourcing.subscriberRemoved(subscriber)
+        if (sourcing.unused()) {
+          routeSourcingMap -= route
+        }
+      }
+    }
+    rowsForSub -= subscriber
+
+  }
+
+  //private val sourcedManifest = new SourceLinksManifest[PeerLinkEntry]
+
+  //private var subscriptions = Map.empty[RoutedTableRowId, Set[Subscription]]
+  //private var unresolvedSubs = Map.empty[RoutedTableRowId, Set[Subscription]]
+  //private var subscribers = Map.empty[Subscriber, Set[RoutedTableRowId]]
+
+  // MANIFEST
+  //private var routesToSource = Map.empty[TypeValue, PeerSourceLink]
+
+
+  // SUB MGMT
+  //private var activeSubscriptions = Map.empty[TypeValue, Map[TableRow, (Set[SubscriptionTarget], Set[PeerSourceLink])]]
+  /*private var activeForSub = Map.empty[SubscriptionTarget, Set[RowId]]
+  private var activeForSource = Map.empty[PeerSourceLink, Set[RowId]]
+
+  private var unresolvedSubRoutes = Map.empty[TypeValue, Map[SubscriptionTarget, Set[TableRow]]]
+  private var unresolvedForSub = Map.empty[SubscriptionTarget, Map[TypeValue, Set[TableRow]]]*/
+  /*val subParams = params.rows.toSet
+
+  val active: Set[RowId] = activeForSub.getOrElse(subscriber, Set())
+  val unresolved: Set[RowId] = {
+    val map = unresolvedForSub.getOrElse(subscriber, Set())
+    map.flatMap { case (route, rowQueries) => rowQueries.map { tr => RowId(Some(route), tr.table, tr.rowKey) } }.toSet
+  }
+
+  val activeRemoves = active -- (subParams ++ unresolved)
+  val unresolvedRemoves = unresolved -- (subParams ++ active)
+
+  val unseen = subParams -- (active ++ unresolved)
+
+  removeUnresolved(subscriber, unresolvedRemoves)
+  removeActive(subscriber, activeRemoves)
+  handleNewSubscriptions(subscriber, unseen)*/
+
+  /*private def removeActive(subscriber: SubscriptionTarget, rows: Set[RowId]): Unit = {
+
+  }
+
+  private def removeUnresolved(subscriber: SubscriptionTarget, rows: Set[RowId]): Unit = {
+
+  }
+
+  private def handleNewSubscriptions(subscriber: SubscriptionTarget, rows: Set[RowId]): Unit = {
+
+
+    /*val routeMap: Map[TypeValue, Set[TableRow]] = {
+      val b = MapSetBuilder.newBuilder[TypeValue, TableRow]
+      rows.foreach { row =>
+        row.routingKeyOpt.foreach { routingKey => b += (routingKey -> row.tableRow)}
+      }
+      b.result()
+    }
+
+    routeMap.foreach {
+      case (routingKey, tableRows) =>
+        tableRows.foreach { tableRow =>
+
+          //for { routeRows <- activeSubscriptions.get(routingKey); rowEntry <- routeRows.get(tableRow) } yield rowEntry
+          activeSubscriptions.get(routingKey).flatMap(_.get(tableRow)) match {
+            case
+          }
+
+        }
+    }*/
+
+    /*val routeMap = rows.flatMap { row =>
+      row.routingKeyOpt.getOrElse(routingKey => (routingKey, ))
+    }*/
+
+  }*/
 
 }
 
