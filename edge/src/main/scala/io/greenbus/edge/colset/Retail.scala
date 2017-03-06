@@ -13,8 +13,13 @@ trait RetailRowQueue {
 }
 
 object RetailRowCache {
-  def build(rowId: RowId, sessionId: PeerSessionId, init: SetSnapshot): RetailRowCache = {
-    ???
+  def build(rowId: RowId, sessionId: PeerSessionId, init: SetSnapshot): Option[RetailRowCache] = {
+    init match {
+      case snap: ModifiedSetSnapshot => Some(new ModifiedSetRetailRowCache(rowId, sessionId, snap))
+      case snap: ModifiedKeyedSetSnapshot => Some(new KeyedModifiedSetRetailRowCache(rowId, sessionId, snap))
+      case snap: AppendSetSequence =>
+        snap.appends.lastOption.map(last => new AppendSetRetailRowCache(rowId, sessionId, last))
+    }
   }
 }
 
@@ -155,6 +160,111 @@ class ModifiedSetRetailRowQueue(rowId: RowId, initSess: PeerSessionId, initSnap:
       case ResyncSession(sess, setSnap) => {
         setSnap match {
           case snap: ModifiedSetSnapshot => {
+            deltas.clear()
+            sessionResync = Some(sess)
+            snapshotRebase = Some(snap)
+            sequence = snap.sequence
+          }
+          case _ => logger.error(s"Incorrect snapshot type for $rowId")
+        }
+      }
+    }
+  }
+
+  def dequeue(): Seq[AppendEvent] = {
+    sessionResync match {
+      case None => {
+        snapshotRebase match {
+          case None => {
+            val results = deltas.map(StreamDelta).toVector
+            deltas.clear()
+            results
+          }
+          case Some(snap) => {
+            val results = Seq(ResyncSnapshot(snap))
+            snapshotRebase = None
+            results
+          }
+        }
+      }
+      case Some(session) => {
+        val results = snapshotRebase.map(snap => ResyncSession(session, snap)).toVector
+        snapshotRebase = None
+        sessionResync = None
+        results
+      }
+    }
+  }
+}
+
+
+class KeyedModifiedSetRetailRowCache(rowId: RowId, initSess: PeerSessionId, initSnap: ModifiedKeyedSetSnapshot) extends RetailRowCache with LazyLogging {
+  private var log: SessionKeyedModifyRowLog = new SessionKeyedModifyRowLog(rowId, initSess, initSnap)
+
+  def handle(append: AppendEvent): Unit = {
+    append match {
+      case StreamDelta(update) => {
+        log.handleDelta(update)
+      }
+      case ResyncSnapshot(setSnap) => {
+        log.handleResync(setSnap)
+      }
+      case ResyncSession(sess, setSnap) => {
+        setSnap match {
+          case snap: ModifiedKeyedSetSnapshot =>
+            log = new SessionKeyedModifyRowLog(rowId, sess, snap)
+          case _ => logger.error(s"Incorrect snapshot type for $rowId")
+        }
+      }
+    }
+  }
+
+  def sync(): Seq[AppendEvent] = {
+    log.resyncEvents
+  }
+}
+
+class KeyedModifiedSetRetailRowQueue(rowId: RowId, initSess: PeerSessionId, initSnap: ModifiedKeyedSetSnapshot) extends RetailRowQueue with LazyLogging {
+
+  private var sequence: SequencedTypeValue = initSnap.sequence
+  private var sessionResync: Option[PeerSessionId] = Some(initSess)
+  private var snapshotRebase: Option[ModifiedKeyedSetSnapshot] = Some(initSnap)
+  private val deltas = mutable.ArrayBuffer.empty[ModifiedKeyedSetDelta]
+
+  def handle(append: AppendEvent): Unit = {
+    append match {
+      case StreamDelta(update) => {
+        update match {
+          case d: ModifiedKeyedSetDelta => {
+            if (sequence.precedes(d.sequence)) {
+              snapshotRebase match {
+                case None =>
+                  deltas += d
+                  sequence = d.sequence
+                case Some(state) =>
+                  snapshotRebase = Some(ModifiedKeyedSetSnapshot(d.sequence, (state.snapshot -- d.removes) ++ d.adds ++ d.modifies))
+                  sequence = d.sequence
+              }
+            } else {
+              logger.warn(s"Retail sequence $rowId saw unsequenced delta: $d")
+            }
+          }
+          case _ => logger.error(s"Incorrect delta type for $rowId")
+        }
+      }
+      case ResyncSnapshot(setSnap) => {
+        setSnap match {
+          case snap: ModifiedKeyedSetSnapshot => {
+            deltas.clear()
+            snapshotRebase = Some(snap)
+            sequence = snap.sequence
+          }
+          case _ => logger.error(s"Incorrect snapshot type for $rowId")
+        }
+      }
+      case ResyncSession(sess, setSnap) => {
+        setSnap match {
+          case snap: ModifiedKeyedSetSnapshot => {
             deltas.clear()
             sessionResync = Some(sess)
             snapshotRebase = Some(snap)

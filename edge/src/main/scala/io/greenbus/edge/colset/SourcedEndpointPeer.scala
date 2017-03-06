@@ -259,8 +259,11 @@ class RetailCacheTable extends LazyLogging {
   private def addRouted(ev: RowAppendEvent, routingKey: TypeValue, existingRows: Map[TableRow, RetailRowCache]): Unit = {
     ev.appendEvent match {
       case resync: ResyncSession =>
-        val log = RetailRowCache.build(ev.rowId, resync.sessionId, resync.snapshot)
-        rows += (routingKey -> (existingRows + (ev.rowId.tableRow -> log)))
+        RetailRowCache.build(ev.rowId, resync.sessionId, resync.snapshot) match {
+          case None => logger.warn(s"Initial row event could not create cache: $ev")
+          case Some(log) =>
+            rows += (routingKey -> (existingRows + (ev.rowId.tableRow -> log)))
+        }
       case _ =>
         logger.warn(s"Initial row event was not resync session: $ev")
     }
