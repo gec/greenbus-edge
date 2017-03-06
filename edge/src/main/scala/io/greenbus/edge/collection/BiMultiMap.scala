@@ -32,6 +32,24 @@ class BiMultiMap[A, B](val keyToVal: Map[A, Set[B]], val valToKey: Map[B, Set[A]
     //add(tup._1, tup._2)
   }*/
 
+  def add(k: A, vals: Set[B]): BiMultiMap[A, B] = {
+
+    val kToV = keyToVal.get(k) match {
+      case None => keyToVal + (k -> vals)
+      case Some(set) => keyToVal + (k -> (set ++ vals))
+    }
+
+    val updates = Vector.newBuilder[(B, Set[A])]
+    vals.foreach { v =>
+      valToKey.get(v) match {
+        case None => updates += (v -> Set(k))
+        case Some(set) => updates += (v -> (set + k))
+      }
+    }
+
+    new BiMultiMap[A, B](kToV, valToKey ++ updates.result())
+  }
+
   def reverseAdd(v: B, keys: Set[A]): BiMultiMap[A, B] = {
 
     val updates = Vector.newBuilder[(A, Set[B])]

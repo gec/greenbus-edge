@@ -32,7 +32,9 @@ object RowId {
 case class RowId(routingKey: TypeValue, table: SymbolVal, rowKey: TypeValue) {
   def tableRow: TableRow = TableRow(table, rowKey)
 }
-case class TableRow(table: SymbolVal, rowKey: TypeValue)
+case class TableRow(table: SymbolVal, rowKey: TypeValue) {
+  def toRowId(routingKey: TypeValue): RowId = RowId(routingKey, table, rowKey)
+}
 
 sealed trait StreamEvent {
   def routingKey: TypeValue
