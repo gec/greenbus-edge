@@ -2,6 +2,12 @@ package io.greenbus.edge.colset
 
 import io.greenbus.edge.collection.MapSetBuilder
 
+/*
+
+sealed trait SetSequenceElement
+trait SetDelta extends SetSequenceElement
+trait SetSnapshot extends SetSequenceElement
+ */
 
 trait SetDelta
 trait SetSnapshot
@@ -11,8 +17,9 @@ case class ModifiedSetSnapshot(sequence: SequencedTypeValue, snapshot: Set[TypeV
 case class ModifiedKeyedSetDelta(sequence: SequencedTypeValue, removes: Set[TypeValue], adds: Set[TypeValue], modifies: Set[(TypeValue, TypeValue)]) extends SetDelta
 case class ModifiedKeyedSetSnapshot(sequence: SequencedTypeValue, snapshot: Map[TypeValue, TypeValue]) extends SetSnapshot
 case class AppendSetValue(sequence: SequencedTypeValue, value: TypeValue)
-case class AppendSetDelta(appends: Seq[AppendSetValue]) extends SetDelta with SetSnapshot
+case class AppendSetSequence(appends: Seq[AppendSetValue]) extends SetDelta with SetSnapshot
 //case class AppendSetSnapshot(appends: Seq[AppendSetValue]) extends SetSnapshot
+
 
 
 //sealed trait RowStreamEvent

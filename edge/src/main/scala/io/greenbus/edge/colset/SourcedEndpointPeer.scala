@@ -226,29 +226,10 @@ case class PeerLinkEntry()
 
 
 
-trait RetailRowQueue {
-
-  def handle(append: AppendEvent): Unit
-
-  def dequeue(): Seq[AppendEvent]
-}
-
-object RetailRowLog {
-  def build(rowId: RowId, sessionId: PeerSessionId, init: SetSnapshot): RetailRowLog = {
-    ???
-  }
-}
-trait RetailRowLog {
-
-  def handle(append: AppendEvent): Unit
-
-  def sync(): Set[AppendEvent]
-  //def query(): Seq[AppendEvent]
-}
 
 
 class RetailCacheTable extends LazyLogging {
-  private var rows = Map.empty[TypeValue, Map[TableRow, RetailRowLog]]
+  private var rows = Map.empty[TypeValue, Map[TableRow, RetailRowCache]]
 
   def getSync(row: RowId): Seq[StreamEvent] = {
     lookup(row).map(log => log.sync())
@@ -269,16 +250,16 @@ class RetailCacheTable extends LazyLogging {
     }
   }
 
-  private def lookup(rowId: RowId): Option[RetailRowLog] = {
+  private def lookup(rowId: RowId): Option[RetailRowCache] = {
     rows.get(rowId.routingKey).flatMap { map =>
       map.get(rowId.tableRow)
     }
   }
 
-  private def addRouted(ev: RowAppendEvent, routingKey: TypeValue, existingRows: Map[TableRow, RetailRowLog]): Unit = {
+  private def addRouted(ev: RowAppendEvent, routingKey: TypeValue, existingRows: Map[TableRow, RetailRowCache]): Unit = {
     ev.appendEvent match {
       case resync: ResyncSession =>
-        val log = RetailRowLog.build(ev.rowId, resync.sessionId, resync.snapshot)
+        val log = RetailRowCache.build(ev.rowId, resync.sessionId, resync.snapshot)
         rows += (routingKey -> (existingRows + (ev.rowId.tableRow -> log)))
       case _ =>
         logger.warn(s"Initial row event was not resync session: $ev")
@@ -323,17 +304,8 @@ object RouteManifestSet {
 trait RouteManifestSet extends RenderedKeyedSet[TypeValue, SourceManifestRouteEntry] {
 }
 
-/*trait PeerSourceLink {
-  def id: PeerSessionId
-  def addSubscriptions(params: Map[RoutedTableRowId, Option[TypeValue]]): Unit
-  def removedSubscriptions(rows: Set[RoutedTableRowId]): Unit
-  def sourced: Set[RoutedTableRowId]
-}*/
 trait PeerSourceLink {
   def setSubscriptions(rows: Set[RowId]): Unit
-  //def setSubscriptions(rows: Set[(RowId, Option[SessionColumnQuery])]): Unit
-  //def sourcedRoutes: Set[TypeValue]
-  //def sourcedRows: Set[RowId]
 }
 
 
@@ -361,7 +333,6 @@ not better? just put set-change semantics in subscription-set push?
 
 
 trait RouteSource {
-
   def updateRowsForRoute(route: TypeValue, rows: Set[TableRow]): Unit
 }
 
