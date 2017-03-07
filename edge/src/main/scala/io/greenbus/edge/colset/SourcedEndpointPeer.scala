@@ -1,11 +1,7 @@
 package io.greenbus.edge.colset
 
-import java.util.UUID
-
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.{CallMarshaller, SchedulableCallMarshaller}
-import io.greenbus.edge.channel2._
-import io.greenbus.edge.collection.{BiMultiMap, MapSetBuilder, MapToUniqueValues}
+import io.greenbus.edge.collection.BiMultiMap
 
 import scala.collection.immutable.VectorBuilder
 import scala.collection.mutable
@@ -222,10 +218,6 @@ unresolved row set: set[routed_row] OR set[routingKey -> set[row]]
 
  */
 
-case class PeerLinkEntry()
-
-
-
 
 
 class RetailCacheTable extends LazyLogging {
@@ -282,17 +274,20 @@ Subscriber retail
 
 
 object RouteManifestSet {
-  def build: UserKeyedSet[TypeValue, SourceManifestRouteEntry] = {
-    new RenderedUserKeyedSet[TypeValue, SourceManifestRouteEntry](
+  def build: UserKeyedSet[TypeValue, RouteManifestEntry] = {
+    new RenderedUserKeyedSet[TypeValue, RouteManifestEntry](
       key => Some(key),
-      v => Some(SourceManifestRouteEntry()))
+      v => RouteManifestEntry.fromTypeValue(v).toOption)
   }
 }
 
-
-trait PeerSourceLink {
+trait StreamSource {
   def setSubscriptions(rows: Set[RowId]): Unit
 }
+
+trait LocalSource extends StreamSource
+
+trait PeerSourceLink extends StreamSource
 
 
 /*
@@ -322,7 +317,8 @@ trait RouteSource {
   def updateRowsForRoute(route: TypeValue, rows: Set[TableRow]): Unit
 }
 
-object SourceMgr {
+
+object PeerManifestDb {
   val tablePrefix = "__manifest"
 
   def peerRouteRow(peerId: PeerSessionId): RowId = {
@@ -336,10 +332,10 @@ object SourceMgr {
     Set(peerRouteRow(peerId), peerIndexRow(peerId))
   }
 }
-class SourceMgr(peerId: PeerSessionId, source: PeerSourceLink) extends RouteSource with LazyLogging {
+class PeerManifestDb(peerId: PeerSessionId, source: PeerSourceLink) extends RouteSource with LazyLogging {
 
-  private val routeRow = SourceMgr.peerRouteRow(peerId)
-  private val indexRow = SourceMgr.peerIndexRow(peerId)
+  private val routeRow = PeerManifestDb.peerRouteRow(peerId)
+  private val indexRow = PeerManifestDb.peerIndexRow(peerId)
 
   private val routeLog = RouteManifestSet.build
 
@@ -368,11 +364,11 @@ class SourceMgr(peerId: PeerSessionId, source: PeerSourceLink) extends RouteSour
     source.setSubscriptions(rowIdSet)
   }
 
-  def snapshot(): Map[TypeValue, SourceManifestRouteEntry] = {
+  def snapshot(): Map[TypeValue, RouteManifestEntry] = {
     routeLog.lastSnapshot
   }
 
-  def handleSelfEvents(events: Seq[StreamEvent]): Option[KeyedSetDiff[TypeValue, SourceManifestRouteEntry]] = {
+  def handleSelfEvents(events: Seq[StreamEvent]): Option[KeyedSetDiff[TypeValue, RouteManifestEntry]] = {
     events.foreach {
       case RowAppendEvent(row, ev) =>
         row match {
@@ -405,7 +401,19 @@ trait SubscriptionTarget {
   def handleBatch(events: Seq[StreamEvent])
 }
 
-case class SourceManifestRouteEntry()
+object RouteManifestEntry {
+  def toTypeValue(entry: RouteManifestEntry): TypeValue = {
+    UInt64Val(entry.distance)
+  }
+  def fromTypeValue(tv: TypeValue): Either[String, RouteManifestEntry] = {
+    tv match {
+      case UInt64Val(v) => Right(RouteManifestEntry(v.toInt))
+      case _ => Left("Could not recognize route manifest type: " + tv)
+    }
+  }
+}
+case class RouteManifestEntry(distance: Int) {
+}
 
 class RouteSourcingMgr(route: TypeValue) {
 
@@ -414,6 +422,9 @@ class RouteSourcingMgr(route: TypeValue) {
 
   private var currentSource = Option.empty[RouteSource]
   private var standbySources = Set.empty[RouteSource]
+  private var manifestMap = Map.empty[RouteSource, RouteManifestEntry]
+
+  def sourceMap: Map[RouteSource, RouteManifestEntry] = manifestMap
 
   def resolved(): Boolean = currentSource.nonEmpty
   def unused(): Boolean = currentSource.nonEmpty && subscribersToRows.keyToVal.keySet.nonEmpty
@@ -466,7 +477,7 @@ class RouteSourcingMgr(route: TypeValue) {
     }
   }
 
-  def sourceAdded(source: RouteSource, desc: SourceManifestRouteEntry): Unit = {
+  def sourceAdded(source: RouteSource, desc: RouteManifestEntry): Unit = {
     if (currentSource.isEmpty) {
       currentSource = Some(source)
       if (subscribedRows.nonEmpty) {
@@ -475,6 +486,7 @@ class RouteSourcingMgr(route: TypeValue) {
     } else {
       standbySources += source
     }
+    manifestMap += (source -> desc)
   }
 
   def sourceRemoved(source: RouteSource): Unit = {
@@ -490,10 +502,79 @@ class RouteSourcingMgr(route: TypeValue) {
         currentSource = None
       }
     }
+    manifestMap -= source
   }
 }
 
-class PeerStreamEngine extends LazyLogging {
+trait LocalGateway extends RouteSource {
+
+}
+
+
+
+class ManifestDb(selfSession: PeerSessionId) {
+
+  private val routeRow = PeerManifestDb.peerRouteRow(selfSession)
+
+  private var sequence: Long = 0
+  private var manifest = Map.empty[TypeValue, RouteManifestEntry]
+
+  def initial(): StreamEvent = {
+    val result = RowAppendEvent(routeRow, ResyncSession(selfSession, ModifiedKeyedSetSnapshot(UInt64Val(sequence), Map())))
+    sequence += 1
+    result
+  }
+
+  def routesUpdated(routes: Set[TypeValue], map: Map[TypeValue, RouteSourcingMgr]): Seq[StreamEvent] = {
+
+    val removed = Vector.newBuilder[TypeValue]
+    val modified = Vector.newBuilder[(TypeValue, RouteManifestEntry)]
+    val added = Vector.newBuilder[(TypeValue, RouteManifestEntry)]
+
+    routes.foreach { route =>
+      map.get(route) match {
+        case None => {
+          if (manifest.contains(route)) removed += route
+        }
+        case Some(sourcing) => {
+          if (!sourcing.resolved()) {
+            if (manifest.contains(route)) removed += route
+          } else {
+            val minimumDistance = sourcing.sourceMap.map(_._2.distance).min
+            manifest.get(route) match {
+              case None => added += (route -> RouteManifestEntry(minimumDistance))
+              case Some(entry) =>
+                if (entry.distance != minimumDistance) {
+                  modified += (route -> RouteManifestEntry(minimumDistance))
+                }
+            }
+          }
+        }
+      }
+    }
+
+    def writeKv(tup: (TypeValue, RouteManifestEntry)): (TypeValue, TypeValue) = {
+      val (route, manifest) = tup
+      (route, RouteManifestEntry.toTypeValue(manifest))
+    }
+
+    val removedResult = removed.result().toSet
+    val modifiedResult = modified.result().toSet
+    val addedResult = added.result().toSet
+
+    if (removedResult.nonEmpty || modifiedResult.nonEmpty || addedResult.nonEmpty) {
+      val results = Seq(RowAppendEvent(routeRow, StreamDelta(ModifiedKeyedSetDelta(UInt64Val(sequence), removedResult, addedResult.map(writeKv), modifiedResult.map(writeKv)))))
+      sequence += 1
+      manifest = (manifest -- removedResult) ++ addedResult ++ modifiedResult
+      results
+    } else {
+      Seq()
+    }
+  }
+}
+
+
+class PeerStreamEngine(selfSession: PeerSessionId, gateway: LocalGateway) extends LazyLogging {
 
   private val synthesizer = new SynthesizerTable
 
@@ -501,11 +582,17 @@ class PeerStreamEngine extends LazyLogging {
 
   private var routeSourcingMap = Map.empty[TypeValue, RouteSourcingMgr]
   private var rowsForSub = Map.empty[SubscriptionTarget, Set[RowId]]
-  private var routesForSource = Map.empty[SourceMgr, Set[TypeValue]]
+  private var routesForSource = Map.empty[RouteSource, Set[TypeValue]]
 
-  private var sourceMgrs = Map.empty[PeerSourceLink, SourceMgr]
+  private var sourceMgrs = Map.empty[PeerSourceLink, PeerManifestDb]
 
-  private def addOrUpdateSourceRoute(source: SourceMgr, route: TypeValue, entry: SourceManifestRouteEntry): Unit = {
+  private val manifestDb = new ManifestDb(selfSession)
+
+
+  addOrUpdateSourceRoute(gateway, TypeValueConversions.toTypeValue(selfSession), RouteManifestEntry(0))
+  retailCacheTable.handleBatch(Seq(manifestDb.initial()))
+
+  private def addOrUpdateSourceRoute(source: RouteSource, route: TypeValue, entry: RouteManifestEntry): Unit = {
     val mgr = routeSourcingMap.getOrElse(route, {
       val sourcing = new RouteSourcingMgr(route)
       routeSourcingMap += (route -> sourcing)
@@ -515,32 +602,35 @@ class PeerStreamEngine extends LazyLogging {
     mgr.sourceAdded(source, entry)
   }
 
-  private def removeSourceRoute(source: SourceMgr, route: TypeValue): Unit = {
+  private def removeSourceRoute(source: RouteSource, route: TypeValue): Unit = {
     routeSourcingMap.get(route).foreach { sourcing =>
       sourcing.sourceRemoved(source)
     }
   }
 
-  private def handleSourcingUpdate(mgr: SourceMgr, events: Seq[StreamEvent]): Unit = {
+  private def handleSourcingUpdate(mgr: PeerManifestDb, events: Seq[StreamEvent]): Seq[StreamEvent] = {
     val manifestEvents = events.filter(_.routingKey == mgr.manifestRoute)
 
     val diffOpt = mgr.handleSelfEvents(manifestEvents)
-    diffOpt.foreach { diff =>
 
-      diff.removed.foreach(removeSourceRoute(mgr, _))
+    diffOpt match {
+      case None => Seq()
+      case Some(diff) =>
+        diff.removed.foreach(removeSourceRoute(mgr, _))
 
-      val updates = diff.added ++ diff.modified
-      updates.foreach {
-        case (route, entry) => addOrUpdateSourceRoute(mgr, route, entry)
-      }
+        val updates = diff.added ++ diff.modified
+        updates.foreach {
+          case (route, entry) => addOrUpdateSourceRoute(mgr, route, entry)
+        }
 
-      // TODO: push updates to our manifest for subscribers
+        routesForSource += (mgr -> diff.snapshot.keySet)
 
-      routesForSource += (mgr -> diff.snapshot.keySet)
+        val allUpdated = diff.removed ++ diff.modified.map(_._1) ++ diff.added.map(_._1)
+        manifestDb.routesUpdated(allUpdated, routeSourcingMap)
     }
   }
 
-  private def removeSourceFromSourcing(mgr: SourceMgr, route: TypeValue): Unit = {
+  private def removeSourceFromSourcing(mgr: PeerManifestDb, route: TypeValue): Unit = {
     routeSourcingMap.get(route).foreach { sourcing =>
       sourcing.sourceRemoved(mgr)
       if (sourcing.unused()) {
@@ -549,7 +639,29 @@ class PeerStreamEngine extends LazyLogging {
     }
   }
 
+  private def handleRetailEvents(events: Seq[StreamEvent]): Unit = {
+    retailCacheTable.handleBatch(events)
+
+    // TODO: maintain ordering across routes?
+    events.groupBy(_.routingKey).foreach {
+      case (route, routeEvents) =>
+        routeSourcingMap.get(route).foreach { mgr => mgr.handleBatch(routeEvents) }
+    }
+  }
+
   // TODO: publisher gateway(s)
+
+  def localGatewayRetailEvents(events: Seq[StreamEvent]): Unit = {
+    handleRetailEvents(events)
+  }
+
+  def localGatewayRoutingUpdate(routes: Set[TypeValue]): Unit = {
+    val prev = routesForSource.getOrElse(gateway, Set())
+    val adds = routes -- prev
+    val removes = prev -- routes
+    removes.foreach(remove => removeSourceRoute(gateway, remove))
+    adds.foreach(add => addOrUpdateSourceRoute(gateway, add, RouteManifestEntry(distance = 0)))
+  }
 
   /*
     update manifest
@@ -565,28 +677,19 @@ class PeerStreamEngine extends LazyLogging {
   def peerSourceEvents(link: PeerSourceLink, events: Seq[StreamEvent]): Unit = {
     val emitted = synthesizer.handleBatch(link, events)
 
-    sourceMgrs.get(link) match {
-      case None => logger.warn(s"No source manager for link: $link")
+    val manifestEvents = sourceMgrs.get(link) match {
+      case None => logger.warn(s"No source manager for link: $link"); Seq()
       case Some(mgr) => handleSourcingUpdate(mgr, emitted)
     }
 
-    handleSynthesizedEvents(emitted)
+    handleRetailEvents(manifestEvents ++ emitted)
   }
 
-  private def handleSynthesizedEvents(events: Seq[StreamEvent]): Unit = {
-    retailCacheTable.handleBatch(events)
-
-    // TODO: maintain ordering across routes?
-    events.groupBy(_.routingKey).foreach {
-      case (route, routeEvents) =>
-        routeSourcingMap.get(route).foreach { mgr => mgr.handleBatch(routeEvents) }
-    }
-  }
 
   def sourceConnected(peerSessionId: PeerSessionId, link: PeerSourceLink): Unit = {
     sourceMgrs.get(link) match {
       case None => {
-        val mgr = new SourceMgr(peerSessionId, link)
+        val mgr = new PeerManifestDb(peerSessionId, link)
         mgr.init()
         sourceMgrs += (link -> mgr)
       }
@@ -596,15 +699,20 @@ class PeerStreamEngine extends LazyLogging {
   }
 
   def sourceDisconnected(link: PeerSourceLink): Unit = {
-    sourceMgrs.get(link).foreach { mgr =>
-      val routes = routesForSource.getOrElse(mgr, Set())
-      routes.foreach(removeSourceFromSourcing(mgr, _))
-      routesForSource -= mgr
+
+    val manifestEvents = sourceMgrs.get(link) match {
+      case None => Seq()
+      case Some(mgr) =>
+        val routes = routesForSource.getOrElse(mgr, Set())
+        routes.foreach(removeSourceFromSourcing(mgr, _))
+        routesForSource -= mgr
+        manifestDb.routesUpdated(routes, routeSourcingMap)
     }
+
     sourceMgrs -= link
 
     val emitted = synthesizer.sourceRemoved(link)
-    handleSynthesizedEvents(emitted)
+    handleRetailEvents(manifestEvents ++ emitted)
   }
 
 
