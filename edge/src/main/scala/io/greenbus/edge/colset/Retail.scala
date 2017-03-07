@@ -219,6 +219,10 @@ class KeyedModifiedSetRetailRowCache(rowId: RowId, initSess: PeerSessionId, init
     }
   }
 
+  def snapshot: Map[TypeValue, TypeValue] = {
+    log.snapshot
+  }
+
   def sync(): Seq[AppendEvent] = {
     log.resyncEvents
   }

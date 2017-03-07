@@ -278,34 +278,17 @@ Subscriber retail
 
  */
 
-object KeyedSetHandler {
-  def build: KeyedSetHandler = {
-    ???
-  }
-}
-trait KeyedSetHandler {
 
-  def handle(event: AppendEvent): Unit
-  def snapshot(): Map[TypeValue, TypeValue]
-}
 
-case class KeyedSetDiff[A, B](snapshot: Map[A, B], removed: Set[A], added: Set[A], modified: Set[A])
-object RenderedKeyedSet {
-  def build[A, B](): RenderedKeyedSet[A, B] = {
-    ???
-  }
-}
-trait RenderedKeyedSet[A, B] {
-  def handle(event: AppendEvent): Unit
-  def snapshot(): Map[A, B]
-  def dequeueDiff(): KeyedSetDiff[A, B]
-}
 
 object RouteManifestSet {
-  def build: RouteManifestSet = ???
+  def build: UserKeyedSet[TypeValue, SourceManifestRouteEntry] = {
+    new RenderedUserKeyedSet[TypeValue, SourceManifestRouteEntry](
+      key => Some(key),
+      v => Some(SourceManifestRouteEntry()))
+  }
 }
-trait RouteManifestSet extends RenderedKeyedSet[TypeValue, SourceManifestRouteEntry] {
-}
+
 
 trait PeerSourceLink {
   def setSubscriptions(rows: Set[RowId]): Unit
@@ -386,21 +369,21 @@ class SourceMgr(peerId: PeerSessionId, source: PeerSourceLink) extends RouteSour
   }
 
   def snapshot(): Map[TypeValue, SourceManifestRouteEntry] = {
-    routeLog.snapshot()
+    routeLog.lastSnapshot
   }
 
-  def handleSelfEvents(events: Seq[StreamEvent]): KeyedSetDiff[TypeValue, SourceManifestRouteEntry] = {
+  def handleSelfEvents(events: Seq[StreamEvent]): Option[KeyedSetDiff[TypeValue, SourceManifestRouteEntry]] = {
     events.foreach {
       case RowAppendEvent(row, ev) =>
         row match {
-          case `routeRow` => routeLog.handle(ev)
+          case `routeRow` => routeLog.handle(Seq(ev))
           case `indexRow` =>
           case other => logger.debug(s"Unexpected row in $peerId manifest events: $other")
         }
       case sev =>
         logger.warn(s"Unexpected self event for $peerId: $sev")
     }
-    routeLog.dequeueDiff()
+    routeLog.dequeue()
   }
 }
 
@@ -510,9 +493,6 @@ class RouteSourcingMgr(route: TypeValue) {
   }
 }
 
-object PeerStreamEngine {
-
-}
 class PeerStreamEngine extends LazyLogging {
 
   private val synthesizer = new SynthesizerTable
@@ -543,17 +523,21 @@ class PeerStreamEngine extends LazyLogging {
 
   private def handleSourcingUpdate(mgr: SourceMgr, events: Seq[StreamEvent]): Unit = {
     val manifestEvents = events.filter(_.routingKey == mgr.manifestRoute)
-    val diff = mgr.handleSelfEvents(manifestEvents)
-    diff.removed.foreach(removeSourceRoute(mgr, _))
 
-    val updates = diff.added ++ diff.modified
-    updates.flatMap(route => diff.snapshot.get(route).map(entry => (route, entry))).foreach {
-      case (route, entry) => addOrUpdateSourceRoute(mgr, route, entry)
+    val diffOpt = mgr.handleSelfEvents(manifestEvents)
+    diffOpt.foreach { diff =>
+
+      diff.removed.foreach(removeSourceRoute(mgr, _))
+
+      val updates = diff.added ++ diff.modified
+      updates.foreach {
+        case (route, entry) => addOrUpdateSourceRoute(mgr, route, entry)
+      }
+
+      // TODO: push updates to our manifest for subscribers
+
+      routesForSource += (mgr -> diff.snapshot.keySet)
     }
-
-    // TODO: push updates to our manifest for subscribers
-
-    routesForSource += (mgr -> diff.snapshot.keySet)
   }
 
   private def removeSourceFromSourcing(mgr: SourceMgr, route: TypeValue): Unit = {

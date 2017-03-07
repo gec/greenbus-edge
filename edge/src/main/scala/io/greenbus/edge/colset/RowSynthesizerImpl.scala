@@ -482,6 +482,7 @@ class SessionKeyedModifyRowLog(rowId: RowId, sessionId: PeerSessionId, init: Mod
     (resyncEvents, new SessionKeyedModifyRowSynthesizingFilter(rowId, sessionId, snap))
   }
 
+  def snapshot: Map[TypeValue, TypeValue] = current
 
   def resyncEvents: Seq[AppendEvent] = {
     val snap = ModifiedKeyedSetSnapshot(sequence, current)
