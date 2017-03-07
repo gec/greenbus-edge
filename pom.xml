@@ -15,7 +15,7 @@
         <scala-maven-plugin.version>3.1.0</scala-maven-plugin.version>
         <slf4j-api.version>1.7.2</slf4j-api.version>
         <scalalogging.version>3.5.0</scalalogging.version>
-        <scalatest.version>3.0.0</scalatest.version>
+        <scalatest.version>3.0.1</scalatest.version>
         <scalariform-maven-plugin.version>0.1.4</scalariform-maven-plugin.version>
         <build-helper-maven-plugin.version>1.1</build-helper-maven-plugin.version>
         <maven-jar-plugin.version>2.2</maven-jar-plugin.version>

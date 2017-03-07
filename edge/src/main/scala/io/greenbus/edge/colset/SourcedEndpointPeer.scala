@@ -588,7 +588,6 @@ class PeerStreamEngine(selfSession: PeerSessionId, gateway: LocalGateway) extend
 
   private val manifestDb = new ManifestDb(selfSession)
 
-
   addOrUpdateSourceRoute(gateway, TypeValueConversions.toTypeValue(selfSession), RouteManifestEntry(0))
   retailCacheTable.handleBatch(Seq(manifestDb.initial()))
 
@@ -657,10 +656,16 @@ class PeerStreamEngine(selfSession: PeerSessionId, gateway: LocalGateway) extend
 
   def localGatewayRoutingUpdate(routes: Set[TypeValue]): Unit = {
     val prev = routesForSource.getOrElse(gateway, Set())
+    routesForSource += (gateway -> routes)
     val adds = routes -- prev
     val removes = prev -- routes
     removes.foreach(remove => removeSourceRoute(gateway, remove))
     adds.foreach(add => addOrUpdateSourceRoute(gateway, add, RouteManifestEntry(distance = 0)))
+
+    val manifestEvents = manifestDb.routesUpdated(adds ++ removes, routeSourcingMap)
+    val unresolvedEvents = removes.map(RouteUnresolved).toVector
+
+    handleRetailEvents(unresolvedEvents ++ manifestEvents)
   }
 
   /*

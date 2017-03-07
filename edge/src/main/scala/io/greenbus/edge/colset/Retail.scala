@@ -108,7 +108,7 @@ class ModifiedSetRetailRowCache(rowId: RowId, initSess: PeerSessionId, initSnap:
         setSnap match {
           case snap: ModifiedSetSnapshot =>
             log = new SessionModifyRowLog(rowId, sess, snap)
-          case _ => logger.error(s"Incorrect snapshot type for $rowId")
+          case _ => logger.error(s"Incorrect snapshot type for $rowId: $setSnap")
         }
       }
     }
@@ -144,7 +144,7 @@ class ModifiedSetRetailRowQueue(rowId: RowId, initSess: PeerSessionId, initSnap:
               logger.warn(s"Retail sequence $rowId saw unsequenced delta: $d")
             }
           }
-          case _ => logger.error(s"Incorrect delta type for $rowId")
+          case _ => logger.error(s"Incorrect delta type for $rowId: $update")
         }
       }
       case ResyncSnapshot(setSnap) => {
@@ -154,7 +154,7 @@ class ModifiedSetRetailRowQueue(rowId: RowId, initSess: PeerSessionId, initSnap:
             snapshotRebase = Some(snap)
             sequence = snap.sequence
           }
-          case _ => logger.error(s"Incorrect snapshot type for $rowId")
+          case _ => logger.error(s"Incorrect snapshot type for $rowId: $setSnap")
         }
       }
       case ResyncSession(sess, setSnap) => {
@@ -165,7 +165,7 @@ class ModifiedSetRetailRowQueue(rowId: RowId, initSess: PeerSessionId, initSnap:
             snapshotRebase = Some(snap)
             sequence = snap.sequence
           }
-          case _ => logger.error(s"Incorrect snapshot type for $rowId")
+          case _ => logger.error(s"Incorrect snapshot type for $rowId: $setSnap")
         }
       }
     }
