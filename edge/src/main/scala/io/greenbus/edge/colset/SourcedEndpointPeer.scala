@@ -651,13 +651,17 @@ class PeerStreamEngine(selfSession: PeerSessionId, gateway: LocalGateway) extend
     }
   }
 
-  // TODO: publisher gateway(s)
+  def localGatewayEvents(routeUpdate: Option[Set[TypeValue]], events: Seq[StreamEvent]): Unit = {
 
-  def localGatewayRetailEvents(events: Seq[StreamEvent]): Unit = {
-    handleRetailEvents(events)
+    val routingEvents = routeUpdate.map(localGatewayRoutingUpdate).getOrElse(Seq())
+
+    val allEvents = routingEvents ++ events
+    if (allEvents.nonEmpty) {
+      handleRetailEvents(allEvents)
+    }
   }
 
-  def localGatewayRoutingUpdate(routes: Set[TypeValue]): Unit = {
+  private def localGatewayRoutingUpdate(routes: Set[TypeValue]): Seq[StreamEvent] = {
     val prev = routesForSource.getOrElse(gateway, Set())
     routesForSource += (gateway -> routes)
     val adds = routes -- prev
@@ -668,7 +672,7 @@ class PeerStreamEngine(selfSession: PeerSessionId, gateway: LocalGateway) extend
     val manifestEvents = manifestDb.routesUpdated(adds ++ removes, routeSourcingMap)
     val unresolvedEvents = removes.map(RouteUnresolved).toVector
 
-    handleRetailEvents(unresolvedEvents ++ manifestEvents)
+    unresolvedEvents ++ manifestEvents
   }
 
   /*

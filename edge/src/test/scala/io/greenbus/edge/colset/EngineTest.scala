@@ -80,7 +80,7 @@ class EngineTest extends FunSuite with Matchers {
 
     engine.subscriptionsRegistered(subQ, StreamSubscriptionParams(route1Rows))
 
-    engine.localGatewayRoutingUpdate(Set(route1))
+    engine.localGatewayEvents(Some(Set(route1)), Seq())
 
     {
       gateway.subUpdates.size should equal(1)
@@ -100,7 +100,7 @@ class EngineTest extends FunSuite with Matchers {
       RowAppendEvent(route1Row2, ResyncSession(sessA, ModifiedKeyedSetSnapshot(UInt64Val(0), Map(UInt64Val(3) -> UInt64Val(9))))),
       RowAppendEvent(route1Row3, ResyncSession(sessA, AppendSetSequence(Seq(AppendSetValue(UInt64Val(0), UInt64Val(66)))))))
 
-    engine.localGatewayRetailEvents(firstRetailBatch)
+    engine.localGatewayEvents(None, firstRetailBatch)
 
     {
       subQ.batches.size should equal(1)
@@ -114,7 +114,7 @@ class EngineTest extends FunSuite with Matchers {
       RowAppendEvent(route1Row2, StreamDelta(ModifiedKeyedSetDelta(UInt64Val(1), Set(), Set(UInt64Val(4) -> UInt64Val(55)), Set(UInt64Val(3) -> UInt64Val(8))))),
       RowAppendEvent(route1Row3, StreamDelta(AppendSetSequence(Seq(AppendSetValue(UInt64Val(1), UInt64Val(77)))))))
 
-    engine.localGatewayRetailEvents(secondRetailBatch)
+    engine.localGatewayEvents(None, secondRetailBatch)
 
     {
       subQ.batches.size should equal(1)
@@ -123,7 +123,7 @@ class EngineTest extends FunSuite with Matchers {
       batch shouldEqual secondRetailBatch
     }
 
-    engine.localGatewayRoutingUpdate(Set())
+    engine.localGatewayEvents(Some(Set()), Seq())
 
     {
       subQ.batches.size should equal(1)
