@@ -1,8 +1,24 @@
+/**
+ * Copyright 2011-2017 Green Energy Corp.
+ *
+ * Licensed to Green Energy Corp (www.greenenergycorp.com) under one or more
+ * contributor license agreements. See the NOTICE file distributed with this
+ * work for additional information regarding copyright ownership. Green Energy
+ * Corp licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 package io.greenbus.edge.colset
 
 import java.util.UUID
-
-
 
 /*
 
@@ -79,7 +95,6 @@ does it allow us to create even more synthetic types
 
  */
 
-
 /*
 trait Row {
 
@@ -105,7 +120,6 @@ trait Database {
 }
 */
 
-
 // TODO: subscribe direct vs. subscribe indirect (with session engine)
 /*trait DatabaseView {
 
@@ -115,7 +129,6 @@ trait Database {
   def subscribe(modSubs: Seq[ModifiedSetSubscription], appendSubs: Seq[AppendSetSubscription], notify: () => Unit): Subscription
 
 }*/
-
 
 /*trait Subscription {
   def dequeue(): SubscriptionNotifications
@@ -163,7 +176,6 @@ case class DirectModifiedSetNotification(tableRowId: DirectTableRowId, update: M
 case class DirectModifiedKeyedSetNotification(tableRowId: DirectTableRowId, update: ModifiedKeyedSetUpdate)
 case class DirectAppendSetNotification(tableRowId: DirectTableRowId, update: AppendSetUpdate)
 
-
 // Put "sequence succession" in notification?
 // Don't, session is like a sub-row, we handle sub rows in parallel
 // TERMINAL subscriptions that allow (re-)publishing peer to sequence w/o sessions?
@@ -177,8 +189,8 @@ case class NotificationBatch(notifications: Seq[SetNotification])
 case class SessionNotificationSequence(session: PeerSessionId, batches: Seq[NotificationBatch])
 
 case class SubscriptionNotifications(
-                            localNotifications: Seq[LocalNotificationBatch],
-                            sessionNotifications: Seq[SessionNotificationSequence])
+  localNotifications: Seq[LocalNotificationBatch],
+  sessionNotifications: Seq[SessionNotificationSequence])
 
 /*
 case class NotificationBatch(

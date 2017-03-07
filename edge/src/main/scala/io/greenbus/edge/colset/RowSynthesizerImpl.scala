@@ -1,7 +1,25 @@
+/**
+ * Copyright 2011-2017 Green Energy Corp.
+ *
+ * Licensed to Green Energy Corp (www.greenenergycorp.com) under one or more
+ * contributor license agreements. See the NOTICE file distributed with this
+ * work for additional information regarding copyright ownership. Green Energy
+ * Corp licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 package io.greenbus.edge.colset
 
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.collection.{BiMultiMap, MapToUniqueValues}
+import io.greenbus.edge.collection.{ BiMultiMap, MapToUniqueValues }
 import scala.collection.mutable
 
 class SynthesizerTable extends LazyLogging {
@@ -91,7 +109,6 @@ class SynthesizerTable extends LazyLogging {
   }
 }
 
-
 object RowSynthesizer {
   def build(rowId: RowId, initSource: PeerSourceLink, initSess: PeerSessionId, snapshot: SetSnapshot): Option[(RowSynthesizer, Seq[AppendEvent])] = {
     val logOpt = SessionRowLog.build(rowId, initSess, snapshot)
@@ -129,7 +146,8 @@ class RowSynthesizerImpl(rowId: RowId, initSource: PeerSourceLink, initSess: Pee
     event match {
       case delta: StreamDelta => {
         sourceToSession.get(source) match {
-          case None => logger.warn(s"$rowId got delta for inactive source link $initSource"); Seq()
+          case None =>
+            logger.warn(s"$rowId got delta for inactive source link $initSource"); Seq()
           case Some(sess) => {
             if (sess == activeSession) {
               activeDb.handleDelta(delta.update).map(StreamDelta)
@@ -146,7 +164,8 @@ class RowSynthesizerImpl(rowId: RowId, initSource: PeerSourceLink, initSess: Pee
       }
       case resync: ResyncSnapshot => {
         sourceToSession.get(source) match {
-          case None => logger.warn(s"$rowId got snapshot for inactive source link $initSource"); Seq()
+          case None =>
+            logger.warn(s"$rowId got snapshot for inactive source link $initSource"); Seq()
           case Some(sess) => {
             if (sess == activeSession) {
               activeDb.handleResync(resync.snapshot)
@@ -276,7 +295,7 @@ case class Increment(sequence: SequencedTypeValue, delta: SetDelta)
 class SessionAppendRowLog(rowId: RowId, sessionId: PeerSessionId, init: Seq[AppendSetValue], last: AppendSetValue) extends SessionRowLog with LazyLogging {
 
   private var sequence: SequencedTypeValue = last.sequence
-  private val values: mutable.ArrayBuffer[AppendSetValue] = mutable.ArrayBuffer[AppendSetValue](init :+ last : _*)
+  private val values: mutable.ArrayBuffer[AppendSetValue] = mutable.ArrayBuffer[AppendSetValue](init :+ last: _*)
 
   def activate(): (Seq[AppendEvent], SessionSynthesizingFilter) = {
     val events = Seq(ResyncSession(sessionId, AppendSetSequence(values.toVector)))
@@ -389,7 +408,6 @@ class SessionModifyRowLog(rowId: RowId, sessionId: PeerSessionId, init: Modified
     (resyncEvents,
       new SessionModifyRowSynthesizingFilter(rowId, sessionId, snap))
   }
-
 
   def resyncEvents: Seq[AppendEvent] = {
     val snap = ModifiedSetSnapshot(sequence, current)

@@ -1,9 +1,27 @@
+/**
+ * Copyright 2011-2017 Green Energy Corp.
+ *
+ * Licensed to Green Energy Corp (www.greenenergycorp.com) under one or more
+ * contributor license agreements. See the NOTICE file distributed with this
+ * work for additional information regarding copyright ownership. Green Energy
+ * Corp licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 package io.greenbus.edge.colset
 
 import java.util.UUID
 
 import org.junit.runner.RunWith
-import org.scalatest.{FunSuite, Matchers}
+import org.scalatest.{ FunSuite, Matchers }
 import org.scalatest.junit.JUnitRunner
 
 import scala.collection.mutable
@@ -43,7 +61,6 @@ class MockSubscriber extends SubscriptionTarget {
 class EngineTest extends FunSuite with Matchers {
   import Helpers._
 
-
   test("subscribe then local gateway publishes") {
 
     val route1 = UuidVal(UUID.randomUUID())
@@ -81,8 +98,7 @@ class EngineTest extends FunSuite with Matchers {
     val firstRetailBatch = Seq(
       RowAppendEvent(route1Row1, ResyncSession(sessA, ModifiedSetSnapshot(UInt64Val(0), Set(UInt64Val(5), UInt64Val(3))))),
       RowAppendEvent(route1Row2, ResyncSession(sessA, ModifiedKeyedSetSnapshot(UInt64Val(0), Map(UInt64Val(3) -> UInt64Val(9))))),
-      RowAppendEvent(route1Row3, ResyncSession(sessA, AppendSetSequence(Seq(AppendSetValue(UInt64Val(0), UInt64Val(66))))))
-    )
+      RowAppendEvent(route1Row3, ResyncSession(sessA, AppendSetSequence(Seq(AppendSetValue(UInt64Val(0), UInt64Val(66)))))))
 
     engine.localGatewayRetailEvents(firstRetailBatch)
 
@@ -96,8 +112,7 @@ class EngineTest extends FunSuite with Matchers {
     val secondRetailBatch = Seq(
       RowAppendEvent(route1Row1, StreamDelta(ModifiedSetDelta(UInt64Val(1), Set(UInt64Val(5)), Set(UInt64Val(7))))),
       RowAppendEvent(route1Row2, StreamDelta(ModifiedKeyedSetDelta(UInt64Val(1), Set(), Set(UInt64Val(4) -> UInt64Val(55)), Set(UInt64Val(3) -> UInt64Val(8))))),
-      RowAppendEvent(route1Row3, StreamDelta(AppendSetSequence(Seq(AppendSetValue(UInt64Val(1), UInt64Val(77))))))
-    )
+      RowAppendEvent(route1Row3, StreamDelta(AppendSetSequence(Seq(AppendSetValue(UInt64Val(1), UInt64Val(77)))))))
 
     engine.localGatewayRetailEvents(secondRetailBatch)
 

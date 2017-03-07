@@ -1,3 +1,21 @@
+/**
+ * Copyright 2011-2017 Green Energy Corp.
+ *
+ * Licensed to Green Energy Corp (www.greenenergycorp.com) under one or more
+ * contributor license agreements. See the NOTICE file distributed with this
+ * work for additional information regarding copyright ownership. Green Energy
+ * Corp licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 package io.greenbus.edge.colset
 
 import com.typesafe.scalalogging.LazyLogging
@@ -119,7 +137,6 @@ channel link abstraction (exposes credit?)
 amqp
  */
 
-
 /*
 dbs:
 links -> synthesizer -> retail
@@ -129,7 +146,6 @@ sub => sub mgr -> sourcing (peers, local pubs)
  */
 
 //case class StreamEvent(inactiveFlagSet: Boolean)
-
 
 /*
 stream events:
@@ -145,15 +161,12 @@ use cases:
  */
 //case class LinkStreamEvent(rowKey: RoutedTableRowId)
 
-
 /*
 Synthesizer,
 Retail stream cache,streams
 Subscriber retail
 
  */
-
-
 
 /*
 
@@ -218,8 +231,6 @@ unresolved row set: set[routed_row] OR set[routingKey -> set[row]]
 
  */
 
-
-
 class RetailCacheTable extends LazyLogging {
   private var rows = Map.empty[TypeValue, Map[TableRow, RetailRowCache]]
 
@@ -262,16 +273,12 @@ class RetailCacheTable extends LazyLogging {
   }
 }
 
-
 /*
 Synthesizer,
 Retail stream cache,streams
 Subscriber retail
 
  */
-
-
-
 
 object RouteManifestSet {
   def build: UserKeyedSet[TypeValue, RouteManifestEntry] = {
@@ -288,7 +295,6 @@ trait StreamSource {
 trait LocalSource extends StreamSource
 
 trait PeerSourceLink extends StreamSource
-
 
 /*
 
@@ -312,11 +318,9 @@ not better? just put set-change semantics in subscription-set push?
 
  */
 
-
 trait RouteSource {
   def updateRowsForRoute(route: TypeValue, rows: Set[TableRow]): Unit
 }
-
 
 object PeerManifestDb {
   val tablePrefix = "__manifest"
@@ -434,10 +438,12 @@ class RouteSourcingMgr(route: TypeValue) {
 
     events.foreach {
       case ev: RowAppendEvent =>
-        subscribersToRows.valToKey.get(ev.rowId.tableRow).foreach { _.foreach { target =>
-          val b = map.getOrElseUpdate(target, new VectorBuilder[StreamEvent])
-          b += ev
-        }}
+        subscribersToRows.valToKey.get(ev.rowId.tableRow).foreach {
+          _.foreach { target =>
+            val b = map.getOrElseUpdate(target, new VectorBuilder[StreamEvent])
+            b += ev
+          }
+        }
       case ev: RouteUnresolved =>
         subscribersToRows.keyToVal.keys.foreach { target =>
           val b = map.getOrElseUpdate(target, new VectorBuilder[StreamEvent])
@@ -510,8 +516,6 @@ trait LocalGateway extends RouteSource {
 
 }
 
-
-
 class ManifestDb(selfSession: PeerSessionId) {
 
   private val routeRow = PeerManifestDb.peerRouteRow(selfSession)
@@ -572,7 +576,6 @@ class ManifestDb(selfSession: PeerSessionId) {
     }
   }
 }
-
 
 class PeerStreamEngine(selfSession: PeerSessionId, gateway: LocalGateway) extends LazyLogging {
 
@@ -683,13 +686,13 @@ class PeerStreamEngine(selfSession: PeerSessionId, gateway: LocalGateway) extend
     val emitted = synthesizer.handleBatch(link, events)
 
     val manifestEvents = sourceMgrs.get(link) match {
-      case None => logger.warn(s"No source manager for link: $link"); Seq()
+      case None =>
+        logger.warn(s"No source manager for link: $link"); Seq()
       case Some(mgr) => handleSourcingUpdate(mgr, emitted)
     }
 
     handleRetailEvents(manifestEvents ++ emitted)
   }
-
 
   def sourceConnected(peerSessionId: PeerSessionId, link: PeerSourceLink): Unit = {
     sourceMgrs.get(link) match {
@@ -719,7 +722,6 @@ class PeerStreamEngine(selfSession: PeerSessionId, gateway: LocalGateway) extend
     val emitted = synthesizer.sourceRemoved(link)
     handleRetailEvents(manifestEvents ++ emitted)
   }
-
 
   // - sub appears: resolve routes, enqueue unresolved or add subscription to a source
   def subscriptionsRegistered(subscriber: SubscriptionTarget, params: StreamSubscriptionParams): Unit = {
@@ -764,7 +766,7 @@ class PeerStreamEngine(selfSession: PeerSessionId, gateway: LocalGateway) extend
       if (sourcing.resolved()) {
         streamEvents ++= addIds.flatMap(row => retailCacheTable.getSync(row))
       } else {
-        streamEvents +=  RouteUnresolved(route)
+        streamEvents += RouteUnresolved(route)
       }
     }
 
@@ -803,8 +805,6 @@ App Entry
 - Link management / I/O
 
  */
-
-
 
 object SourcedEndpointPeer {
   val tablePrefix = "sep"
