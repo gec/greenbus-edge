@@ -22,7 +22,7 @@ import java.util.UUID
 
 import com.typesafe.scalalogging.LazyLogging
 import org.junit.runner.RunWith
-import org.scalatest.{FunSuite, Matchers}
+import org.scalatest.{ FunSuite, Matchers }
 import org.scalatest.junit.JUnitRunner
 
 import scala.collection.mutable
@@ -31,19 +31,22 @@ object Helpers {
   def sessId: PeerSessionId = PeerSessionId(UUID.randomUUID(), 0)
 }
 
-class MockGateway extends LocalGateway {
+class MockGateway extends LocalGateway with LazyLogging {
   val subUpdates: mutable.Queue[(TypeValue, Set[TableRow])] = mutable.Queue.empty[(TypeValue, Set[TableRow])]
 
   def updateRowsForRoute(route: TypeValue, rows: Set[TableRow]): Unit = {
+    logger.debug("gateway got push: " + rows + ", prev: " + subUpdates)
+    //(new Throwable()).printStackTrace()
     subUpdates += ((route, rows))
   }
 }
 
-trait MockSource extends StreamSource {
+trait MockSource extends StreamSource with LazyLogging {
 
   val subUpdates: mutable.Queue[Set[RowId]] = mutable.Queue.empty[Set[RowId]]
 
   def setSubscriptions(rows: Set[RowId]): Unit = {
+    logger.debug("source got push: " + rows + ", prev: " + subUpdates)
     subUpdates += rows
   }
 }
@@ -74,7 +77,7 @@ object MockPeer {
 
   def subscribe(name: String, source: MockPeer, target: MockPeer): MockPeerSource = {
     val mps = new MockPeerSource(name, source, target)
-    target.engine.sourceConnected(source.session, mps)
+    target.engine.peerSourceConnected(source.session, mps)
     mps
   }
 }
@@ -84,7 +87,7 @@ class MockPeer(val name: String) {
   val engine = new PeerStreamEngine(name, session, gateway)
 
   def routeRow: RowId = {
-    PeerManifestDb.peerRouteRow(session)
+    PeerRouteSource.peerRouteRow(session)
   }
 }
 
@@ -96,6 +99,8 @@ class SimpleRoute {
   val rows = Seq(row1, row2, row3)
   val rowSet = rows.toSet
   val tableRowsSet = rows.map(_.tableRow).toSet
+
+  def routeToTableRows: (TypeValue, Set[TableRow]) = route -> tableRowsSet
 
   //val typeValueRows =
 }
@@ -178,11 +183,8 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
   }
 
   def matchAndClearEventBatches(sub: MockSubscriber, batches: Seq[StreamEvent]*): Unit = {
-    sub.batches.size shouldEqual batches.size
-    batches.foreach { matchBatch =>
-      val batch = sub.batches.dequeue()
-      batch shouldEqual matchBatch
-    }
+    sub.batches shouldEqual batches
+    sub.batches.clear()
   }
 
   def matchEventBatches(sub: MockSubscriber, batches: Seq[StreamEvent]*): Unit = {
@@ -202,13 +204,20 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
     link.subUpdates.clear()
   }
 
-  def routeRow(session: PeerSessionId): RowId = {
-    PeerManifestDb.peerRouteRow(session)
+  def matchGatewayUpdate(source: MockGateway, updates: (TypeValue, Set[TableRow])*): Unit = {
+    source.subUpdates shouldEqual updates
   }
-  def manifestRowsForPeer(session: PeerSessionId): Set[RowId] = {
-    Set(PeerManifestDb.peerRouteRow(session))
+  def matchAndClearGatewayUpdate(source: MockGateway, updates: (TypeValue, Set[TableRow])*): Unit = {
+    matchGatewayUpdate(source, updates: _*)
+    source.subUpdates.clear()
   }
 
+  def routeRow(session: PeerSessionId): RowId = {
+    PeerRouteSource.peerRouteRow(session)
+  }
+  def manifestRowsForPeer(session: PeerSessionId): Set[RowId] = {
+    Set(PeerRouteSource.peerRouteRow(session))
+  }
 
   object MockData {
     def rowAppend(row: RowId, append: AppendEvent): RowAppendEvent = {
@@ -247,77 +256,85 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
     val bToD = MockPeer.subscribe("BtoD", peerB, peerD)
     val cToD = MockPeer.subscribe("CtoD", peerC, peerD)
 
+    val peers = Seq(peerA, peerB, peerC, peerD)
     val links = Seq(aToB, aToC, bToD, cToD)
 
-    links.foreach(l => matchAndPushSourceUpdate(l, manifestRowsForPeer(l.source.session)))
-
+    def checkAllClear(): Unit = {
+      checkLinksClear()
+      checkGatewaysClear()
+    }
+    def checkLinkClear(l: MockPeerSource): Unit = {
+      if (l.batches.nonEmpty) fail(s"${l.name} has event batches: " + l.batches)
+      if (l.subUpdates.nonEmpty) fail(s"${l.name} has subscription updates: " + l.subUpdates)
+    }
     def checkLinksClear() = {
-      links.foreach { l =>
-        if (l.batches.nonEmpty) fail(s"${l.name} has event batches: " + l.batches)
-        if (l.subUpdates.nonEmpty) fail(s"${l.name} has subscription updates: " + l.subUpdates)
+      links.foreach(checkLinkClear)
+    }
+    def checkGatewaysClear(): Unit = {
+      peers.foreach { p =>
+        if (p.gateway.subUpdates.nonEmpty) fail(s"${p.name} has gateway subscription updates: " + p.gateway.subUpdates)
       }
     }
 
-    //links.foreach(_.pushSubs())
+    links.foreach(l => matchAndPushSourceUpdate(l, manifestRowsForPeer(l.source.session)))
 
     links.foreach { l =>
-      logger.debug("Match manifest resyncs: " + l.name)
       matchAndPushEventBatches(l, Seq(rowAppend(l.source.routeRow, sessResyncManifest(l.source.session, 0, Map()))))
     }
 
-    checkLinksClear()
+    checkAllClear()
 
     peerD.engine.subscriptionsRegistered(subQ, StreamSubscriptionParams(route1.rows))
     matchAndClearEventBatches(subQ, Seq(RouteUnresolved(route1.route)))
 
-    checkLinksClear()
+    checkAllClear()
 
     peerA.engine.localGatewayEvents(Some(Set(route1.route)), Seq())
 
     Seq(aToB, aToC).foreach { l =>
-      logger.debug("Manifest update: " + l.name)
       matchAndPushEventBatches(l, Seq(rowAppend(l.source.routeRow, manifestUpdate(1, Set(), Set((route1.route, 0)), Set()))))
     }
 
     Seq(bToD, cToD).foreach { l =>
-      logger.debug("Manifest update: " + l.name)
       matchAndPushEventBatches(l, Seq(rowAppend(l.source.routeRow, manifestUpdate(1, Set(), Set((route1.route, 1)), Set()))))
     }
 
-    println(aToB.subUpdates)
-
     matchAndPushSourceUpdate(bToD, route1.rowSet ++ Set(bToD.source.routeRow))
-
-    println(aToB.subUpdates)
-
     matchAndPushSourceUpdate(aToB, route1.rowSet ++ Set(aToB.source.routeRow))
 
     checkLinksClear()
+    matchAndClearGatewayUpdate(peerA.gateway, route1.routeToTableRows)
 
+    def transferBatch(batch: Seq[RowAppendEvent]): Unit = {
+      peerA.engine.localGatewayEvents(None, batch)
 
-    /*
-org.scalatest.exceptions.TestFailedException:
-Queue(Set(RowId(TupleVal(List(UuidVal(1dcf0685-6c3a-46bd-a155-9b7d84118395), UInt64Val(0))),SymbolVal(__manifest),SymbolVal(routes))), Set(RowId(TupleVal(List(UuidVal(1dcf0685-6c3a-46bd-a155-9b7d84118395), UInt64Val(0))),SymbolVal(__manifest),SymbolVal(routes)), RowId(UuidVal(bc43470e-6139-4d90-9d8a-947481f264b0),SymbolVal(testTable),SymbolVal(row1)), RowId(UuidVal(bc43470e-6139-4d90-9d8a-947481f264b0),SymbolVal(testTable),SymbolVal(row2)), RowId(UuidVal(bc43470e-6139-4d90-9d8a-947481f264b0),SymbolVal(testTable),SymbolVal(row3)))) did not equal
-Array(Set(RowId(UuidVal(bc43470e-6139-4d90-9d8a-947481f264b0),SymbolVal(testTable),SymbolVal(row1)), RowId(UuidVal(bc43470e-6139-4d90-9d8a-947481f264b0),SymbolVal(testTable),SymbolVal(row2)), RowId(UuidVal(bc43470e-6139-4d90-9d8a-947481f264b0),SymbolVal(testTable),SymbolVal(row3)), RowId(TupleVal(List(UuidVal(1dcf0685-6c3a-46bd-a155-9b7d84118395), UInt64Val(0))),SymbolVal(__manifest),SymbolVal(routes))))
+      Seq(aToC, bToD, cToD).foreach(checkLinkClear)
+      checkGatewaysClear()
+      matchAndPushEventBatches(aToB, batch)
 
+      Seq(aToB, aToC, cToD).foreach(checkLinkClear)
+      checkGatewaysClear()
+      matchAndPushEventBatches(bToD, batch)
 
-    Queue(Set(RowId(TupleVal(List(UuidVal(5f69bcbc-9c4f-47f2-ae9f-2dbc03f29d92), UInt64Val(0))),SymbolVal(__manifest),SymbolVal(routes)), RowId(UuidVal(7ab3c9e3-3892-4183-bcbd-56253aa6ee71),SymbolVal(testTable),SymbolVal(row1)), RowId(UuidVal(7ab3c9e3-3892-4183-bcbd-56253aa6ee71),SymbolVal(testTable),SymbolVal(row2)), RowId(UuidVal(7ab3c9e3-3892-4183-bcbd-56253aa6ee71),SymbolVal(testTable),SymbolVal(row3))))
-    Array(Set(RowId(UuidVal(7ab3c9e3-3892-4183-bcbd-56253aa6ee71),SymbolVal(testTable),SymbolVal(row1)), RowId(UuidVal(7ab3c9e3-3892-4183-bcbd-56253aa6ee71),SymbolVal(testTable),SymbolVal(row2)), RowId(UuidVal(7ab3c9e3-3892-4183-bcbd-56253aa6ee71),SymbolVal(testTable),SymbolVal(row3))))
+      checkGatewaysClear()
+      checkLinksClear()
+      matchAndClearEventBatches(subQ, batch)
+    }
 
-     */
+    val firstRetailBatch = Seq(
+      RowAppendEvent(route1.row1, ResyncSession(peerA.session, ModifiedSetSnapshot(UInt64Val(0), Set(UInt64Val(5), UInt64Val(3))))),
+      RowAppendEvent(route1.row2, ResyncSession(peerA.session, ModifiedKeyedSetSnapshot(UInt64Val(0), Map(UInt64Val(3) -> UInt64Val(9))))),
+      RowAppendEvent(route1.row3, ResyncSession(peerA.session, AppendSetSequence(Seq(AppendSetValue(UInt64Val(0), UInt64Val(66)))))))
 
-    //matchAndPushEventBatches(aToB, peerB.engine, )
-    //matchEventBatches()
+    transferBatch(firstRetailBatch)
+    checkAllClear()
 
-    /*peerD.engine.subscriptionsRegistered(subQ, StreamSubscriptionParams(route1.rows))
+    val secondRetailBatch = Seq(
+      RowAppendEvent(route1.row1, StreamDelta(ModifiedSetDelta(UInt64Val(1), Set(UInt64Val(5)), Set(UInt64Val(7))))),
+      RowAppendEvent(route1.row2, StreamDelta(ModifiedKeyedSetDelta(UInt64Val(1), Set(), Set(UInt64Val(4) -> UInt64Val(55)), Set(UInt64Val(3) -> UInt64Val(8))))),
+      RowAppendEvent(route1.row3, StreamDelta(AppendSetSequence(Seq(AppendSetValue(UInt64Val(1), UInt64Val(77)))))))
 
-    matchAndClearEventBatches(subQ, Seq(RouteUnresolved(route1.route)))
-
-    peerA.engine.localGatewayEvents(Some(Set(route1.route)), Seq())
-
-    println(aToB.batches)
-    println(aToB.subUpdates)*/
-    //matchSubs(aToB.subUpdates, Seq())
-
+    transferBatch(secondRetailBatch)
+    checkAllClear()
   }
 }

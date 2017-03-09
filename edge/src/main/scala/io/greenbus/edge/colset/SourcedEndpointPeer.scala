@@ -322,7 +322,7 @@ trait RouteSource {
   def updateRowsForRoute(route: TypeValue, rows: Set[TableRow]): Unit
 }
 
-object PeerManifestDb {
+object PeerRouteSource {
   val tablePrefix = "__manifest"
 
   def peerRouteRow(peerId: PeerSessionId): RowId = {
@@ -333,19 +333,19 @@ object PeerManifestDb {
   }
 
   def manifestRows(peerId: PeerSessionId): Set[RowId] = {
-    Set(peerRouteRow(peerId)/*, peerIndexRow(peerId)*/)
+    Set(peerRouteRow(peerId) /*, peerIndexRow(peerId)*/ )
   }
 }
-class PeerManifestDb(peerId: PeerSessionId, source: PeerSourceLink) extends RouteSource with LazyLogging {
+class PeerRouteSource(peerId: PeerSessionId, source: PeerSourceLink) extends RouteSource with LazyLogging {
 
-  private val routeRow = PeerManifestDb.peerRouteRow(peerId)
-  private val indexRow = PeerManifestDb.peerIndexRow(peerId)
+  private val routeRow = PeerRouteSource.peerRouteRow(peerId)
+  private val indexRow = PeerRouteSource.peerIndexRow(peerId)
 
   private val routeLog = RouteManifestSet.build
 
-  private var routeToRows: Map[TypeValue, Set[TableRow]] = Map(TypeValueConversions.toTypeValue(peerId) -> Set(routeRow.tableRow/*, indexRow.tableRow*/))
+  private var routeToRows: Map[TypeValue, Set[TableRow]] = Map(TypeValueConversions.toTypeValue(peerId) -> Set(routeRow.tableRow /*, indexRow.tableRow*/ ))
 
-  private val keys: Set[RowId] = Set(routeRow/*, indexRow*/)
+  private val keys: Set[RowId] = Set(routeRow /*, indexRow*/ )
   def manifestKeys: Set[RowId] = keys
   def manifestRoute: TypeValue = TypeValueConversions.toTypeValue(peerId)
 
@@ -365,7 +365,6 @@ class PeerManifestDb(peerId: PeerSessionId, source: PeerSourceLink) extends Rout
 
   private def pushSubscription(): Unit = {
     val rowIdSet = routeToRows.flatMap { case (route, rows) => rows.map(_.toRowId(route)) }.toSet
-    logger.debug("PUSHING: " + rowIdSet)
     source.setSubscriptions(rowIdSet)
   }
 
@@ -422,8 +421,8 @@ case class RouteManifestEntry(distance: Int) {
 
 class RouteSourcingMgr(route: TypeValue) extends LazyLogging {
 
-  private var subscribedRows = Set.empty[TableRow]
   private var subscribersToRows = BiMultiMap.empty[SubscriptionTarget, TableRow]
+  private def subscribedRows: Set[TableRow] = subscribersToRows.valToKey.keySet
 
   private var currentSource = Option.empty[RouteSource]
   private var standbySources = Set.empty[RouteSource]
@@ -457,31 +456,18 @@ class RouteSourcingMgr(route: TypeValue) extends LazyLogging {
     }
   }
 
-  def addRowsToSubscription(subscriber: SubscriptionTarget, rows: Set[TableRow]): Unit = {
-    subscribersToRows = subscribersToRows.add(subscriber, rows)
-    logger.debug("SUBSCRIBED ROWS: " + subscribedRows)
-    val unsourced = rows -- subscribedRows
-    subscribedRows ++= rows
-    logger.debug("SUBSCRIBED ROWS: " + subscribedRows)
-    if (unsourced.nonEmpty) {
-      currentSource.foreach { source =>
-        source.updateRowsForRoute(route, subscribedRows)
-      }
+  def modifySubscription(subscriber: SubscriptionTarget, removed: Set[TableRow], added: Set[TableRow]): Unit = {
+    val prev = subscribedRows
+    subscribersToRows = subscribersToRows.removeMappings(subscriber, removed).add(subscriber, added)
+    if (prev != subscribedRows) {
+      currentSource.foreach(_.updateRowsForRoute(route, subscribedRows))
     }
   }
 
-  def removeRowsFromSubscription(subscriber: SubscriptionTarget, rows: Set[TableRow]): Unit = {
-    subscribersToRows = subscribersToRows.removeMappings(subscriber, rows)
-    val deadRows = rows.filterNot(subscribersToRows.valToKey.contains)
-    subscribedRows --= deadRows
-    currentSource.foreach(_.updateRowsForRoute(route, subscribedRows))
-  }
-
   def subscriberRemoved(subscriber: SubscriptionTarget): Unit = {
+    val prev = subscribedRows
     subscribersToRows = subscribersToRows.removeKey(subscriber)
-    val stillSubscribed = subscribedRows.filter(subscribersToRows.valToKey.contains)
-    if (stillSubscribed != subscribedRows) {
-      subscribedRows = stillSubscribed
+    if (prev != subscribedRows) {
       currentSource.foreach(_.updateRowsForRoute(route, subscribedRows))
     }
   }
@@ -521,7 +507,7 @@ trait LocalGateway extends RouteSource {
 
 class ManifestDb(selfSession: PeerSessionId) {
 
-  private val routeRow = PeerManifestDb.peerRouteRow(selfSession)
+  private val routeRow = PeerRouteSource.peerRouteRow(selfSession)
 
   private var sequence: Long = 0
   private var manifest = Map.empty[TypeValue, RouteManifestEntry]
@@ -580,6 +566,10 @@ class ManifestDb(selfSession: PeerSessionId) {
   }
 }
 
+class PeerLocalRouteSource extends RouteSource {
+  def updateRowsForRoute(route: TypeValue, rows: Set[TableRow]): Unit = {}
+}
+
 class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: LocalGateway) extends LazyLogging {
 
   private val synthesizer = new SynthesizerTable
@@ -590,11 +580,12 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
   private var rowsForSub = Map.empty[SubscriptionTarget, Set[RowId]]
   private var routesForSource = Map.empty[RouteSource, Set[TypeValue]]
 
-  private var sourceMgrs = Map.empty[PeerSourceLink, PeerManifestDb]
+  private var sourceMgrs = Map.empty[PeerSourceLink, PeerRouteSource]
 
   private val manifestDb = new ManifestDb(selfSession)
 
-  addOrUpdateSourceRoute(gateway, TypeValueConversions.toTypeValue(selfSession), RouteManifestEntry(0))
+  private val peerLocalRoute = new PeerLocalRouteSource
+  addOrUpdateSourceRoute(peerLocalRoute, TypeValueConversions.toTypeValue(selfSession), RouteManifestEntry(0))
   retailCacheTable.handleBatch(Seq(manifestDb.initial()))
 
   private def addOrUpdateSourceRoute(source: RouteSource, route: TypeValue, entry: RouteManifestEntry): Unit = {
@@ -613,13 +604,13 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
     }
   }
 
-  private def handleSourcingUpdate(mgr: PeerManifestDb, events: Seq[StreamEvent]): Seq[StreamEvent] = {
+  private def handleSourcingUpdate(mgr: PeerRouteSource, events: Seq[StreamEvent]): Seq[StreamEvent] = {
     val manifestEvents = events.filter(_.routingKey == mgr.manifestRoute)
     if (manifestEvents.nonEmpty) {
 
       logger.debug(s"$logId peer sourcing update events: $manifestEvents")
       val diffOpt = mgr.handleSelfEvents(manifestEvents)
-      logger.debug(s"$logId peer sourcing update diff: $diffOpt")
+      logger.trace(s"$logId peer sourcing update diff: $diffOpt")
 
       diffOpt match {
         case None => Seq()
@@ -641,7 +632,7 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
     }
   }
 
-  private def removeSourceFromSourcing(mgr: PeerManifestDb, route: TypeValue): Unit = {
+  private def removeSourceFromSourcing(mgr: PeerRouteSource, route: TypeValue): Unit = {
     routeSourcingMap.get(route).foreach { sourcing =>
       sourcing.sourceRemoved(mgr)
       if (sourcing.unused()) {
@@ -709,11 +700,11 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
     handleRetailEvents(manifestEvents ++ emitted)
   }
 
-  def sourceConnected(peerSessionId: PeerSessionId, link: PeerSourceLink): Unit = {
+  def peerSourceConnected(peerSessionId: PeerSessionId, link: PeerSourceLink): Unit = {
     logger.debug(s"$logId source connected: $peerSessionId")
     sourceMgrs.get(link) match {
       case None => {
-        val mgr = new PeerManifestDb(peerSessionId, link)
+        val mgr = new PeerRouteSource(peerSessionId, link)
         mgr.init()
         sourceMgrs += (link -> mgr)
       }
@@ -755,9 +746,7 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
     logger.debug(s"$logId subscriptions params: $params, added: $addedRouteMap, removed: $removedRouteMap")
     val updatedRoutes = removedRouteMap.keySet ++ addedRouteMap.keySet
 
-    val streamEvents = Vector.newBuilder[StreamEvent]
-
-    updatedRoutes.foreach { route =>
+    val streamEvents = updatedRoutes.flatMap { route =>
 
       val removes = removedRouteMap.getOrElse(route, Set())
       val adds = addedRouteMap.getOrElse(route, Set())
@@ -768,8 +757,10 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
         routeSourcingMgr
       })
 
-      sourcing.removeRowsFromSubscription(subscriber, removes)
-      sourcing.addRowsToSubscription(subscriber, adds)
+      // TODO: these two calls need to be merged for one transactional subscription update
+      if (removes.nonEmpty || adds.nonEmpty) {
+        sourcing.modifySubscription(subscriber, removes, adds)
+      }
 
       // TODO: branch above to prevent dumb add/remove
       if (sourcing.unused()) {
@@ -781,18 +772,17 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
       // For every row, either route is unresolved, sub was already active and cached, or subscribe above will
       // cause a sync/unavail event at a later time, meanwhile that row is pending for the subscriber
       if (sourcing.resolved()) {
-        streamEvents ++= addIds.flatMap(row => retailCacheTable.getSync(row))
+        addIds.flatMap(row => retailCacheTable.getSync(row))
       } else {
-        streamEvents += RouteUnresolved(route)
+        Seq(RouteUnresolved(route))
       }
     }
 
     rowsForSub += (subscriber -> rows)
 
-    val events = streamEvents.result()
-    if (events.nonEmpty) {
-      logger.debug(s"$logId initial subscription events: $events")
-      subscriber.handleBatch(events)
+    if (streamEvents.nonEmpty) {
+      logger.debug(s"$logId initial subscription events: $streamEvents")
+      subscriber.handleBatch(streamEvents.toSeq)
     }
 
   }

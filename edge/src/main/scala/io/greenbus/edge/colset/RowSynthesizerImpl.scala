@@ -50,7 +50,7 @@ class SynthesizerTable extends LazyLogging {
           case None => Seq()
           case Some(rows) => {
             // TODO: stable sort?
-            val results =  rows.toVector.flatMap {
+            val results = rows.toVector.flatMap {
               case (row, db) =>
                 val rowId = RowId(in.routingKey, row.table, row.rowKey)
                 db.sourceRemoved(sourceLink)

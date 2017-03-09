@@ -188,4 +188,7 @@ class BiMultiMap[A, B](val keyToVal: Map[A, Set[B]], val valToKey: Map[B, Set[A]
     }
   }
 
+  override def toString: String = {
+    "BiMultiMap" + (keyToVal, valToKey).toString()
+  }
 }
