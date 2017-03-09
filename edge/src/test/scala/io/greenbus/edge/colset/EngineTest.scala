@@ -417,10 +417,13 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
     // Reorganization: D subscribes to C, C subscribes to A
     matchAndPushSourceUpdate(cToD, route1.rowSet ++ Set(cToD.source.routeRow))
     matchAndPushSourceUpdate(aToC, route1.rowSet ++ Set(aToC.source.routeRow))
-    /*matchAndClearGatewayUpdate(peerA.gateway, route1.routeToTableRows)
+
+    matchAndClearGatewayUpdate(peerA.gateway, route1.routeToTableRows)
+
+    // This should be filtered by the synthesizer, so below in aToC we have one batch caused by source update above
+    peerA.engine.localGatewayEvents(None, firstBatch)
 
     // Resync: C must get resynced, then forwards to D who squelches it before it goes to the subscriber, since it's not new
-    peerA.engine.localGatewayEvents(None, firstBatch)
     matchAndPushEventBatches(aToC, firstBatch)
     matchAndPushEventBatches(cToD, firstBatch)
 
@@ -440,6 +443,6 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
 
     checkGatewaysClear()
     checkLinksClear()
-    matchAndClearEventBatches(subQ, batch)*/
+    matchAndClearEventBatches(subQ, batch)
   }
 }

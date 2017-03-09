@@ -292,13 +292,11 @@ object RouteManifestSet {
   }
 }
 
-trait StreamSource {
+trait StreamSource
+
+trait PeerSourceLink extends StreamSource {
   def setSubscriptions(rows: Set[RowId]): Unit
 }
-
-trait LocalSource extends StreamSource
-
-trait PeerSourceLink extends StreamSource
 
 /*
 
@@ -511,9 +509,7 @@ class RouteSourcingMgr(route: TypeValue) extends LazyLogging {
   }
 }
 
-trait LocalGateway extends RouteSource {
-
-}
+trait LocalGateway extends RouteSource with StreamSource
 
 class ManifestDb(selfSession: PeerSessionId) {
 
@@ -666,9 +662,11 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
     routeUpdate.foreach(route => logger.trace(s"$logId local gateway route update: $route"))
     if (events.nonEmpty) logger.trace(s"$logId local gateway events: $events")
 
+    val synthesizedEvents = synthesizer.handleBatch(gateway, events)
+
     val routingEvents = routeUpdate.map(localGatewayRoutingUpdate).getOrElse(Seq())
 
-    val allEvents = routingEvents ++ events
+    val allEvents = routingEvents ++ synthesizedEvents
     if (allEvents.nonEmpty) {
       handleRetailEvents(allEvents)
     }
