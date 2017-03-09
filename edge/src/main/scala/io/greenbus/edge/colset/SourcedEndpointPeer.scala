@@ -271,6 +271,10 @@ class RetailCacheTable extends LazyLogging {
         logger.warn(s"Initial row event was not resync session: $ev")
     }
   }
+
+  def removeRoute(route: TypeValue): Unit = {
+    rows -= route
+  }
 }
 
 /*
@@ -434,6 +438,8 @@ class RouteSourcingMgr(route: TypeValue) extends LazyLogging {
   def unused(): Boolean = currentSource.isEmpty && subscribersToRows.keyToVal.keySet.isEmpty
 
   def handleBatch(events: Seq[StreamEvent]): Unit = {
+    logger.trace(s"Route $route handling batch $events")
+
     val map = mutable.Map.empty[SubscriptionTarget, VectorBuilder[StreamEvent]]
 
     events.foreach {
@@ -465,11 +471,13 @@ class RouteSourcingMgr(route: TypeValue) extends LazyLogging {
   }
 
   def subscriberRemoved(subscriber: SubscriptionTarget): Unit = {
+    logger.debug(s"Route $route subscriber removed before $subscribersToRows")
     val prev = subscribedRows
     subscribersToRows = subscribersToRows.removeKey(subscriber)
     if (prev != subscribedRows) {
       currentSource.foreach(_.updateRowsForRoute(route, subscribedRows))
     }
+    logger.debug(s"Route $route subscriber removed after $subscribersToRows")
   }
 
   def sourceAdded(source: RouteSource, desc: RouteManifestEntry): Unit = {
@@ -485,6 +493,7 @@ class RouteSourcingMgr(route: TypeValue) extends LazyLogging {
   }
 
   def sourceRemoved(source: RouteSource): Unit = {
+    logger.debug(s"Route $route source removed start: $currentSource - $standbySources - $manifestMap")
     if (currentSource.contains(source)) {
       if (standbySources.nonEmpty) {
         val next = standbySources.head
@@ -498,6 +507,7 @@ class RouteSourcingMgr(route: TypeValue) extends LazyLogging {
       }
     }
     manifestMap -= source
+    logger.debug(s"Route $route source removed end: $currentSource - $standbySources - $manifestMap")
   }
 }
 
@@ -637,6 +647,7 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
       sourcing.sourceRemoved(mgr)
       if (sourcing.unused()) {
         routeSourcingMap -= route
+        retailCacheTable.removeRoute(route)
       }
     }
   }
@@ -652,6 +663,8 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
   }
 
   def localGatewayEvents(routeUpdate: Option[Set[TypeValue]], events: Seq[StreamEvent]): Unit = {
+    routeUpdate.foreach(route => logger.trace(s"$logId local gateway route update: $route"))
+    if (events.nonEmpty) logger.trace(s"$logId local gateway events: $events")
 
     val routingEvents = routeUpdate.map(localGatewayRoutingUpdate).getOrElse(Seq())
 
@@ -765,6 +778,7 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
       // TODO: branch above to prevent dumb add/remove
       if (sourcing.unused()) {
         routeSourcingMap -= route
+        retailCacheTable.removeRoute(route)
       }
 
       val addIds = adds.map(tr => RowId(route, tr.table, tr.rowKey))
@@ -794,6 +808,7 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
         sourcing.subscriberRemoved(subscriber)
         if (sourcing.unused()) {
           routeSourcingMap -= route
+          retailCacheTable.removeRoute(route)
         }
       }
     }

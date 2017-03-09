@@ -286,8 +286,6 @@ trait SessionSynthesizingFilter {
 sealed trait SessionSeqElement {
   def sequence: SequencedTypeValue
 }
-case class Resync(sequence: SequencedTypeValue, snapshot: SetSnapshot)
-case class Increment(sequence: SequencedTypeValue, delta: SetDelta)
 
 class SessionAppendRowLog(rowId: RowId, sessionId: PeerSessionId, init: Seq[AppendSetValue], last: AppendSetValue) extends SessionRowLog with LazyLogging {
 
@@ -540,14 +538,12 @@ class SessionKeyedModifyRowLog(rowId: RowId, sessionId: PeerSessionId, init: Mod
 class SessionKeyedModifyRowSynthesizingFilter(rowId: RowId, sessionId: PeerSessionId, init: ModifiedKeyedSetSnapshot) extends SessionSynthesizingFilter with LazyLogging {
 
   private var sequence: SequencedTypeValue = init.sequence
-  //private var current: Set[TypeValue] = init.snapshot
 
   def handleDelta(delta: SetDelta): Option[SetDelta] = {
     delta match {
       case d: ModifiedKeyedSetDelta => {
         if (sequence.precedes(d.sequence)) {
           sequence = d.sequence
-          //current = (current -- d.removes) ++ d.adds
           Some(delta)
         } else {
           logger.debug(s"Set delta unsequenced for $rowId, session $sessionId, current: $sequence, delta: ${d.sequence}")
@@ -565,7 +561,6 @@ class SessionKeyedModifyRowSynthesizingFilter(rowId: RowId, sessionId: PeerSessi
       case d: ModifiedKeyedSetSnapshot =>
         if (sequence.isLessThan(d.sequence)) {
           sequence = d.sequence
-          //current = d.snapshot
           Some(ResyncSnapshot(snapshot))
         } else {
           logger.debug(s"Set snapshot unsequenced for $rowId, session $sessionId, current: $sequence, snap: ${d.sequence}")
