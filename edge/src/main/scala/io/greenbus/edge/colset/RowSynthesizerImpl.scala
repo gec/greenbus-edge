@@ -27,23 +27,21 @@ class SynthesizerTable extends LazyLogging {
   private var sourceToRow = BiMultiMap.empty[PeerSourceLink, RowId]
 
   def handleBatch(sourceLink: PeerSourceLink, events: Seq[StreamEvent]): Seq[StreamEvent] = {
-    val results = Vector.newBuilder[StreamEvent]
-
-    events.foreach {
+    events.flatMap {
       case ev: RowAppendEvent => {
         val tableRow = ev.rowId.tableRow
         val routingKey = ev.routingKey
         routed.get(routingKey) match {
           case None => {
-            results ++= addRouted(sourceLink, ev, routingKey, Map())
+            addRouted(sourceLink, ev, routingKey, Map())
           }
           case Some(routingKeyRows) =>
             routingKeyRows.get(tableRow) match {
               case None => {
-                results ++= addRouted(sourceLink, ev, routingKey, routingKeyRows)
+                addRouted(sourceLink, ev, routingKey, routingKeyRows)
               }
               case Some(db) =>
-                db.append(sourceLink, ev.appendEvent)
+                db.append(sourceLink, ev.appendEvent).map(RowAppendEvent(ev.rowId, _))
             }
         }
       }
@@ -52,7 +50,7 @@ class SynthesizerTable extends LazyLogging {
           case None => Seq()
           case Some(rows) => {
             // TODO: stable sort?
-            results ++= rows.toVector.flatMap {
+            val results =  rows.toVector.flatMap {
               case (row, db) =>
                 val rowId = RowId(in.routingKey, row.table, row.rowKey)
                 db.sourceRemoved(sourceLink)
@@ -61,12 +59,11 @@ class SynthesizerTable extends LazyLogging {
 
             val rowIds = rows.keys.map(tr => RowId(in.routingKey, tr.table, tr.rowKey)).toSet
             sourceToRow = sourceToRow.removeMappings(sourceLink, rowIds)
+            results
           }
         }
       }
     }
-
-    results.result()
   }
 
   def sourceRemoved(sourceLink: PeerSourceLink): Seq[StreamEvent] = {
@@ -547,7 +544,7 @@ class SessionKeyedModifyRowSynthesizingFilter(rowId: RowId, sessionId: PeerSessi
 
   def handleDelta(delta: SetDelta): Option[SetDelta] = {
     delta match {
-      case d: ModifiedSetDelta => {
+      case d: ModifiedKeyedSetDelta => {
         if (sequence.precedes(d.sequence)) {
           sequence = d.sequence
           //current = (current -- d.removes) ++ d.adds
@@ -565,7 +562,7 @@ class SessionKeyedModifyRowSynthesizingFilter(rowId: RowId, sessionId: PeerSessi
 
   def handleResync(snapshot: SetSnapshot): Option[AppendEvent] = {
     snapshot match {
-      case d: ModifiedSetSnapshot =>
+      case d: ModifiedKeyedSetSnapshot =>
         if (sequence.isLessThan(d.sequence)) {
           sequence = d.sequence
           //current = d.snapshot
