@@ -490,9 +490,9 @@ class RouteSourcingMgr(route: TypeValue) extends LazyLogging {
     manifestMap += (source -> desc)
   }
 
-  def sourceRemoved(source: RouteSource): Unit = {
+  def sourceRemoved(source: RouteSource): Option[RouteUnresolved] = {
     logger.debug(s"Route $route source removed start: $currentSource - $standbySources - $manifestMap")
-    if (currentSource.contains(source)) {
+    val resultOpt = if (currentSource.contains(source)) {
       if (standbySources.nonEmpty) {
         val next = standbySources.head
         standbySources -= next
@@ -500,12 +500,18 @@ class RouteSourcingMgr(route: TypeValue) extends LazyLogging {
         if (subscribedRows.nonEmpty) {
           next.updateRowsForRoute(route, subscribedRows)
         }
+        None
       } else {
         currentSource = None
+        Some(RouteUnresolved(route))
       }
+    } else {
+      standbySources -= source
+      None
     }
     manifestMap -= source
     logger.debug(s"Route $route source removed end: $currentSource - $standbySources - $manifestMap")
+    resultOpt
   }
 }
 
@@ -604,12 +610,6 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
     mgr.sourceAdded(source, entry)
   }
 
-  private def removeSourceRoute(source: RouteSource, route: TypeValue): Unit = {
-    routeSourcingMap.get(route).foreach { sourcing =>
-      sourcing.sourceRemoved(source)
-    }
-  }
-
   private def handleSourcingUpdate(mgr: PeerRouteSource, events: Seq[StreamEvent]): Seq[StreamEvent] = {
     val manifestEvents = events.filter(_.routingKey == mgr.manifestRoute)
     if (manifestEvents.nonEmpty) {
@@ -621,7 +621,7 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
       diffOpt match {
         case None => Seq()
         case Some(diff) =>
-          diff.removed.foreach(removeSourceRoute(mgr, _))
+          val removeEvents = diff.removed.flatMap(removeSourceForRoute(mgr, _))
 
           val updates = diff.added ++ diff.modified
           updates.foreach {
@@ -638,13 +638,14 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
     }
   }
 
-  private def removeSourceFromSourcing(mgr: PeerRouteSource, route: TypeValue): Unit = {
-    routeSourcingMap.get(route).foreach { sourcing =>
-      sourcing.sourceRemoved(mgr)
+  private def removeSourceForRoute(source: RouteSource, route: TypeValue): Option[StreamEvent] = {
+    routeSourcingMap.get(route).flatMap { sourcing =>
+      val resultOpt = sourcing.sourceRemoved(source)
       if (sourcing.unused()) {
         routeSourcingMap -= route
         retailCacheTable.removeRoute(route)
       }
+      resultOpt
     }
   }
 
@@ -677,7 +678,7 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
     routesForSource += (gateway -> routes)
     val adds = routes -- prev
     val removes = prev -- routes
-    removes.foreach(remove => removeSourceRoute(gateway, remove))
+    removes.foreach(remove => removeSourceForRoute(gateway, remove))
     adds.foreach(add => addOrUpdateSourceRoute(gateway, add, RouteManifestEntry(distance = 0)))
 
     val manifestEvents = manifestDb.routesUpdated(adds ++ removes, routeSourcingMap)
@@ -704,7 +705,7 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
 
     val manifestEvents = sourceMgrs.get(link) match {
       case None =>
-        logger.warn(s"No source manager for link: $link"); Seq()
+        logger.warn(s"$logId no source manager for link: $link"); Seq()
       case Some(mgr) => handleSourcingUpdate(mgr, emitted)
     }
 
@@ -720,25 +721,28 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
         sourceMgrs += (link -> mgr)
       }
       case Some(mgr) =>
-        logger.warn(s"Link for $peerSessionId had connect event but already existed")
+        logger.warn(s"$logId link for $peerSessionId had connect event but already existed")
     }
   }
 
   def sourceDisconnected(link: PeerSourceLink): Unit = {
 
-    val manifestEvents = sourceMgrs.get(link) match {
+    val sourcingEvents = sourceMgrs.get(link) match {
       case None => Seq()
       case Some(mgr) =>
         val routes = routesForSource.getOrElse(mgr, Set())
-        routes.foreach(removeSourceFromSourcing(mgr, _))
+        val unresolvedEvents = routes.flatMap(removeSourceForRoute(mgr, _)).toVector
         routesForSource -= mgr
-        manifestDb.routesUpdated(routes, routeSourcingMap)
+        val manifestEvents = manifestDb.routesUpdated(routes, routeSourcingMap)
+
+        unresolvedEvents ++ manifestEvents
     }
 
     sourceMgrs -= link
 
     val emitted = synthesizer.sourceRemoved(link)
-    handleRetailEvents(manifestEvents ++ emitted)
+    logger.debug(s"$logId source removed emitted events: $emitted")
+    handleRetailEvents(sourcingEvents ++ emitted)
   }
 
   // - sub appears: resolve routes, enqueue unresolved or add subscription to a source

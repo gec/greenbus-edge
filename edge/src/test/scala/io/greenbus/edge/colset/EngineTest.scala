@@ -274,6 +274,7 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
 
     val peers = Seq(peerA, peerB, peerC, peerD)
     val links = Seq(aToB, aToC, bToD, cToD)
+    val subs = Seq(subQ)
 
     // Manifest subscriptions
     links.foreach(l => matchAndPushSourceUpdate(l, manifestRowsForPeer(l.source.session)))
@@ -286,18 +287,25 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
     def checkAllClear(): Unit = {
       checkLinksClear()
       checkGatewaysClear()
+      checkSubsClear()
     }
     def checkLinkClear(l: MockPeerSource): Unit = {
       if (l.batches.nonEmpty) fail(s"${l.name} has event batches: " + l.batches)
       if (l.subUpdates.nonEmpty) fail(s"${l.name} has subscription updates: " + l.subUpdates)
     }
-    def checkLinksClear() = {
+    def checkLinksClear(): Unit = {
       links.foreach(checkLinkClear)
     }
     def checkGatewaysClear(): Unit = {
       peers.foreach { p =>
         if (p.gateway.subUpdates.nonEmpty) fail(s"${p.name} has gateway subscription updates: " + p.gateway.subUpdates)
       }
+    }
+    def checkSubClear(s: SimpleMockSubscriber): Unit = {
+      if (s.batches.nonEmpty) fail(s"${s.name} has event batches: " + s.batches)
+    }
+    def checkSubsClear(): Unit = {
+      subs.foreach(checkSubClear)
     }
 
     def attachRoute1ToAAndPropagate(): Unit = {
@@ -444,5 +452,14 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
     checkGatewaysClear()
     checkLinksClear()
     matchAndClearEventBatches(subQ, batch)
+
+    // Disconnect C
+    logger.info("Removing C")
+    peerA.engine.subscriberRemoved(aToC)
+    matchAndClearGatewayUpdate(peerA.gateway, (route1.route, Set()))
+    checkAllClear()
+    peerD.engine.sourceDisconnected(cToD)
+
+    matchAndClearEventBatches(subQ, Seq(RouteUnresolved(route1.route)))
   }
 }
