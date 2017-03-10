@@ -39,9 +39,11 @@ class MockGateway extends LocalGateway with LazyLogging {
     //(new Throwable()).printStackTrace()
     subUpdates += ((route, rows))
   }
+
+  def issueServiceRequests(requests: Seq[ServiceRequest]): Unit = {}
 }
 
-trait MockSource extends StreamSource with LazyLogging {
+trait MockSource extends PeerLink with LazyLogging {
   val name: String
 
   val subUpdates: mutable.Queue[Set[RowId]] = mutable.Queue.empty[Set[RowId]]
@@ -51,8 +53,6 @@ trait MockSource extends StreamSource with LazyLogging {
     subUpdates += rows
   }
 }
-
-//class MockPeerSourceLink extends PeerSourceLink with MockSource
 
 trait MockSubscriber extends SubscriptionTarget with LazyLogging {
   val name: String

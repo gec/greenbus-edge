@@ -22,7 +22,7 @@ import com.typesafe.scalalogging.LazyLogging
 
 trait ManagedRouteSource {
   def updateRowsForRoute(route: TypeValue, rows: Set[TableRow]): Unit
-  //def issueServiceRequests(requests: Seq[ServiceRequest]): Unit
+  def issueServiceRequests(requests: Seq[ServiceRequest]): Unit
 }
 
 object PeerRouteSource {

@@ -24,7 +24,11 @@ import io.greenbus.edge.collection.BiMultiMap
 import scala.collection.immutable.VectorBuilder
 import scala.collection.mutable
 
-class SourcingForRoute(route: TypeValue) extends LazyLogging {
+trait ServiceRouteProvider {
+  def serviceTargets: Seq[ManagedRouteSource]
+}
+
+class SourcingForRoute(route: TypeValue) extends ServiceRouteProvider with LazyLogging {
 
   private var subscribersToRows = BiMultiMap.empty[SubscriptionTarget, TableRow]
   private def subscribedRows: Set[TableRow] = subscribersToRows.valToKey.keySet
@@ -37,6 +41,10 @@ class SourcingForRoute(route: TypeValue) extends LazyLogging {
 
   def resolved(): Boolean = currentSource.nonEmpty
   def unused(): Boolean = currentSource.isEmpty && subscribersToRows.keyToVal.keySet.isEmpty
+
+  def serviceTargets: Seq[ManagedRouteSource] = {
+    currentSource.map(src => Seq(src)).getOrElse(Seq())
+  }
 
   def handleBatch(events: Seq[StreamEvent]): Unit = {
     logger.trace(s"Route $route handling batch $events")
