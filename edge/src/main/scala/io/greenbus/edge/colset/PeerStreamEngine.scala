@@ -272,7 +272,7 @@ object RouteManifestSet {
 
 trait StreamSource
 
-trait PeerSourceLink extends StreamSource {
+trait PeerLink extends StreamSource {
   def setSubscriptions(rows: Set[RowId]): Unit
 }
 
@@ -307,7 +307,7 @@ object RouteManifestEntry {
 }
 case class RouteManifestEntry(distance: Int)
 
-trait LocalGateway extends ManagedRouteSource with StreamSource
+trait LocalGateway extends ManagedRouteSource
 
 class LocalPeerRouteSource extends ManagedRouteSource {
   def updateRowsForRoute(route: TypeValue, rows: Set[TableRow]): Unit = {}
@@ -317,7 +317,7 @@ class LocalPeerRouteSource extends ManagedRouteSource {
 
 class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: LocalGateway) extends LazyLogging {
 
-  private val synthesizer = new SynthesizerTable
+  private val synthesizer = new SynthesizerTable[ManagedRouteSource]
 
   private val retailCacheTable = new RetailCacheTable
 
@@ -325,7 +325,7 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
   private var rowsForSub = Map.empty[SubscriptionTarget, Set[RowId]]
   private var routesForSource = Map.empty[ManagedRouteSource, Set[TypeValue]]
 
-  private var sourceMgrs = Map.empty[PeerSourceLink, PeerRouteSource]
+  private var sourceMgrs = Map.empty[PeerLink, PeerRouteSource]
 
   private val manifestDb = new LocalPeerManifestDb(selfSession)
 
@@ -433,21 +433,22 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
 
     manifest component just another subscriber, do event before commit to subscribers?
    */
-  def peerSourceEvents(link: PeerSourceLink, events: Seq[StreamEvent]): Unit = {
+  def peerSourceEvents(link: PeerLink, events: Seq[StreamEvent]): Unit = {
     logger.trace(s"$logId peer source events $events")
-    val emitted = synthesizer.handleBatch(link, events)
-    logger.trace(s"$logId peer source events synthesized: $emitted")
+    sourceMgrs.get(link) match {
+      case None => logger.warn(s"$logId no source manager for link: $link")
+      case Some(mgr) =>
 
-    val manifestEvents = sourceMgrs.get(link) match {
-      case None =>
-        logger.warn(s"$logId no source manager for link: $link"); Seq()
-      case Some(mgr) => handleSourcingUpdate(mgr, emitted)
+        val emitted = synthesizer.handleBatch(mgr, events)
+        logger.trace(s"$logId peer source events synthesized: $emitted")
+
+        val manifestEvents = handleSourcingUpdate(mgr, emitted)
+
+        handleRetailEvents(manifestEvents ++ emitted)
     }
-
-    handleRetailEvents(manifestEvents ++ emitted)
   }
 
-  def peerSourceConnected(peerSessionId: PeerSessionId, link: PeerSourceLink): Unit = {
+  def peerSourceConnected(peerSessionId: PeerSessionId, link: PeerLink): Unit = {
     logger.debug(s"$logId source connected: $peerSessionId")
     sourceMgrs.get(link) match {
       case None => {
@@ -460,24 +461,24 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
     }
   }
 
-  def sourceDisconnected(link: PeerSourceLink): Unit = {
+  def sourceDisconnected(link: PeerLink): Unit = {
+    sourceMgrs.get(link) match {
+      case None => logger.warn(s"$logId no source manager for link: $link")
+      case Some(mgr) => {
+        sourceMgrs -= link
 
-    val sourcingEvents = sourceMgrs.get(link) match {
-      case None => Seq()
-      case Some(mgr) =>
         val routes = routesForSource.getOrElse(mgr, Set())
         val unresolvedEvents = routes.flatMap(removeSourceForRoute(mgr, _)).toVector
         routesForSource -= mgr
         val manifestEvents = manifestDb.routesUpdated(routes, routeSourcingMap)
 
-        unresolvedEvents ++ manifestEvents
+        val sourcingEvents = unresolvedEvents ++ manifestEvents
+
+        val emitted = synthesizer.sourceRemoved(mgr)
+        logger.debug(s"$logId source removed sourcing events: $sourcingEvents, emitted events: $emitted")
+        handleRetailEvents(sourcingEvents ++ emitted)
+      }
     }
-
-    sourceMgrs -= link
-
-    val emitted = synthesizer.sourceRemoved(link)
-    logger.debug(s"$logId source removed sourcing events: $sourcingEvents, emitted events: $emitted")
-    handleRetailEvents(sourcingEvents ++ emitted)
   }
 
   // - sub appears: resolve routes, enqueue unresolved or add subscription to a source

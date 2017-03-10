@@ -67,7 +67,7 @@ trait MockSubscriber extends SubscriptionTarget with LazyLogging {
 
 class SimpleMockSubscriber(val name: String) extends MockSubscriber
 
-class MockPeerSource(val name: String, val source: MockPeer, val target: MockPeer) extends MockSubscriber with PeerSourceLink with MockSource {
+class MockPeerSource(val name: String, val source: MockPeer, val target: MockPeer) extends MockSubscriber with PeerLink with MockSource {
 
   def pushSubs(): Unit = {
     subUpdates.foreach { rowSet =>

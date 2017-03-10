@@ -22,11 +22,11 @@ import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.collection.{ BiMultiMap, MapToUniqueValues }
 import scala.collection.mutable
 
-class SynthesizerTable extends LazyLogging {
-  private var routed = Map.empty[TypeValue, Map[TableRow, RowSynthesizer]]
-  private var sourceToRow = BiMultiMap.empty[StreamSource, RowId]
+class SynthesizerTable[Source] extends LazyLogging {
+  private var routed = Map.empty[TypeValue, Map[TableRow, RowSynthesizer[Source]]]
+  private var sourceToRow = BiMultiMap.empty[Source, RowId]
 
-  def handleBatch(sourceLink: StreamSource, events: Seq[StreamEvent]): Seq[StreamEvent] = {
+  def handleBatch(sourceLink: Source, events: Seq[StreamEvent]): Seq[StreamEvent] = {
     events.flatMap {
       case ev: RowAppendEvent => {
         val tableRow = ev.rowId.tableRow
@@ -66,7 +66,7 @@ class SynthesizerTable extends LazyLogging {
     }
   }
 
-  def sourceRemoved(sourceLink: StreamSource): Seq[StreamEvent] = {
+  def sourceRemoved(sourceLink: Source): Seq[StreamEvent] = {
     val results = sourceToRow.keyToVal.get(sourceLink) match {
       case None => Seq()
       case Some(rowSet) =>
@@ -81,13 +81,13 @@ class SynthesizerTable extends LazyLogging {
     results
   }
 
-  private def lookup(rowId: RowId): Option[RowSynthesizer] = {
+  private def lookup(rowId: RowId): Option[RowSynthesizer[Source]] = {
     routed.get(rowId.routingKey).flatMap { map =>
       map.get(rowId.tableRow)
     }
   }
 
-  private def addRouted(sourceLink: StreamSource, ev: RowAppendEvent, routingKey: TypeValue, existingRows: Map[TableRow, RowSynthesizer]): Seq[StreamEvent] = {
+  private def addRouted(sourceLink: Source, ev: RowAppendEvent, routingKey: TypeValue, existingRows: Map[TableRow, RowSynthesizer[Source]]): Seq[StreamEvent] = {
     ev.appendEvent match {
       case resync: ResyncSession =>
         RowSynthesizer.build(ev.rowId, sourceLink, resync.sessionId, resync.snapshot) match {
@@ -107,18 +107,18 @@ class SynthesizerTable extends LazyLogging {
 }
 
 object RowSynthesizer {
-  def build(rowId: RowId, initSource: StreamSource, initSess: PeerSessionId, snapshot: SetSnapshot): Option[(RowSynthesizer, Seq[AppendEvent])] = {
+  def build[Source](rowId: RowId, initSource: Source, initSess: PeerSessionId, snapshot: SetSnapshot): Option[(RowSynthesizer[Source], Seq[AppendEvent])] = {
     val logOpt = SessionRowLog.build(rowId, initSess, snapshot)
     logOpt.map { log =>
       val (events, db) = log.activate()
-      val synthesizer = new RowSynthesizerImpl(rowId, initSource, initSess, db)
+      val synthesizer = new RowSynthesizerImpl[Source](rowId, initSource, initSess, db)
       (synthesizer, events)
     }
   }
 }
-trait RowSynthesizer {
-  def append(source: StreamSource, event: AppendEvent): Seq[AppendEvent]
-  def sourceRemoved(source: StreamSource): Seq[AppendEvent]
+trait RowSynthesizer[Source] {
+  def append(source: Source, event: AppendEvent): Seq[AppendEvent]
+  def sourceRemoved(source: Source): Seq[AppendEvent]
 }
 
 /*
@@ -131,15 +131,15 @@ three modes a session can be in:
 
  */
 // TODO: emit desync when no sources left
-class RowSynthesizerImpl(rowId: RowId, initSource: StreamSource, initSess: PeerSessionId, initMgr: SessionSynthesizingFilter) extends RowSynthesizer with LazyLogging {
+class RowSynthesizerImpl[Source](rowId: RowId, initSource: Source, initSess: PeerSessionId, initMgr: SessionSynthesizingFilter) extends RowSynthesizer[Source] with LazyLogging {
 
   private var activeSession: PeerSessionId = initSess
   private var activeDb: SessionSynthesizingFilter = initMgr
   private var standbySessions = Map.empty[PeerSessionId, SessionRowLog]
-  private var sessionToSources: MapToUniqueValues[PeerSessionId, StreamSource] = MapToUniqueValues((initSess, initSource))
-  private def sourceToSession: Map[StreamSource, PeerSessionId] = sessionToSources.valToKey
+  private var sessionToSources: MapToUniqueValues[PeerSessionId, Source] = MapToUniqueValues((initSess, initSource))
+  private def sourceToSession: Map[Source, PeerSessionId] = sessionToSources.valToKey
 
-  def append(source: StreamSource, event: AppendEvent): Seq[AppendEvent] = {
+  def append(source: Source, event: AppendEvent): Seq[AppendEvent] = {
     event match {
       case delta: StreamDelta => {
         sourceToSession.get(source) match {
@@ -242,7 +242,7 @@ class RowSynthesizerImpl(rowId: RowId, initSource: StreamSource, initSess: PeerS
     }
   }
 
-  def sourceRemoved(source: StreamSource): Seq[AppendEvent] = {
+  def sourceRemoved(source: Source): Seq[AppendEvent] = {
 
     val prevSessOpt = sourceToSession.get(source)
     sessionToSources = sessionToSources.remove(source)

@@ -39,7 +39,7 @@ object PeerRouteSource {
     Set(peerRouteRow(peerId) /*, peerIndexRow(peerId)*/ )
   }
 }
-class PeerRouteSource(peerId: PeerSessionId, source: PeerSourceLink) extends ManagedRouteSource with LazyLogging {
+class PeerRouteSource(peerId: PeerSessionId, source: PeerLink) extends ManagedRouteSource with LazyLogging {
 
   private val routeRow = PeerRouteSource.peerRouteRow(peerId)
   private val indexRow = PeerRouteSource.peerIndexRow(peerId)
