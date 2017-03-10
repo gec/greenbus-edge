@@ -89,6 +89,9 @@ class RawUserKeyedSetImpl extends RawUserKeyedSet with LazyLogging {
           }
       }
 
+      last = updated
+      updatedOpt = None
+
       KeyedSetDiff(updated, removed, added.result().toSet, modified.result().toSet)
     }
   }

@@ -379,7 +379,7 @@ class PeerRouteSource(peerId: PeerSessionId, source: PeerSourceLink) extends Rou
       case RowAppendEvent(row, ev) =>
         row match {
           case `routeRow` => routeLog.handle(Seq(ev))
-          case `indexRow` =>
+          //case `indexRow` =>
           case other => logger.debug(s"Unexpected row in $peerId manifest events: $other")
         }
       case sev =>
@@ -621,7 +621,7 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
       diffOpt match {
         case None => Seq()
         case Some(diff) =>
-          val removeEvents = diff.removed.flatMap(removeSourceForRoute(mgr, _))
+          val removeEvents = diff.removed.flatMap(removeSourceForRoute(mgr, _)).toVector
 
           val updates = diff.added ++ diff.modified
           updates.foreach {
@@ -631,7 +631,9 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
           routesForSource += (mgr -> diff.snapshot.keySet)
 
           val allUpdated = diff.removed ++ diff.modified.map(_._1) ++ diff.added.map(_._1)
-          manifestDb.routesUpdated(allUpdated, routeSourcingMap)
+          val manifestUpdates = manifestDb.routesUpdated(allUpdated, routeSourcingMap)
+
+          removeEvents ++ manifestUpdates
       }
     } else {
       Seq()
@@ -741,7 +743,7 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
     sourceMgrs -= link
 
     val emitted = synthesizer.sourceRemoved(link)
-    logger.debug(s"$logId source removed emitted events: $emitted")
+    logger.debug(s"$logId source removed sourcing events: $sourcingEvents, emitted events: $emitted")
     handleRetailEvents(sourcingEvents ++ emitted)
   }
 

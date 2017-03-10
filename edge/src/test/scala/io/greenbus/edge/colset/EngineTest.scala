@@ -192,6 +192,10 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
     }
   }
 
+  def matchEventBatches(sub: MockSubscriber, batches: Seq[StreamEvent]*): Unit = {
+    sub.batches.toSet shouldEqual batches.toSet
+  }
+
   def matchAndPushEventBatches(sub: MockPeerSource, batches: Seq[StreamEvent]*): Unit = {
     matchEventBatches(sub, batches: _*)
     sub.batches.foreach(batch => sub.target.engine.peerSourceEvents(sub, batch))
@@ -201,10 +205,6 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
   def matchAndClearEventBatches(sub: MockSubscriber, batches: Seq[StreamEvent]*): Unit = {
     sub.batches shouldEqual batches
     sub.batches.clear()
-  }
-
-  def matchEventBatches(sub: MockSubscriber, batches: Seq[StreamEvent]*): Unit = {
-    sub.batches shouldEqual batches
   }
 
   def matchSourceUpdate(source: MockSource, updates: Set[RowId]*): Unit = {
@@ -257,6 +257,15 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
 
   import MockData._
 
+  /*
+     src
+      |
+      A
+    B   C
+      D
+      |
+     sub
+   */
   class FourPeerScenario {
 
     val route1 = new SimpleRoute
@@ -391,7 +400,7 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
     checkAllClear()
   }
 
-  test("four peer scenario, reconfigure before second batch") {
+  test("four peer scenario, nodes killed, reconfigure before second batch") {
 
     val s = new FourPeerScenario
     import s._
@@ -415,7 +424,7 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
     transferAtoBtoD(firstBatch)
     checkAllClear()
 
-    // Disconnect B
+    // Kill B
     logger.info("Removing B")
     peerA.engine.subscriberRemoved(aToB)
     matchAndClearGatewayUpdate(peerA.gateway, (route1.route, Set()))
@@ -453,12 +462,90 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
     checkLinksClear()
     matchAndClearEventBatches(subQ, batch)
 
-    // Disconnect C
+    // Kill C
     logger.info("Removing C")
     peerA.engine.subscriberRemoved(aToC)
     matchAndClearGatewayUpdate(peerA.gateway, (route1.route, Set()))
     checkAllClear()
     peerD.engine.sourceDisconnected(cToD)
+
+    matchAndClearEventBatches(subQ, Seq(RouteUnresolved(route1.route)))
+  }
+
+  test("four peer scenario, middle nodes have connectivity to A cut") {
+
+    val s = new FourPeerScenario
+    import s._
+
+    checkAllClear()
+
+    attachRoute1ToAAndPropagate()
+
+    checkAllClear()
+
+    // Now subscribe
+    peerD.engine.subscriptionsRegistered(subQ, StreamSubscriptionParams(route1.rows))
+
+    matchAndPushSourceUpdate(bToD, route1.rowSet ++ Set(bToD.source.routeRow))
+    matchAndPushSourceUpdate(aToB, route1.rowSet ++ Set(aToB.source.routeRow))
+
+    checkLinksClear()
+    matchAndClearGatewayUpdate(peerA.gateway, route1.routeToTableRows)
+
+    val firstBatch = route1.firstBatch(peerA.session)
+    transferAtoBtoD(firstBatch)
+    checkAllClear()
+
+    // Disconnect A <-> B
+    logger.info("Removing B")
+    peerA.engine.subscriberRemoved(aToB)
+    matchAndClearGatewayUpdate(peerA.gateway, (route1.route, Set()))
+    checkAllClear()
+    peerB.engine.sourceDisconnected(aToB)
+
+    matchAndPushEventBatches(bToD, Seq(RouteUnresolved(route1.route)), Seq(rowAppend(bToD.source.routeRow, manifestUpdate(2, Set(route1.route), Set(), Set()))))
+
+    checkSubsClear()
+
+    // Reorganization: D subscribes to C, C subscribes to A
+    matchAndPushSourceUpdate(cToD, route1.rowSet ++ Set(cToD.source.routeRow))
+    matchAndPushSourceUpdate(aToC, route1.rowSet ++ Set(aToC.source.routeRow))
+
+    matchAndClearGatewayUpdate(peerA.gateway, route1.routeToTableRows)
+
+    // This should be filtered by the synthesizer, so below in aToC we have one batch caused by source update above
+    peerA.engine.localGatewayEvents(None, firstBatch)
+
+    // Resync: C must get resynced, then forwards to D who squelches it before it goes to the subscriber, since it's not new
+    matchAndPushEventBatches(aToC, firstBatch)
+    matchAndPushEventBatches(cToD, firstBatch)
+
+    checkAllClear()
+
+    // Transfer A to C to D
+    val batch = route1.secondBatch()
+    peerA.engine.localGatewayEvents(None, batch)
+
+    Seq(aToB, bToD, cToD).foreach(checkLinkClear)
+    checkGatewaysClear()
+    matchAndPushEventBatches(aToC, batch)
+
+    Seq(aToB, aToC, bToD).foreach(checkLinkClear)
+    checkGatewaysClear()
+    matchAndPushEventBatches(cToD, batch)
+
+    checkGatewaysClear()
+    checkLinksClear()
+    matchAndClearEventBatches(subQ, batch)
+
+    // Disconnect A <-> C
+    logger.info("Removing C")
+    peerA.engine.subscriberRemoved(aToC)
+    matchAndClearGatewayUpdate(peerA.gateway, (route1.route, Set()))
+    checkAllClear()
+    peerC.engine.sourceDisconnected(aToC)
+
+    matchAndPushEventBatches(cToD, Seq(RouteUnresolved(route1.route)), Seq(rowAppend(cToD.source.routeRow, manifestUpdate(2, Set(route1.route), Set(), Set()))))
 
     matchAndClearEventBatches(subQ, Seq(RouteUnresolved(route1.route)))
   }
