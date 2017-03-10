@@ -774,7 +774,6 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
         routeSourcingMgr
       })
 
-      // TODO: these two calls need to be merged for one transactional subscription update
       if (removes.nonEmpty || adds.nonEmpty) {
         sourcing.modifySubscription(subscriber, removes, adds)
       }

@@ -85,9 +85,9 @@ object MockPeer {
     mps
   }
 }
-class MockPeer(val name: String) {
+class MockPeer(val name: String, sessionOpt: Option[PeerSessionId] = None) {
   val gateway = new MockGateway
-  val session: PeerSessionId = Helpers.sessId
+  val session: PeerSessionId = sessionOpt.getOrElse(Helpers.sessId)
   val engine = new PeerStreamEngine(name, session, gateway)
 
   def routeRow: RowId = {
@@ -106,18 +106,18 @@ class SimpleRoute {
 
   def routeToTableRows: (TypeValue, Set[TableRow]) = route -> tableRowsSet
 
-  def firstBatch(session: PeerSessionId): Seq[RowAppendEvent] = {
+  def firstBatch(session: PeerSessionId, n: Int = 0): Seq[RowAppendEvent] = {
     Seq(
-      RowAppendEvent(row1, ResyncSession(session, ModifiedSetSnapshot(UInt64Val(0), Set(UInt64Val(5), UInt64Val(3))))),
-      RowAppendEvent(row2, ResyncSession(session, ModifiedKeyedSetSnapshot(UInt64Val(0), Map(UInt64Val(3) -> UInt64Val(9))))),
-      RowAppendEvent(row3, ResyncSession(session, AppendSetSequence(Seq(AppendSetValue(UInt64Val(0), UInt64Val(66)))))))
+      RowAppendEvent(row1, ResyncSession(session, ModifiedSetSnapshot(UInt64Val(0), Set(UInt64Val(5 + n), UInt64Val(3 + n))))),
+      RowAppendEvent(row2, ResyncSession(session, ModifiedKeyedSetSnapshot(UInt64Val(0), Map(UInt64Val(3 + n) -> UInt64Val(9 + n))))),
+      RowAppendEvent(row3, ResyncSession(session, AppendSetSequence(Seq(AppendSetValue(UInt64Val(0), UInt64Val(66 + n)))))))
   }
 
-  def secondBatch(): Seq[RowAppendEvent] = {
+  def secondBatch(n: Int = 0): Seq[RowAppendEvent] = {
     Seq(
-      RowAppendEvent(row1, StreamDelta(ModifiedSetDelta(UInt64Val(1), Set(UInt64Val(5)), Set(UInt64Val(7))))),
-      RowAppendEvent(row2, StreamDelta(ModifiedKeyedSetDelta(UInt64Val(1), Set(), Set(UInt64Val(4) -> UInt64Val(55)), Set(UInt64Val(3) -> UInt64Val(8))))),
-      RowAppendEvent(row3, StreamDelta(AppendSetSequence(Seq(AppendSetValue(UInt64Val(1), UInt64Val(77)))))))
+      RowAppendEvent(row1, StreamDelta(ModifiedSetDelta(UInt64Val(1), Set(UInt64Val(5 + n)), Set(UInt64Val(7 + n))))),
+      RowAppendEvent(row2, StreamDelta(ModifiedKeyedSetDelta(UInt64Val(1), Set(), Set(UInt64Val(4) -> UInt64Val(55 + n)), Set(UInt64Val(3 + n) -> UInt64Val(8 + n))))),
+      RowAppendEvent(row3, StreamDelta(AppendSetSequence(Seq(AppendSetValue(UInt64Val(1), UInt64Val(77 + n)))))))
   }
 }
 
@@ -257,41 +257,11 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
 
   import MockData._
 
-  /*
-     src
-      |
-      A
-    B   C
-      D
-      |
-     sub
-   */
-  class FourPeerScenario {
+  trait Scenario {
 
-    val route1 = new SimpleRoute
-    val subQ = new SimpleMockSubscriber("subQ")
-
-    val peerA = new MockPeer("A")
-    val peerB = new MockPeer("B")
-    val peerC = new MockPeer("C")
-    val peerD = new MockPeer("D")
-
-    val aToB = MockPeer.subscribe("AtoB", peerA, peerB)
-    val aToC = MockPeer.subscribe("AtoC", peerA, peerC)
-    val bToD = MockPeer.subscribe("BtoD", peerB, peerD)
-    val cToD = MockPeer.subscribe("CtoD", peerC, peerD)
-
-    val peers = Seq(peerA, peerB, peerC, peerD)
-    val links = Seq(aToB, aToC, bToD, cToD)
-    val subs = Seq(subQ)
-
-    // Manifest subscriptions
-    links.foreach(l => matchAndPushSourceUpdate(l, manifestRowsForPeer(l.source.session)))
-
-    // Manifest updates
-    links.foreach { l =>
-      matchAndPushEventBatches(l, Seq(rowAppend(l.source.routeRow, sessResyncManifest(l.source.session, 0, Map()))))
-    }
+    def peers: Seq[MockPeer]
+    def links: Seq[MockPeerSource]
+    def subs: Seq[SimpleMockSubscriber]
 
     def checkAllClear(): Unit = {
       checkLinksClear()
@@ -315,6 +285,52 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
     }
     def checkSubsClear(): Unit = {
       subs.foreach(checkSubClear)
+    }
+  }
+
+  /*
+     src
+      |
+      A
+    B   C
+      D
+      |
+     sub
+   */
+  trait BaseFourPeers extends Scenario {
+
+    val route1 = new SimpleRoute
+    val subQ = new SimpleMockSubscriber("subQ")
+
+    val peerA = new MockPeer("A")
+    val peerB = new MockPeer("B")
+    val peerC = new MockPeer("C")
+    val peerD = new MockPeer("D")
+
+    val peers = Seq(peerA, peerB, peerC, peerD)
+    val subs = Seq(subQ)
+  }
+
+  class ConnectedFourPeers extends BaseFourPeers {
+
+    val aToB = MockPeer.subscribe("AtoB", peerA, peerB)
+    val aToC = MockPeer.subscribe("AtoC", peerA, peerC)
+    val bToD = MockPeer.subscribe("BtoD", peerB, peerD)
+    val cToD = MockPeer.subscribe("CtoD", peerC, peerD)
+
+    val links = Seq(aToB, aToC, bToD, cToD)
+
+    initialLinkExchanges(links)
+
+    def initialLinkExchanges(links: Seq[MockPeerSource]): Unit = {
+
+      // Manifest subscriptions
+      links.foreach(l => matchAndPushSourceUpdate(l, manifestRowsForPeer(l.source.session)))
+
+      // Manifest updates
+      links.foreach { l =>
+        matchAndPushEventBatches(l, Seq(rowAppend(l.source.routeRow, sessResyncManifest(l.source.session, 0, Map()))))
+      }
     }
 
     def attachRoute1ToAAndPropagate(): Unit = {
@@ -348,7 +364,7 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
 
   test("four peer scenario, subscribe before source arrives") {
 
-    val s = new FourPeerScenario
+    val s = new ConnectedFourPeers
     import s._
 
     checkAllClear()
@@ -375,7 +391,7 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
 
   test("four peer scenario, source arrives then subscribe") {
 
-    val s = new FourPeerScenario
+    val s = new ConnectedFourPeers
     import s._
 
     checkAllClear()
@@ -402,7 +418,7 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
 
   test("four peer scenario, nodes killed, reconfigure before second batch") {
 
-    val s = new FourPeerScenario
+    val s = new ConnectedFourPeers
     import s._
 
     checkAllClear()
@@ -474,7 +490,7 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
 
   test("four peer scenario, middle nodes have connectivity to A cut") {
 
-    val s = new FourPeerScenario
+    val s = new ConnectedFourPeers
     import s._
 
     checkAllClear()
@@ -549,4 +565,260 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
 
     matchAndClearEventBatches(subQ, Seq(RouteUnresolved(route1.route)))
   }
+  /*
+  class ReplaceableAFourPeers extends Scenario {
+
+    val route1 = new SimpleRoute
+    val subQ = new SimpleMockSubscriber("subQ")
+
+    //val peerA = new MockPeer("A")
+    val peerB = new MockPeer("B")
+    val peerC = new MockPeer("C")
+    val peerD = new MockPeer("D")
+
+    val bToD = MockPeer.subscribe("BtoD", peerB, peerD)
+    val cToD = MockPeer.subscribe("CtoD", peerC, peerD)
+
+    val peers = Seq(peerB, peerC, peerD)
+    val links = Seq(bToD, cToD)
+    val subs = Seq(subQ)
+
+    // Manifest subscriptions
+    links.foreach(l => matchAndPushSourceUpdate(l, manifestRowsForPeer(l.source.session)))
+
+    // Manifest updates
+    links.foreach { l =>
+      matchAndPushEventBatches(l, Seq(rowAppend(l.source.routeRow, sessResyncManifest(l.source.session, 0, Map()))))
+    }
+  }*/
+
+  /*abstract class SubScenario(base: Scenario) extends Scenario {
+    protected var subPeers = Vector.empty[MockPeer]
+    protected var subLinks = Vector.empty[MockPeerSource]
+    protected var subSubs = Vector.empty[SimpleMockSubscriber]
+
+    protected def peer(name: String, sessionId: Option[PeerSessionId] = None): MockPeer = {
+      val p = new MockPeer(name, sessionId)
+      subPeers :+= p
+      p
+    }
+    protected def subscribe(name: String, source: MockPeer, target: MockPeer): MockPeerSource = {
+      val l = MockPeer.subscribe("BtoD", source, target)
+      subLinks :+= l
+      l
+    }
+
+    def peers: Seq[MockPeer] = subPeers ++ base.peers
+
+    def links: Seq[MockPeerSource] = subLinks ++ base.links
+
+    def subs: Seq[SimpleMockSubscriber] = subSubs ++ base.subs
+
+    def pushLinking(): Unit = {
+      subLinks.foreach(l => matchAndPushSourceUpdate(l, manifestRowsForPeer(l.source.session)))
+
+      subLinks.foreach { l =>
+        matchAndPushEventBatches(l, Seq(rowAppend(l.source.routeRow, sessResyncManifest(l.source.session, 0, Map()))))
+      }
+    }
+  }
+
+
+  class SubScenario(base: Scenario) extends Scenario {
+    protected var subPeers = Vector.empty[MockPeer]
+    protected var subLinks = Vector.empty[MockPeerSource]
+    protected var subSubs = Vector.empty[SimpleMockSubscriber]
+
+    def peer(name: String, sessionId: Option[PeerSessionId] = None): MockPeer = {
+      val p = new MockPeer(name, sessionId)
+      subPeers :+= p
+      p
+    }
+    def subscribe(name: String, source: MockPeer, target: MockPeer): MockPeerSource = {
+      val l = MockPeer.subscribe("BtoD", source, target)
+      subLinks :+= l
+      l
+    }
+
+    def peers: Seq[MockPeer] = subPeers ++ base.peers
+
+    def links: Seq[MockPeerSource] = subLinks ++ base.links
+
+    def subs: Seq[SimpleMockSubscriber] = subSubs ++ base.subs
+
+  }
+  */
+
+  class ReplaceableFourPeers extends ConnectedFourPeers {
+
+    protected var subPeers = Vector.empty[MockPeer]
+    protected var subLinks = Vector.empty[MockPeerSource]
+    protected var subSubs = Vector.empty[SimpleMockSubscriber]
+
+    def peer(name: String, sessionId: Option[PeerSessionId] = None): MockPeer = {
+      val p = new MockPeer(name, sessionId)
+      subPeers :+= p
+      p
+    }
+    def subscribe(name: String, source: MockPeer, target: MockPeer): MockPeerSource = {
+      val l = MockPeer.subscribe(name, source, target)
+      subLinks :+= l
+      l
+    }
+
+    def transferAtoBtoDtoSub(peerA: MockPeer, aToB: MockPeerSource, aToC: MockPeerSource, batch: Seq[RowAppendEvent]): Unit = {
+      peerA.engine.localGatewayEvents(None, batch)
+
+      Seq(aToC, bToD, cToD).foreach(checkLinkClear)
+      checkGatewaysClear()
+      matchAndPushEventBatches(aToB, batch)
+
+      Seq(aToB, aToC, cToD).foreach(checkLinkClear)
+      checkGatewaysClear()
+      matchAndPushEventBatches(bToD, batch)
+
+      checkGatewaysClear()
+      checkLinksClear()
+      matchAndClearEventBatches(subQ, batch)
+    }
+
+    def transferAtoBtoDOnly(peerA: MockPeer, aToB: MockPeerSource, aToC: MockPeerSource, batch: Seq[RowAppendEvent]): Unit = {
+      peerA.engine.localGatewayEvents(None, batch)
+
+      Seq(aToC, bToD, cToD).foreach(checkLinkClear)
+      checkGatewaysClear()
+      matchAndPushEventBatches(aToB, batch)
+
+      Seq(aToB, aToC, cToD).foreach(checkLinkClear)
+      checkGatewaysClear()
+      matchAndPushEventBatches(bToD, batch)
+
+      checkAllClear()
+    }
+
+    override def checkLinksClear(): Unit = (this.links ++ subLinks).foreach(checkLinkClear)
+
+    def twoBatchStartingSequence(): Unit = {
+
+      // Attach route
+      peerA.engine.localGatewayEvents(Some(Set(route1.route)), Seq())
+
+      Seq(aToB, aToC).foreach { l =>
+        matchAndPushEventBatches(l, Seq(rowAppend(l.source.routeRow, manifestUpdate(1, Set(), Set((route1.route, 0)), Set()))))
+      }
+
+      Seq(bToD, cToD).foreach { l =>
+        matchAndPushEventBatches(l, Seq(rowAppend(l.source.routeRow, manifestUpdate(1, Set(), Set((route1.route, 1)), Set()))))
+      }
+
+      checkAllClear()
+
+      // Now subscribe
+      peerD.engine.subscriptionsRegistered(subQ, StreamSubscriptionParams(route1.rows))
+
+      matchAndPushSourceUpdate(bToD, route1.rowSet ++ Set(bToD.source.routeRow))
+      matchAndPushSourceUpdate(aToB, route1.rowSet ++ Set(aToB.source.routeRow))
+
+      checkLinksClear()
+      matchAndClearGatewayUpdate(peerA.gateway, route1.routeToTableRows)
+
+      transferAtoBtoDtoSub(peerA, aToB, aToC, route1.firstBatch(peerA.session, n = 1))
+      transferAtoBtoDtoSub(peerA, aToB, aToC, route1.secondBatch(n = 1))
+    }
+  }
+
+  test("A reboots, sessions are synthesized after timeout") {
+
+    val s = new ReplaceableFourPeers
+    import s._
+
+    twoBatchStartingSequence()
+
+    // PeerA1 is dead but not disconnected (yet)
+    val peerA2 = peer("A2")
+    val a2ToB = subscribe("A2toB", peerA2, peerB)
+    matchAndPushSourceUpdate(a2ToB, manifestRowsForPeer(a2ToB.source.session))
+    matchAndPushEventBatches(a2ToB, Seq(rowAppend(a2ToB.source.routeRow, sessResyncManifest(a2ToB.source.session, 0, Map()))))
+
+    peerA2.engine.localGatewayEvents(Some(Set(route1.route)), Seq())
+
+    matchAndPushEventBatches(a2ToB, Seq(rowAppend(a2ToB.source.routeRow, manifestUpdate(1, Set(), Set((route1.route, 0)), Set()))))
+
+    checkAllClear()
+
+    peerB.engine.sourceDisconnected(aToB)
+
+    matchAndPushSourceUpdate(a2ToB, route1.rowSet ++ Set(a2ToB.source.routeRow))
+    matchAndClearGatewayUpdate(peerA2.gateway, route1.routeToTableRows)
+
+    checkAllClear()
+
+    val a2batch = route1.firstBatch(peerA2.session, n = 2)
+    transferAtoBtoDtoSub(peerA2, a2ToB, aToC, a2batch)
+
+    checkAllClear()
+  }
+
+  /*test("A reboots, session is replaced due to ordering") {
+
+    val s = new ReplaceableFourPeers
+    import s._
+
+    twoBatchStartingSequence()
+
+    // PeerA1 is dead but not disconnected (yet)
+    val peerA2 = peer("A2", sessionId = Some(peerA.session.copy(instanceId = 1)))
+    val a2ToB = subscribe("A2toB", peerA2, peerB)
+    matchAndPushSourceUpdate(a2ToB, manifestRowsForPeer(a2ToB.source.session))
+    matchAndPushEventBatches(a2ToB, Seq(rowAppend(a2ToB.source.routeRow, sessResyncManifest(a2ToB.source.session, 0, Map()))))
+
+    peerA2.engine.localGatewayEvents(Some(Set(route1.route)), Seq())
+
+    matchAndPushEventBatches(a2ToB, Seq(rowAppend(a2ToB.source.routeRow, manifestUpdate(1, Set(), Set((route1.route, 0)), Set()))))
+
+    matchAndPushSourceUpdate(a2ToB, route1.rowSet ++ Set(a2ToB.source.routeRow))
+    matchAndClearGatewayUpdate(peerA2.gateway, route1.routeToTableRows)
+
+    checkAllClear()
+
+    val a2batch = route1.firstBatch(peerA2.session, n = 2)
+    transferAtoBtoDtoSub(peerA2, a2ToB, aToC, a2batch)
+
+    checkAllClear()
+
+  }*/
+
+  /*test("A reboots twice, sessions are synthesized once singular") {
+
+    val s = new ReplaceableFourPeers
+    import s._
+
+    twoBatchStartingSequence()
+
+    def peerAStartupSequence(peerAX: MockPeer, axToB: MockPeerSource): Unit = {
+
+      matchAndPushSourceUpdate(axToB, manifestRowsForPeer(axToB.source.session))
+      matchAndPushEventBatches(axToB, Seq(rowAppend(axToB.source.routeRow, sessResyncManifest(axToB.source.session, 0, Map()))))
+
+      peerAX.engine.localGatewayEvents(Some(Set(route1.route)), Seq())
+
+      matchAndPushEventBatches(axToB, Seq(rowAppend(axToB.source.routeRow, manifestUpdate(1, Set(), Set((route1.route, 0)), Set()))))
+
+      checkAllClear()
+    }
+
+    // PeerA1 is dead but not disconnected (yet)
+    val peerA2 = peer("A2")
+    val a2ToB = subscribe("A2toB", peerA2, peerB)
+    peerAStartupSequence(peerA2, a2ToB)
+
+    val peerA3 = peer("A3")
+    val a3toB = subscribe("A3toB", peerA3, peerB)
+    peerAStartupSequence(peerA3, a3toB)
+
+    logger.debug("Removing aToB")
+    peerB.engine.sourceDisconnected(aToB)
+
+    checkAllClear()
+  }*/
 }

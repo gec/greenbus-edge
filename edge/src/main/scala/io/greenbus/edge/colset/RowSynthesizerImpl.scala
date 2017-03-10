@@ -164,16 +164,7 @@ class RowSynthesizerImpl(rowId: RowId, initSource: StreamSource, initSess: PeerS
           case None =>
             logger.warn(s"$rowId got snapshot for inactive source link $initSource"); Seq()
           case Some(sess) => {
-            if (sess == activeSession) {
-              activeDb.handleResync(resync.snapshot)
-                .map(v => Seq(v)).getOrElse(Seq())
-            } else {
-              standbySessions.get(sess) match {
-                case None => logger.error(s"$rowId got delta for inactive source link $initSource")
-                case Some(log) => log.handleResync(resync.snapshot)
-              }
-              Seq()
-            }
+            snapshotForSession(sess, resync.snapshot)
           }
         }
       }
@@ -181,7 +172,10 @@ class RowSynthesizerImpl(rowId: RowId, initSource: StreamSource, initSess: PeerS
 
         // TODO: session succession logic by actually reading peer session id
         val prevSessOpt = sourceToSession.get(source)
-        sessionToSources = sessionToSources + (sessionResync.sessionId -> source)
+
+        if (!prevSessOpt.contains(sessionResync.sessionId)) {
+          sessionToSources = sessionToSources.remove(source) + (sessionResync.sessionId -> source)
+        }
 
         if (sessionResync.sessionId == activeSession) {
 
@@ -211,6 +205,19 @@ class RowSynthesizerImpl(rowId: RowId, initSource: StreamSource, initSess: PeerS
           activeSessionChangeCheck()
         }
       }
+    }
+  }
+
+  private def snapshotForSession(sess: PeerSessionId, snapshot: SetSnapshot): Seq[AppendEvent] = {
+    if (sess == activeSession) {
+      activeDb.handleResync(snapshot)
+        .map(v => Seq(v)).getOrElse(Seq())
+    } else {
+      standbySessions.get(sess) match {
+        case None => logger.error(s"$rowId got delta for inactive source link $initSource")
+        case Some(log) => log.handleResync(snapshot)
+      }
+      Seq()
     }
   }
 
