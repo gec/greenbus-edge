@@ -30,6 +30,7 @@ import io.greenbus.edge.{ CallMarshaller, ChannelDescriptor, EdgeChannelClient, 
 import org.apache.qpid.proton.engine.{ Receiver, _ }
 
 import scala.concurrent.{ Future, Promise }
+import scala.util.{ Success, Try }
 
 class DeliverySequencer {
   private var deliverySequence: Long = 0
@@ -48,6 +49,16 @@ class SentTransferDeliveryContext(promise: Promise[Boolean]) extends SenderDeliv
     if (!delivery.isSettled && delivery.remotelySettled()) {
       delivery.settle()
       promise.success(true)
+    }
+  }
+}
+
+class SentTransferDeliveryContextTry(handler: Try[Boolean] => Unit) extends SenderDeliveryContext with LazyLogging {
+  def onDelivery(s: Sender, delivery: Delivery): Unit = {
+    logger.trace("Got delivery update: " + delivery)
+    if (!delivery.isSettled && delivery.remotelySettled()) {
+      delivery.settle()
+      handler(Success(true))
     }
   }
 }

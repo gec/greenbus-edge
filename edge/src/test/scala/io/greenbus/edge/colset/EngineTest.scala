@@ -75,6 +75,8 @@ class MockPeerSource(val name: String, val source: MockPeer, val target: MockPee
     }
     subUpdates.clear()
   }
+
+  def issueServiceRequests(requests: Seq[ServiceRequest]): Unit = {}
 }
 
 object MockPeer {

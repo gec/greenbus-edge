@@ -16,7 +16,9 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.channel2
+package io.greenbus.edge.flow
+
+import scala.util.Try
 
 trait Handler[A] {
   def handle(obj: A): Unit
@@ -25,10 +27,22 @@ trait Source[A] {
   def bind(handler: Handler[A]): Unit
 }
 
+object Sink {
+  def apply[A](f: A => Unit) = {
+    new Sink[A] {
+      def push(obj: A): Unit = f(obj)
+    }
+  }
+}
 trait Sink[A] {
   def push(obj: A): Unit
 }
 
+object LatchSink {
+  def apply(f: () => Unit): LatchSink = {
+    () => f()
+  }
+}
 trait LatchSink {
   def apply(): Unit
 }
@@ -41,12 +55,16 @@ trait LatchSource {
   def bind(handler: LatchHandler): Unit
 }
 
+trait LatchSubscribable {
+  def subscribe(handler: LatchHandler): Closeable
+}
+
 trait Closeable {
   def close(): Unit
 }
 
 trait CloseObservable {
-  def onClose()
+  def onClose: LatchSubscribable
 }
 
 trait Responder[A, B] {
@@ -54,7 +72,7 @@ trait Responder[A, B] {
 }
 
 trait Sender[A, B] {
-  def send(obj: A, handleResponse: B => Unit): Unit
+  def send(obj: A, handleResponse: Try[B] => Unit): Unit
 }
 
 trait Receiver[A, B] {
@@ -64,15 +82,3 @@ trait Receiver[A, B] {
 trait SenderChannel[A, B] extends Sender[A, B] with Closeable with CloseObservable
 
 trait ReceiverChannel[A, B] extends Receiver[A, B] with Closeable with CloseObservable
-
-/*
-trait Receiver[A, B] {
-  def bind(responder: Responder[A, B]): Unit
-  def bindFunc(f: (A, Promise[B]) => Unit): Unit = {
-    bind(new Responder[A, B] {
-      def handle(obj: A, promise: Promise[B]): Unit = {
-        f(obj, promise)
-      }
-    })
-  }
-}*/

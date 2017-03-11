@@ -30,6 +30,7 @@ object RouteManifestSet {
 
 trait PeerLink {
   def setSubscriptions(rows: Set[RowId]): Unit
+  def issueServiceRequests(requests: Seq[ServiceRequest]): Unit
 }
 
 /*
