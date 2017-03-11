@@ -21,6 +21,7 @@ package io.greenbus.edge.colset
 import java.util.UUID
 
 import com.typesafe.scalalogging.LazyLogging
+import io.greenbus.edge.flow.Sink
 import org.junit.runner.RunWith
 import org.scalatest.{ FunSuite, Matchers }
 import org.scalatest.junit.JUnitRunner
@@ -43,10 +44,12 @@ class MockGateway extends LocalGateway with LazyLogging {
   def issueServiceRequests(requests: Seq[ServiceRequest]): Unit = {}
 }
 
-trait MockSource extends PeerLink with LazyLogging {
+trait MockSource extends RowSubscribable with LazyLogging {
   val name: String
 
   val subUpdates: mutable.Queue[Set[RowId]] = mutable.Queue.empty[Set[RowId]]
+
+  def subscriptions: Sink[Set[RowId]] = Sink(rows => setSubscriptions(rows))
 
   def setSubscriptions(rows: Set[RowId]): Unit = {
     logger.debug(s"$name source got push: " + rows + ", prev: " + subUpdates)
@@ -67,7 +70,7 @@ trait MockSubscriber extends SubscriptionTarget with LazyLogging {
 
 class SimpleMockSubscriber(val name: String) extends MockSubscriber
 
-class MockPeerSource(val name: String, val source: MockPeer, val target: MockPeer) extends MockSubscriber with PeerLink with MockSource {
+class MockPeerSource(val name: String, val source: MockPeer, val target: MockPeer) extends MockSubscriber with RowSubscribable with MockSource {
 
   def pushSubs(): Unit = {
     subUpdates.foreach { rowSet =>

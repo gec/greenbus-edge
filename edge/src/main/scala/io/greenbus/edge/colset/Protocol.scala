@@ -18,14 +18,7 @@
  */
 package io.greenbus.edge.colset
 
-import com.typesafe.scalalogging.LazyLogging
-
-import scala.collection.mutable
-
-case class ServiceRequest(row: RowId, value: TypeValue, correlation: TypeValue)
-case class ServiceResponse(row: RowId, value: TypeValue, correlation: TypeValue)
-
-trait ServiceIssuer {
-  def handleResponses(responses: Seq[ServiceResponse]): Unit
-}
-
+case class SubscriptionSetUpdate(rows: Set[RowId])
+case class EventBatch(events: Seq[StreamEvent])
+case class ServiceRequestBatch(requests: Seq[ServiceRequest])
+case class ServiceResponseBatch(responses: Seq[ServiceResponse])

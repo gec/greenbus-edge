@@ -199,7 +199,7 @@ abstract class CloseableChannel(ioThread: CallMarshaller, startOpen: Boolean, pa
   private var opened = startOpen
   private var userClosed = false
   //private val closeSink = LatchSink(handleUserClose)
-  protected val closeSource = new LocallyAppliedLatchSubscriptionSource(ioThread)
+  protected val closeSource = new LocallyAppliedLatchSubscribable(ioThread)
 
   protected def handleOpenTransition(): Unit
   protected def handleClosedBeforeOpen(): Unit

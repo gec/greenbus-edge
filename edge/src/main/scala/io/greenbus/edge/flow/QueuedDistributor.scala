@@ -50,24 +50,6 @@ class QueuedDistributor[A] extends Source[A] with Sink[A] {
   }
 }
 
-/*
-
-trait Responder[A, B] {
-  def handle(obj: A, respond: B => Unit)
-}
-
-trait Sender[A, B] {
-  def send(obj: A, handleResponse: B => Unit): Unit
-}
-
-trait Receiver[A, B] {
-  def bind(responder: Responder[A, B]): Unit
-}
-
-
-
- */
-
 object QueueingReceiverImpl {
   sealed trait State[A, B]
   case class Unopened[A, B](queue: ArrayBuffer[(A, B => Unit)]) extends State[A, B]
@@ -115,6 +97,28 @@ class SingleThreadedLatchSource extends LatchSource with LatchSink {
   }
 }
 
+class SingleThreadedLatchSubscribable extends LatchSubscribable with LatchSink {
+  private var latched = false
+  private var handlers = Set.empty[LatchHandler]
+
+  def subscribe(handler: LatchHandler): Closeable = {
+    handlers += handler
+    if (latched) handler.handle()
+    new Closeable {
+      def close(): Unit = {
+        handlers -= handler
+      }
+    }
+  }
+
+  def apply(): Unit = {
+    if (!latched) {
+      latched = true
+      handlers.foreach(_.handle())
+    }
+  }
+}
+
 class LocallyAppliedLatchSource(self: CallMarshaller) extends LatchSource with LatchSink {
   private var latched = false
   private var handlerOpt = Option.empty[LatchHandler]
@@ -135,7 +139,7 @@ class LocallyAppliedLatchSource(self: CallMarshaller) extends LatchSource with L
   }
 }
 
-class LocallyAppliedLatchSubscriptionSource(self: CallMarshaller) extends LatchSubscribable with LatchSink {
+class LocallyAppliedLatchSubscribable(self: CallMarshaller) extends LatchSubscribable with LatchSink {
   private var latched = false
   private var handlers = Set.empty[LatchHandler]
 

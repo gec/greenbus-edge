@@ -28,10 +28,10 @@ object RouteManifestSet {
   }
 }
 
-trait PeerLink {
+/*trait PeerLink {
   def setSubscriptions(rows: Set[RowId]): Unit
   def issueServiceRequests(requests: Seq[ServiceRequest]): Unit
-}
+}*/
 
 /*
 
@@ -77,7 +77,11 @@ trait RoutingManager {
   def routeToSourcing: Map[TypeValue, ServiceRouteProvider]
 }
 
-class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: LocalGateway) extends RoutingManager with LazyLogging {
+trait GatewayEventHandler {
+  def localGatewayEvents(routeUpdate: Option[Set[TypeValue]], events: Seq[StreamEvent]): Unit
+}
+
+class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: LocalGateway) extends RoutingManager with GatewayEventHandler with LazyLogging {
 
   private val synthesizer = new SynthesizerTable[ManagedRouteSource]
 
@@ -87,7 +91,7 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
   private var rowsForSub = Map.empty[SubscriptionTarget, Set[RowId]]
   private var routesForSource = Map.empty[ManagedRouteSource, Set[TypeValue]]
 
-  private var sourceMgrs = Map.empty[PeerLink, PeerRouteSource]
+  private var sourceMgrs = Map.empty[RowSubscribable, PeerRouteSource]
 
   private val manifestDb = new LocalPeerManifestDb(selfSession)
 
@@ -197,7 +201,7 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
 
     manifest component just another subscriber, do event before commit to subscribers?
    */
-  def peerSourceEvents(link: PeerLink, events: Seq[StreamEvent]): Unit = {
+  def peerSourceEvents(link: RowSubscribable, events: Seq[StreamEvent]): Unit = {
     logger.trace(s"$logId peer source events $events")
     sourceMgrs.get(link) match {
       case None => logger.warn(s"$logId no source manager for link: $link")
@@ -212,7 +216,7 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
     }
   }
 
-  def peerSourceConnected(peerSessionId: PeerSessionId, link: PeerLink): Unit = {
+  def peerSourceConnected(peerSessionId: PeerSessionId, link: RowSubscribable): Unit = {
     logger.debug(s"$logId source connected: $peerSessionId")
     sourceMgrs.get(link) match {
       case None => {
@@ -225,7 +229,7 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
     }
   }
 
-  def sourceDisconnected(link: PeerLink): Unit = {
+  def sourceDisconnected(link: RowSubscribable): Unit = {
     sourceMgrs.get(link) match {
       case None => logger.warn(s"$logId no source manager for link: $link")
       case Some(mgr) => {

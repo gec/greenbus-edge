@@ -35,6 +35,11 @@ trait ClientGatewaySourceProxyChannel extends ClientGatewaySourceProxy with Clos
 
 class Gateway extends LocalGateway {
 
+  /*private var handler = Option.empty[GatewayEventHandler]
+  def bindHandler(eventHandler: GatewayEventHandler): Unit = {
+    handler = Some(eventHandler)
+  }*/
+
   def handleClientOpened(proxy: ClientGatewaySourceProxy): Unit = {
     proxy.events.bind(ev => clientEvents(proxy, ev.routes, ev.events))
     proxy.responses.bind(resps => clientServiceResponses(proxy, resps))
@@ -45,7 +50,7 @@ class Gateway extends LocalGateway {
   }
 
   private def clientEvents(proxy: ClientGatewaySourceProxy, routeUpdate: Option[Set[TypeValue]], events: Seq[StreamEvent]): Unit = {
-
+    //handler.foreach(_.localGatewayEvents())
   }
 
   private def clientServiceResponses(proxy: ClientGatewaySourceProxy, responses: Seq[ServiceResponse]): Unit = {
@@ -57,20 +62,23 @@ class Gateway extends LocalGateway {
   def issueServiceRequests(requests: Seq[ServiceRequest]): Unit = ???
 }
 
-trait ServiceRequestTarget {
+trait RowSubscribable {
+  def subscriptions: Sink[Set[RowId]]
+}
+trait ServiceRequestable {
   def requests: Sink[Seq[ServiceRequest]]
+}
+trait EventSource {
+  def events: Source[Seq[StreamEvent]]
+}
+trait ResponseSource {
   def responses: Source[Seq[ServiceResponse]]
 }
 
-trait RoutesProvider extends ServiceRequestTarget {
-  def subscriptions: Sink[Set[RowId]]
-  def events: Source[Seq[StreamEvent]]
-}
+trait ServiceRequestTarget extends ServiceRequestable with ResponseSource
+trait StreamSource extends RowSubscribable with EventSource
 
-trait PeerLinkProxy extends ServiceRequestTarget {
-  def subscriptions: Sink[Set[RowId]]
-  def events: Source[Seq[StreamEvent]]
-}
+trait PeerLinkProxy extends StreamSource with ServiceRequestTarget
 
 trait ServiceRequestSource {
   def requests: Source[Seq[ServiceRequest]]
@@ -84,6 +92,26 @@ trait RoutesConsumer {
 
 trait SubscriberProxy extends RoutesConsumer
 
+trait PeerLinkProxyChannel extends PeerLinkProxy with Closeable with CloseObservable
+
 class PeerManager(logId: String, selfSession: PeerSessionId) {
+
+  private val gateway = new Gateway
+  private val streams = new PeerStreamEngine(logId, selfSession, gateway)
+  private val services = new PeerServiceEngine(logId, streams)
+
+  def peerOpened(peerSessionId: PeerSessionId, proxy: PeerLinkProxy): Unit = {
+    streams.peerSourceConnected(peerSessionId, proxy)
+    proxy.events.bind { events =>
+      streams.peerSourceEvents(proxy, events)
+    }
+    proxy.responses.bind { resps =>
+      services.handleResponses(resps)
+    }
+  }
+
+  def peerClosed(proxy: PeerLinkProxy): Unit = {
+    streams.sourceDisconnected(proxy)
+  }
 
 }
