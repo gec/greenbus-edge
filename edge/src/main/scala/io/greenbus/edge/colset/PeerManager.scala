@@ -18,7 +18,7 @@
  */
 package io.greenbus.edge.colset
 
-import io.greenbus.edge.flow.{ CloseObservable, Closeable, Sink, Source }
+import io.greenbus.edge.flow._
 
 trait StreamSubscribable {
   def subscriptions: Sink[Set[RowId]]
@@ -56,8 +56,8 @@ trait ServiceConsumer extends ServiceRequestSource with ServiceRespondable
 
 trait SubscriberProxy extends StreamConsumer with ServiceConsumer
 
-trait PeerLinkProxyChannel extends PeerLinkProxy with Closeable with CloseObservable
-trait SubscriberProxyChannel extends SubscriberProxy with Closeable with CloseObservable
+trait PeerLinkProxyChannel extends PeerLinkProxy with CloseableComponent
+trait SubscriberProxyChannel extends SubscriberProxy with CloseableComponent
 
 class PeerLinkShim(proxy: PeerLinkProxy) extends PeerLink {
   def setSubscriptions(rows: Set[RowId]): Unit = proxy.subscriptions.push(rows)

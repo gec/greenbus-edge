@@ -21,20 +21,18 @@ package io.greenbus.edge.colset.channel
 import io.greenbus.edge.colset._
 import io.greenbus.edge.flow._
 
-import scala.util.Try
-
-class PeerLinkProxyChannelImpl(
+class GatewayClientProxyChannelImpl(
     subChannel: SenderChannel[SubscriptionSetUpdate, Boolean],
-    eventChannel: ReceiverChannel[EventBatch, Boolean],
+    eventChannel: ReceiverChannel[GatewayClientEvents, Boolean],
     serviceRequestsChannel: SenderChannel[ServiceRequestBatch, Boolean],
-    serviceResponsesChannel: ReceiverChannel[ServiceResponseBatch, Boolean]) extends PeerLinkProxyChannel with CloseableChannelAggregate {
+    serviceResponsesChannel: ReceiverChannel[ServiceResponseBatch, Boolean]) extends GatewayClientProxyChannel with CloseableChannelAggregate {
 
   private val channels = Seq(subChannel, eventChannel, serviceRequestsChannel, serviceResponsesChannel)
   protected def closeables: Seq[CloseableComponent] = channels
 
   private val subSink = ChannelHelpers.bindSink(subChannel, { set: Set[RowId] => SubscriptionSetUpdate(set) })
 
-  private val eventDist = ChannelHelpers.bindDistributor(eventChannel, { msg: EventBatch => msg.events })
+  private val eventDist = ChannelHelpers.bindDistributor(eventChannel, { msg: GatewayClientEvents => GatewayEvents(msg.routesUpdate, msg.events) })
 
   private val requestSink = ChannelHelpers.bindSink(serviceRequestsChannel, { seq: Seq[ServiceRequest] => ServiceRequestBatch(seq) })
 
@@ -42,7 +40,7 @@ class PeerLinkProxyChannelImpl(
 
   def subscriptions: Sink[Set[RowId]] = subSink
 
-  def events: Source[Seq[StreamEvent]] = eventDist
+  def events: Source[GatewayEvents] = eventDist
 
   def requests: Sink[Seq[ServiceRequest]] = requestSink
 

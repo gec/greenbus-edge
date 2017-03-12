@@ -22,3 +22,5 @@ case class SubscriptionSetUpdate(rows: Set[RowId])
 case class EventBatch(events: Seq[StreamEvent])
 case class ServiceRequestBatch(requests: Seq[ServiceRequest])
 case class ServiceResponseBatch(responses: Seq[ServiceResponse])
+
+case class GatewayClientEvents(routesUpdate: Option[Set[TypeValue]], events: Seq[StreamEvent])

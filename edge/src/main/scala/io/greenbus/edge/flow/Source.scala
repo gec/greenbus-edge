@@ -67,6 +67,8 @@ trait CloseObservable {
   def onClose: LatchSubscribable
 }
 
+trait CloseableComponent extends Closeable with CloseObservable
+
 trait Responder[A, B] {
   def handle(obj: A, respond: B => Unit)
 }
@@ -79,6 +81,6 @@ trait Receiver[A, B] {
   def bind(responder: Responder[A, B]): Unit
 }
 
-trait SenderChannel[A, B] extends Sender[A, B] with Closeable with CloseObservable
+trait SenderChannel[A, B] extends Sender[A, B] with CloseableComponent
 
-trait ReceiverChannel[A, B] extends Receiver[A, B] with Closeable with CloseObservable
+trait ReceiverChannel[A, B] extends Receiver[A, B] with CloseableComponent

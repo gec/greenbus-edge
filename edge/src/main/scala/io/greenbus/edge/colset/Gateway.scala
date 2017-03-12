@@ -23,16 +23,20 @@ import io.greenbus.edge.flow._
 
 import scala.collection.mutable
 
-case class GatewayClientEvents(routes: Option[Set[TypeValue]], events: Seq[StreamEvent])
+trait GatewayProxy extends ServiceConsumer {
+  def subscriptions: Source[Set[RowId]]
+  def events: Sink[GatewayEvents]
+}
+trait GatewayProxyChannel extends GatewayProxy with CloseableComponent
 
 trait GatewayClientProxy extends ServiceProvider {
   def subscriptions: Sink[Set[RowId]]
-  def events: Source[GatewayClientEvents]
+  def events: Source[GatewayEvents]
 }
 
-trait GatewayClientProxyChannel extends GatewayClientProxy with Closeable with CloseObservable
+trait GatewayClientProxyChannel extends GatewayClientProxy with CloseableComponent
 
-case class GatewayEvents(routeUpdate: Option[Set[TypeValue]], events: Seq[StreamEvent])
+case class GatewayEvents(routesUpdate: Option[Set[TypeValue]], events: Seq[StreamEvent])
 class Gateway extends LocalGateway {
 
   private val clientToRoutes = OneToManyUniquely.empty[GatewayClientProxy, TypeValue]
@@ -45,7 +49,7 @@ class Gateway extends LocalGateway {
   def responses: Source[Seq[ServiceResponse]] = respDist
 
   def handleClientOpened(proxy: GatewayClientProxy): Unit = {
-    proxy.events.bind(ev => clientEvents(proxy, ev.routes, ev.events))
+    proxy.events.bind(ev => clientEvents(proxy, ev.routesUpdate, ev.events))
     proxy.responses.bind(resps => clientServiceResponses(proxy, resps))
   }
 

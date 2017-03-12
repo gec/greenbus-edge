@@ -23,29 +23,28 @@ import io.greenbus.edge.flow._
 
 import scala.util.Try
 
-class PeerLinkProxyChannelImpl(
-    subChannel: SenderChannel[SubscriptionSetUpdate, Boolean],
-    eventChannel: ReceiverChannel[EventBatch, Boolean],
-    serviceRequestsChannel: SenderChannel[ServiceRequestBatch, Boolean],
-    serviceResponsesChannel: ReceiverChannel[ServiceResponseBatch, Boolean]) extends PeerLinkProxyChannel with CloseableChannelAggregate {
+class SubscriberChannelProxyImpl(
+    subChannel: ReceiverChannel[SubscriptionSetUpdate, Boolean],
+    eventChannel: SenderChannel[EventBatch, Boolean],
+    serviceRequestsChannel: ReceiverChannel[ServiceRequestBatch, Boolean],
+    serviceResponsesChannel: SenderChannel[ServiceResponseBatch, Boolean]) extends SubscriberProxyChannel with CloseableChannelAggregate {
 
   private val channels = Seq(subChannel, eventChannel, serviceRequestsChannel, serviceResponsesChannel)
   protected def closeables: Seq[CloseableComponent] = channels
 
-  private val subSink = ChannelHelpers.bindSink(subChannel, { set: Set[RowId] => SubscriptionSetUpdate(set) })
+  private val subDist = ChannelHelpers.bindDistributor(subChannel, { msg: SubscriptionSetUpdate => msg.rows })
 
-  private val eventDist = ChannelHelpers.bindDistributor(eventChannel, { msg: EventBatch => msg.events })
+  private val eventSink = ChannelHelpers.bindSink(eventChannel, { seq: Seq[StreamEvent] => EventBatch(seq) })
 
-  private val requestSink = ChannelHelpers.bindSink(serviceRequestsChannel, { seq: Seq[ServiceRequest] => ServiceRequestBatch(seq) })
+  private val requestDist = ChannelHelpers.bindDistributor(serviceRequestsChannel, { msg: ServiceRequestBatch => msg.requests })
 
-  private val responseDist = ChannelHelpers.bindDistributor(serviceResponsesChannel, { msg: ServiceResponseBatch => msg.responses })
+  private val responseSink = ChannelHelpers.bindSink(serviceResponsesChannel, { seq: Seq[ServiceResponse] => ServiceResponseBatch(seq) })
 
-  def subscriptions: Sink[Set[RowId]] = subSink
+  def subscriptions: Source[Set[RowId]] = subDist
 
-  def events: Source[Seq[StreamEvent]] = eventDist
+  def events: Sink[Seq[StreamEvent]] = eventSink
 
-  def requests: Sink[Seq[ServiceRequest]] = requestSink
+  def requests: Source[Seq[ServiceRequest]] = requestDist
 
-  def responses: Source[Seq[ServiceResponse]] = responseDist
-
+  def responses: Sink[Seq[ServiceResponse]] = responseSink
 }
