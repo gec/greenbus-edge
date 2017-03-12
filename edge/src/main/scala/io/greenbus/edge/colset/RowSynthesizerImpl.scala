@@ -326,7 +326,7 @@ class SessionAppendRowLog(rowId: RowId, sessionId: PeerSessionId, init: Seq[Appe
     snapshot match {
       case AppendSetSequence(appends) => {
         appends.headOption.foreach { head =>
-          if (head.sequence == sequence || head.sequence.isLessThan(sequence)) {
+          if (head.sequence == sequence || head.sequence.isLessThan(sequence).contains(true)) {
             handleInOrder(appends)
           } else {
             sequence = head.sequence
@@ -375,7 +375,7 @@ class SessionAppendSynthesizingFilter(rowId: RowId, sessionId: PeerSessionId, st
     snapshot match {
       case AppendSetSequence(appends) => {
         appends.headOption.flatMap { head =>
-          if (sequence.precedes(head.sequence) || head.sequence == sequence || head.sequence.isLessThan(sequence)) {
+          if (sequence.precedes(head.sequence) || head.sequence == sequence || head.sequence.isLessThan(sequence).contains(true)) {
             val deltaAppends = handleInOrder(appends)
             if (deltaAppends.nonEmpty) {
               Some(StreamDelta(AppendSetSequence(deltaAppends)))
@@ -435,7 +435,7 @@ class SessionModifyRowLog(rowId: RowId, sessionId: PeerSessionId, init: Modified
   def handleResync(snapshot: SetSnapshot): Unit = {
     snapshot match {
       case d: ModifiedSetSnapshot =>
-        if (sequence.isLessThan(d.sequence)) {
+        if (sequence.isLessThan(d.sequence).contains(true)) {
           sequence = d.sequence
           current = d.snapshot
         } else {
@@ -477,7 +477,7 @@ class SessionModifyRowSynthesizingFilter(rowId: RowId, sessionId: PeerSessionId,
   def handleResync(snapshot: SetSnapshot): Option[AppendEvent] = {
     snapshot match {
       case d: ModifiedSetSnapshot =>
-        if (sequence.isLessThan(d.sequence)) {
+        if (sequence.isLessThan(d.sequence).contains(true)) {
           sequence = d.sequence
           //current = d.snapshot
           Some(ResyncSnapshot(snapshot))
@@ -528,7 +528,7 @@ class SessionKeyedModifyRowLog(rowId: RowId, sessionId: PeerSessionId, init: Mod
   def handleResync(snapshot: SetSnapshot): Unit = {
     snapshot match {
       case d: ModifiedKeyedSetSnapshot =>
-        if (sequence.isLessThan(d.sequence)) {
+        if (sequence.isLessThan(d.sequence).contains(true)) {
           sequence = d.sequence
           current = d.snapshot
         } else {
@@ -566,7 +566,7 @@ class SessionKeyedModifyRowSynthesizingFilter(rowId: RowId, sessionId: PeerSessi
   def handleResync(snapshot: SetSnapshot): Option[AppendEvent] = {
     snapshot match {
       case d: ModifiedKeyedSetSnapshot =>
-        if (sequence.isLessThan(d.sequence)) {
+        if (sequence.isLessThan(d.sequence).contains(true)) {
           sequence = d.sequence
           Some(ResyncSnapshot(snapshot))
         } else {

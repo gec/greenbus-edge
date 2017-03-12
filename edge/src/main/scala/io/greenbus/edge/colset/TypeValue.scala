@@ -18,6 +18,7 @@
  */
 package io.greenbus.edge.colset
 
+import java.util
 import java.util.UUID
 
 //trait TypeTrait
@@ -27,13 +28,6 @@ trait TypeDesc {
 trait TypeValue {
   def typeDesc: TypeDesc
 }
-
-/*object DerivedTypeDesc {
-  def hasSuperTypeDesc(desc: TypeDesc)
-}
-abstract class DerivedTypeDesc(val superTypes: Set[TypeDesc])*/
-
-//abstract class TraitCarryingTypeDesc(val traits: Set[TypeDesc]) extends TypeDesc
 
 trait FinalTypeDesc extends TypeDesc {
   def instanceOf(v: TypeValue): Boolean = v.typeDesc == this
@@ -46,32 +40,11 @@ case object NothingDesc extends TypeDesc {
   def instanceOf(v: TypeValue): Boolean = false
 }
 
-/*
-trait OrderedTypeValue[Self] extends TypeValue {
-  def isEqualTo(r: Self): Boolean
-  def isLessThan(r: Self): Boolean
-}
-
-trait SequencedTypeValue[Self] extends OrderedTypeValue[Self] {
-  def precedes(r: Self): Boolean
-  def next: Self
-}*/
-
-/*case object IndexableTypeDesc extends TypeDesc {
-  def instanceOf(v: TypeValue): Boolean = {
-    v.typeDesc match {
-      case dtd: DerivedTypeDesc => {
-
-      }
-      case _ => false
-    }
-  }
-}*/
 trait IndexableTypeValue extends TypeValue
 
 trait OrderedTypeValue extends TypeValue {
   def isEqualTo(r: OrderedTypeValue): Boolean
-  def isLessThan(r: OrderedTypeValue): Boolean
+  def isLessThan(r: OrderedTypeValue): Option[Boolean]
 }
 
 trait SequencedTypeValue extends OrderedTypeValue {
@@ -84,25 +57,117 @@ abstract class TypeValueDecl(desc: TypeDesc) extends TypeValue {
 }
 
 case object SymbolDesc extends FinalTypeDesc
-case class SymbolVal(v: String) extends TypeValueDecl(SymbolDesc)
+case class SymbolVal(v: String) extends TypeValueDecl(SymbolDesc) with OrderedTypeValue {
+  def isEqualTo(r: OrderedTypeValue): Boolean = r == this
 
-case object UuidDesc extends FinalTypeDesc
-case class UuidVal(v: UUID) extends TypeValueDecl(UuidDesc)
-
-case object UInt64Desc extends FinalTypeDesc
-case class UInt64Val(v: Long) extends TypeValueDecl(UInt64Desc) with SequencedTypeValue {
-  def precedes(r: SequencedTypeValue): Boolean = {
+  def isLessThan(r: OrderedTypeValue): Option[Boolean] = {
     r match {
-      case UInt64Val(rv) => v == (rv - 1)
+      case SymbolVal(rv) => Some(v.compareTo(rv) < 0)
+      case _ => None
+    }
+  }
+}
+
+case object TextDesc extends FinalTypeDesc
+case class TextVal(v: String) extends TypeValueDecl(TextDesc) with OrderedTypeValue {
+  def isEqualTo(r: OrderedTypeValue): Boolean = r == this
+
+  def isLessThan(r: OrderedTypeValue): Option[Boolean] = {
+    r match {
+      case TextVal(rv) => Some(v.compareTo(rv) < 0)
+      case _ => None
+    }
+  }
+}
+
+object ArrayCompare {
+
+  def compare(l: Array[Byte], r: Array[Byte]): Int = {
+    var continue = true
+    var result = l.length - r.length
+    var i = 0
+    val lowestLen = Math.min(l.length, r.length)
+    while (continue && i < lowestLen) {
+      val lint: Int = l(i) & 0xff
+      val rint: Int = r(i) & 0xff
+      if (lint != rint) {
+        result = lint - rint
+        continue = false
+      }
+      i += 1
+    }
+    result
+  }
+
+}
+
+case object BytesDesc extends FinalTypeDesc
+case class BytesVal(v: Array[Byte]) extends TypeValueDecl(BytesDesc) with OrderedTypeValue {
+  def isEqualTo(r: OrderedTypeValue): Boolean = {
+    r match {
+      case BytesVal(rv) => util.Arrays.equals(v, rv)
       case _ => false
     }
   }
-  def next: SequencedTypeValue = UInt64Val(v + 1)
-  def isEqualTo(r: OrderedTypeValue): Boolean = r == this
-  def isLessThan(r: OrderedTypeValue): Boolean = {
+
+  def isLessThan(r: OrderedTypeValue): Option[Boolean] = {
     r match {
-      case UInt64Val(rv) => v < rv
+      case BytesVal(rv) => Some(ArrayCompare.compare(v, rv) < 0)
+      case _ => None
+    }
+  }
+}
+
+case object UuidDesc extends FinalTypeDesc
+case class UuidVal(v: UUID) extends TypeValueDecl(UuidDesc) with OrderedTypeValue {
+  def isEqualTo(r: OrderedTypeValue): Boolean = r == this
+
+  def isLessThan(r: OrderedTypeValue): Option[Boolean] = {
+    r match {
+      case UuidVal(rv) => Some(v.compareTo(rv) < 0)
+      case _ => None
+    }
+  }
+}
+
+case object BoolDesc extends FinalTypeDesc
+case class BoolVal(v: Boolean) extends TypeValueDecl(BoolDesc) with OrderedTypeValue {
+  def isEqualTo(r: OrderedTypeValue): Boolean = r == this
+
+  def isLessThan(r: OrderedTypeValue): Option[Boolean] = {
+    r match {
+      case BoolVal(rv) => Some(!v && rv)
+      case _ => None
+    }
+  }
+}
+
+case object DoubleDesc extends FinalTypeDesc
+case class DoubleVal(v: Double) extends TypeValueDecl(DoubleDesc) with OrderedTypeValue {
+  def isEqualTo(r: OrderedTypeValue): Boolean = r == this
+
+  def isLessThan(r: OrderedTypeValue): Option[Boolean] = {
+    r match {
+      case DoubleVal(rv) => Some(v < rv)
+      case _ => None
+    }
+  }
+}
+
+case object Int64Desc extends FinalTypeDesc
+case class Int64Val(v: Long) extends TypeValueDecl(Int64Desc) with SequencedTypeValue {
+  def precedes(r: SequencedTypeValue): Boolean = {
+    r match {
+      case Int64Val(rv) => v == (rv - 1)
       case _ => false
+    }
+  }
+  def next: SequencedTypeValue = Int64Val(v + 1)
+  def isEqualTo(r: OrderedTypeValue): Boolean = r == this
+  def isLessThan(r: OrderedTypeValue): Option[Boolean] = {
+    r match {
+      case Int64Val(rv) => Some(v < rv)
+      case _ => None
     }
   }
 }
@@ -116,7 +181,7 @@ case class OptionVal(element: Option[TypeValue]) extends TypeValueDecl(OptionDes
 object TypeValueConversions {
 
   def toTypeValue(session: PeerSessionId): TypeValue = {
-    TupleVal(Seq(UuidVal(session.persistenceId), UInt64Val(session.instanceId)))
+    TupleVal(Seq(UuidVal(session.persistenceId), Int64Val(session.instanceId)))
   }
 
 }

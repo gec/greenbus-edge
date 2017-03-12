@@ -37,7 +37,7 @@ class PeerServiceEngine(logId: String, routing: RoutingManager) extends ServiceI
               val registered = routeRequests.map { req =>
                 val issuerCorrelation = req.correlation
                 val ourCorrelation = correlator.add(issuer, (issuer, issuerCorrelation))
-                ServiceRequest(req.row, req.value, UInt64Val(ourCorrelation))
+                ServiceRequest(req.row, req.value, Int64Val(ourCorrelation))
               }
 
               sourcing.serviceTargets.foreach(_.issueServiceRequests(registered))
@@ -52,7 +52,7 @@ class PeerServiceEngine(logId: String, routing: RoutingManager) extends ServiceI
   def handleResponses(responses: Seq[ServiceResponse]): Unit = {
     val correlated = responses.flatMap { resp =>
       resp.correlation match {
-        case UInt64Val(ourCorrelation) => {
+        case Int64Val(ourCorrelation) => {
           correlator.pop(ourCorrelation) match {
             case Some((issuer, corr)) => Some((issuer, corr, resp))
             case None =>

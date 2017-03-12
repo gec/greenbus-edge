@@ -55,7 +55,7 @@ class AppendSetRetailRowCache(rowId: RowId, initSess: PeerSessionId, last: Appen
 
   private def handleAppends(appends: Seq[AppendSetValue]): Unit = {
     appends.foreach { append =>
-      if (latest.sequence.isLessThan(append.sequence)) {
+      if (latest.sequence.isLessThan(append.sequence).contains(true)) {
         latest = append
       }
     }
