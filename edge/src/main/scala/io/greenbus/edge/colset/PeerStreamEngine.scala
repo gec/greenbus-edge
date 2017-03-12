@@ -28,10 +28,10 @@ object RouteManifestSet {
   }
 }
 
-/*trait PeerLink {
+trait PeerLink {
   def setSubscriptions(rows: Set[RowId]): Unit
   def issueServiceRequests(requests: Seq[ServiceRequest]): Unit
-}*/
+}
 
 /*
 
@@ -91,7 +91,7 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
   private var rowsForSub = Map.empty[SubscriptionTarget, Set[RowId]]
   private var routesForSource = Map.empty[ManagedRouteSource, Set[TypeValue]]
 
-  private var sourceMgrs = Map.empty[RowSubscribable, PeerRouteSource]
+  private var sourceMgrs = Map.empty[PeerLink, PeerRouteSource]
 
   private val manifestDb = new LocalPeerManifestDb(selfSession)
 
@@ -201,7 +201,7 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
 
     manifest component just another subscriber, do event before commit to subscribers?
    */
-  def peerSourceEvents(link: RowSubscribable, events: Seq[StreamEvent]): Unit = {
+  def peerSourceEvents(link: PeerLink, events: Seq[StreamEvent]): Unit = {
     logger.trace(s"$logId peer source events $events")
     sourceMgrs.get(link) match {
       case None => logger.warn(s"$logId no source manager for link: $link")
@@ -216,7 +216,7 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
     }
   }
 
-  def peerSourceConnected(peerSessionId: PeerSessionId, link: RowSubscribable): Unit = {
+  def peerSourceConnected(peerSessionId: PeerSessionId, link: PeerLink): Unit = {
     logger.debug(s"$logId source connected: $peerSessionId")
     sourceMgrs.get(link) match {
       case None => {
@@ -229,7 +229,7 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
     }
   }
 
-  def sourceDisconnected(link: RowSubscribable): Unit = {
+  def sourceDisconnected(link: PeerLink): Unit = {
     sourceMgrs.get(link) match {
       case None => logger.warn(s"$logId no source manager for link: $link")
       case Some(mgr) => {

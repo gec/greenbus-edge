@@ -44,12 +44,10 @@ class MockGateway extends LocalGateway with LazyLogging {
   def issueServiceRequests(requests: Seq[ServiceRequest]): Unit = {}
 }
 
-trait MockSource extends RowSubscribable with LazyLogging {
+trait MockSource extends PeerLink with LazyLogging {
   val name: String
 
   val subUpdates: mutable.Queue[Set[RowId]] = mutable.Queue.empty[Set[RowId]]
-
-  def subscriptions: Sink[Set[RowId]] = Sink(rows => setSubscriptions(rows))
 
   def setSubscriptions(rows: Set[RowId]): Unit = {
     logger.debug(s"$name source got push: " + rows + ", prev: " + subUpdates)
@@ -70,7 +68,7 @@ trait MockSubscriber extends SubscriptionTarget with LazyLogging {
 
 class SimpleMockSubscriber(val name: String) extends MockSubscriber
 
-class MockPeerSource(val name: String, val source: MockPeer, val target: MockPeer) extends MockSubscriber with RowSubscribable with MockSource {
+class MockPeerSource(val name: String, val source: MockPeer, val target: MockPeer) extends MockSubscriber with PeerLink with MockSource {
 
   def pushSubs(): Unit = {
     subUpdates.foreach { rowSet =>

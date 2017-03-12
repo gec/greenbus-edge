@@ -39,7 +39,7 @@ object PeerRouteSource {
     Set(peerRouteRow(peerId) /*, peerIndexRow(peerId)*/ )
   }
 }
-class PeerRouteSource(peerId: PeerSessionId, source: RowSubscribable) extends ManagedRouteSource with LazyLogging {
+class PeerRouteSource(peerId: PeerSessionId, source: PeerLink) extends ManagedRouteSource with LazyLogging {
 
   private val routeRow = PeerRouteSource.peerRouteRow(peerId)
   private val indexRow = PeerRouteSource.peerIndexRow(peerId)
@@ -53,7 +53,7 @@ class PeerRouteSource(peerId: PeerSessionId, source: RowSubscribable) extends Ma
   def manifestRoute: TypeValue = TypeValueConversions.toTypeValue(peerId)
 
   def init(): Unit = {
-    source.subscriptions.push(manifestKeys)
+    source.setSubscriptions(manifestKeys)
   }
 
   def updateRowsForRoute(route: TypeValue, rows: Set[TableRow]): Unit = {
@@ -68,7 +68,7 @@ class PeerRouteSource(peerId: PeerSessionId, source: RowSubscribable) extends Ma
 
   private def pushSubscription(): Unit = {
     val rowIdSet = routeToRows.flatMap { case (route, rows) => rows.map(_.toRowId(route)) }.toSet
-    source.subscriptions.push(rowIdSet)
+    source.setSubscriptions(rowIdSet)
   }
 
   def snapshot(): Map[TypeValue, RouteManifestEntry] = {

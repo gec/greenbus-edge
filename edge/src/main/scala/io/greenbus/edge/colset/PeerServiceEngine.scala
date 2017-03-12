@@ -24,7 +24,7 @@ import scala.collection.mutable
 
 class PeerServiceEngine(logId: String, routing: RoutingManager) extends ServiceIssuer with LazyLogging {
 
-  private val correlator = new Correlator[(ServiceIssuer, TypeValue)]
+  private val correlator = new KeyedCorrelator[(ServiceIssuer, TypeValue), ServiceIssuer]
 
   def requestsIssued(issuer: ServiceIssuer, requests: Seq[ServiceRequest]): Unit = {
     requests.groupBy(_.row.routingKey).foreach {
@@ -36,7 +36,7 @@ class PeerServiceEngine(logId: String, routing: RoutingManager) extends ServiceI
 
               val registered = routeRequests.map { req =>
                 val issuerCorrelation = req.correlation
-                val ourCorrelation = correlator.add((issuer, issuerCorrelation))
+                val ourCorrelation = correlator.add(issuer, (issuer, issuerCorrelation))
                 ServiceRequest(req.row, req.value, UInt64Val(ourCorrelation))
               }
 
@@ -73,6 +73,54 @@ class PeerServiceEngine(logId: String, routing: RoutingManager) extends ServiceI
         }
         issuer.handleResponses(mapped)
       }
+    }
+  }
+
+  def issuerClosed(issuer: ServiceIssuer): Unit = {
+    correlator.remove(issuer)
+  }
+}
+
+class KeyedCorrelator[A, K] {
+
+  private var sequence: Long = 0
+  private val correlationMap = mutable.LongMap.empty[(A, K)]
+  private val keyMap = mutable.Map.empty[K, mutable.Set[Long]]
+
+  def add(key: K, obj: A): Long = {
+    val next = sequence
+    sequence += 1
+
+    correlationMap += (next -> (obj, key))
+    val keySet = keyMap.getOrElseUpdate(key, mutable.Set.empty[Long])
+    keySet += next
+
+    next
+  }
+
+  def pop(correlator: Long): Option[A] = {
+    val resultOpt = correlationMap.get(correlator)
+    correlationMap -= correlator
+
+    resultOpt.foreach {
+      case (_, key) =>
+        keyMap.get(key).foreach { keySet =>
+          keySet -= correlator
+          if (keySet.isEmpty) {
+            keyMap -= key
+          }
+        }
+    }
+
+    resultOpt.map(_._1)
+  }
+
+  def remove(key: K): Unit = {
+    keyMap.get(key).foreach { keySet =>
+      keySet.foreach { dead =>
+        correlationMap -= dead
+      }
+      keyMap -= key
     }
   }
 }

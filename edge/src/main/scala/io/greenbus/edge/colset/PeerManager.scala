@@ -26,7 +26,7 @@ trait ClientGatewaySource {
 
 case class GatewayClientEvents(routes: Option[Set[TypeValue]], events: Seq[StreamEvent])
 
-trait ClientGatewaySourceProxy extends ServiceRequestTarget {
+trait ClientGatewaySourceProxy extends ServiceProvider {
   def subscriptions: Sink[Set[RowId]]
   def events: Source[GatewayClientEvents]
 }
@@ -34,11 +34,6 @@ trait ClientGatewaySourceProxy extends ServiceRequestTarget {
 trait ClientGatewaySourceProxyChannel extends ClientGatewaySourceProxy with Closeable with CloseObservable
 
 class Gateway extends LocalGateway {
-
-  /*private var handler = Option.empty[GatewayEventHandler]
-  def bindHandler(eventHandler: GatewayEventHandler): Unit = {
-    handler = Some(eventHandler)
-  }*/
 
   def handleClientOpened(proxy: ClientGatewaySourceProxy): Unit = {
     proxy.events.bind(ev => clientEvents(proxy, ev.routes, ev.events))
@@ -50,7 +45,7 @@ class Gateway extends LocalGateway {
   }
 
   private def clientEvents(proxy: ClientGatewaySourceProxy, routeUpdate: Option[Set[TypeValue]], events: Seq[StreamEvent]): Unit = {
-    //handler.foreach(_.localGatewayEvents())
+
   }
 
   private def clientServiceResponses(proxy: ClientGatewaySourceProxy, responses: Seq[ServiceResponse]): Unit = {
@@ -62,39 +57,46 @@ class Gateway extends LocalGateway {
   def issueServiceRequests(requests: Seq[ServiceRequest]): Unit = ???
 }
 
-trait RowSubscribable {
+trait StreamSubscribable {
   def subscriptions: Sink[Set[RowId]]
 }
 trait ServiceRequestable {
   def requests: Sink[Seq[ServiceRequest]]
 }
-trait EventSource {
+trait StreamEventSource {
   def events: Source[Seq[StreamEvent]]
 }
-trait ResponseSource {
+trait ServiceResponseSource {
   def responses: Source[Seq[ServiceResponse]]
 }
 
-trait ServiceRequestTarget extends ServiceRequestable with ResponseSource
-trait StreamSource extends RowSubscribable with EventSource
+trait ServiceProvider extends ServiceRequestable with ServiceResponseSource
+trait StreamProvider extends StreamSubscribable with StreamEventSource
 
-trait PeerLinkProxy extends StreamSource with ServiceRequestTarget
+trait PeerLinkProxy extends StreamProvider with ServiceProvider
+
+trait StreamSubscriptionSource {
+  def subscriptions: Source[Set[RowId]]
+}
+trait StreamEventSink {
+  def events: Sink[Seq[StreamEvent]]
+}
+trait StreamConsumer extends StreamSubscriptionSource with StreamEventSink
 
 trait ServiceRequestSource {
   def requests: Source[Seq[ServiceRequest]]
+}
+trait ServiceRespondable {
   def responses: Sink[Seq[ServiceResponse]]
 }
+trait ServiceConsumer extends ServiceRequestSource with ServiceRespondable
 
-trait RoutesConsumer {
-  def subscriptions: Source[Set[RowId]]
-  def events: Sink[Seq[StreamEvent]]
-}
-
-trait SubscriberProxy extends RoutesConsumer
+trait SubscriberProxy extends StreamConsumer with ServiceConsumer
 
 trait PeerLinkProxyChannel extends PeerLinkProxy with Closeable with CloseObservable
+trait SubscriberProxyChannel extends SubscriberProxy with Closeable with CloseObservable
 
-class PeerManager(logId: String, selfSession: PeerSessionId) {
+/*class PeerManager(logId: String, selfSession: PeerSessionId) {
 
   private val gateway = new Gateway
   private val streams = new PeerStreamEngine(logId, selfSession, gateway)
@@ -112,6 +114,80 @@ class PeerManager(logId: String, selfSession: PeerSessionId) {
 
   def peerClosed(proxy: PeerLinkProxy): Unit = {
     streams.sourceDisconnected(proxy)
+  }
+
+}*/
+
+class PeerLinkShim(proxy: PeerLinkProxy) extends PeerLink {
+  def setSubscriptions(rows: Set[RowId]): Unit = proxy.subscriptions.push(rows)
+
+  def issueServiceRequests(requests: Seq[ServiceRequest]): Unit = proxy.requests.push(requests)
+}
+
+case class PeerLinkContext(
+  proxy: PeerLinkProxyChannel,
+  link: PeerLink)
+
+class SubscriptionTargetShim(proxy: SubscriberProxy) extends SubscriptionTarget {
+  def handleBatch(events: Seq[StreamEvent]): Unit = {
+    proxy.events.push(events)
+  }
+}
+
+class RequestIssuerShim(proxy: SubscriberProxy) extends ServiceIssuer {
+  def handleResponses(responses: Seq[ServiceResponse]): Unit = {
+    proxy.responses.push(responses)
+  }
+}
+
+case class SubscriptionContext(proxy: SubscriberProxyChannel, target: SubscriptionTarget, issuer: ServiceIssuer)
+
+class PeerChannelMachine(logId: String, selfSession: PeerSessionId) {
+
+  private val gateway = new Gateway
+  private val streams = new PeerStreamEngine(logId, selfSession, gateway)
+  private val services = new PeerServiceEngine(logId, streams)
+
+  def peerOpened(peerSessionId: PeerSessionId, proxy: PeerLinkProxyChannel): Unit = {
+    val link = new PeerLinkShim(proxy)
+    val ctx = PeerLinkContext(proxy, link)
+
+    proxy.events.bind(events => peerEvents(ctx, events))
+    proxy.responses.bind(events => peerResponses(ctx, events))
+    proxy.onClose.subscribe(() => peerClosed(ctx))
+    streams.peerSourceConnected(peerSessionId, link)
+  }
+
+  private def peerEvents(ctx: PeerLinkContext, events: Seq[StreamEvent]): Unit = {
+    streams.peerSourceEvents(ctx.link, events)
+    // TODO: flush subs
+  }
+
+  private def peerResponses(ctx: PeerLinkContext, responses: Seq[ServiceResponse]): Unit = {
+    services.handleResponses(responses)
+    // TODO: flush subs
+  }
+
+  private def peerClosed(ctx: PeerLinkContext): Unit = {
+    streams.sourceDisconnected(ctx.link)
+    // TODO: flush subs
+  }
+
+  def subscriberOpened(proxy: SubscriberProxyChannel): Unit = {
+    val target = new SubscriptionTargetShim(proxy)
+    val issuer = new RequestIssuerShim(proxy)
+    val ctx = SubscriptionContext(proxy, target, issuer)
+    proxy.requests.bind(reqs => subscriberRequests(ctx, reqs))
+    proxy.onClose.subscribe(() => subscriberClosed(ctx))
+  }
+
+  private def subscriberRequests(ctx: SubscriptionContext, requests: Seq[ServiceRequest]): Unit = {
+    services.requestsIssued(ctx.issuer, requests)
+  }
+
+  private def subscriberClosed(ctx: SubscriptionContext): Unit = {
+    streams.subscriberRemoved(ctx.target)
+    services.issuerClosed(ctx.issuer)
   }
 
 }
