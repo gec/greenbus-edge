@@ -90,7 +90,7 @@ class PeerRouteSource(peerId: PeerSessionId, source: PeerLink) extends ManagedRo
   }
 
   def issueServiceRequests(requests: Seq[ServiceRequest]): Unit = {
-
+    source.issueServiceRequests(requests)
   }
 }
 

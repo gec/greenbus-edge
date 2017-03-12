@@ -20,43 +20,6 @@ package io.greenbus.edge.colset
 
 import io.greenbus.edge.flow.{ CloseObservable, Closeable, Sink, Source }
 
-trait ClientGatewaySource {
-  //def routes: Sink[Set[TypeValue]]
-}
-
-case class GatewayClientEvents(routes: Option[Set[TypeValue]], events: Seq[StreamEvent])
-
-trait ClientGatewaySourceProxy extends ServiceProvider {
-  def subscriptions: Sink[Set[RowId]]
-  def events: Source[GatewayClientEvents]
-}
-
-trait ClientGatewaySourceProxyChannel extends ClientGatewaySourceProxy with Closeable with CloseObservable
-
-class Gateway extends LocalGateway {
-
-  def handleClientOpened(proxy: ClientGatewaySourceProxy): Unit = {
-    proxy.events.bind(ev => clientEvents(proxy, ev.routes, ev.events))
-    proxy.responses.bind(resps => clientServiceResponses(proxy, resps))
-  }
-
-  def handleClientClosed(proxy: ClientGatewaySourceProxy): Unit = {
-
-  }
-
-  private def clientEvents(proxy: ClientGatewaySourceProxy, routeUpdate: Option[Set[TypeValue]], events: Seq[StreamEvent]): Unit = {
-
-  }
-
-  private def clientServiceResponses(proxy: ClientGatewaySourceProxy, responses: Seq[ServiceResponse]): Unit = {
-
-  }
-
-  def updateRowsForRoute(route: TypeValue, rows: Set[TableRow]): Unit = ???
-
-  def issueServiceRequests(requests: Seq[ServiceRequest]): Unit = ???
-}
-
 trait StreamSubscribable {
   def subscriptions: Sink[Set[RowId]]
 }
@@ -95,28 +58,6 @@ trait SubscriberProxy extends StreamConsumer with ServiceConsumer
 
 trait PeerLinkProxyChannel extends PeerLinkProxy with Closeable with CloseObservable
 trait SubscriberProxyChannel extends SubscriberProxy with Closeable with CloseObservable
-
-/*class PeerManager(logId: String, selfSession: PeerSessionId) {
-
-  private val gateway = new Gateway
-  private val streams = new PeerStreamEngine(logId, selfSession, gateway)
-  private val services = new PeerServiceEngine(logId, streams)
-
-  def peerOpened(peerSessionId: PeerSessionId, proxy: PeerLinkProxy): Unit = {
-    streams.peerSourceConnected(peerSessionId, proxy)
-    proxy.events.bind { events =>
-      streams.peerSourceEvents(proxy, events)
-    }
-    proxy.responses.bind { resps =>
-      services.handleResponses(resps)
-    }
-  }
-
-  def peerClosed(proxy: PeerLinkProxy): Unit = {
-    streams.sourceDisconnected(proxy)
-  }
-
-}*/
 
 class PeerLinkShim(proxy: PeerLinkProxy) extends PeerLink {
   def setSubscriptions(rows: Set[RowId]): Unit = proxy.subscriptions.push(rows)
@@ -188,6 +129,15 @@ class PeerChannelMachine(logId: String, selfSession: PeerSessionId) {
   private def subscriberClosed(ctx: SubscriptionContext): Unit = {
     streams.subscriberRemoved(ctx.target)
     services.issuerClosed(ctx.issuer)
+  }
+
+  def gatewayClientOpened(clientProxy: GatewayClientProxyChannel): Unit = {
+    clientProxy.onClose.subscribe(() => gatewayClientClosed(clientProxy))
+    gateway.handleClientOpened(clientProxy)
+  }
+
+  private def gatewayClientClosed(clientProxy: GatewayClientProxyChannel): Unit = {
+    gateway.handleClientClosed(clientProxy)
   }
 
 }
