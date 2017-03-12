@@ -18,7 +18,11 @@
  */
 package io.greenbus.edge.colset
 
+import java.util.UUID
+
 import io.greenbus.edge.collection.MapSetBuilder
+
+case class PeerSessionId(persistenceId: UUID, instanceId: Long)
 
 trait SetDelta
 trait SetSnapshot
