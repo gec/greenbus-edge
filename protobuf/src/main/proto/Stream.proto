@@ -1,0 +1,168 @@
+
+
+syntax = "proto3";
+
+package colset.data;
+
+option java_package = "io.greenbus.edge.colset.proto";
+option java_multiple_files = true;
+
+
+message PeerSessionId {
+    UUID persistence_id = 1;
+    int64 instance_id = 2;
+}
+
+message RowId {
+    TypeValue routing_key = 1;
+    string table = 2;
+    TypeValue row_key = 3;
+}
+
+message ModifiedSetDelta {
+    SequencedTypeValue sequence = 1;
+    repeated TypeValue removes = 2;
+    repeated TypeValue adds = 3;
+}
+message ModifiedSetSnapshot {
+    SequencedTypeValue sequence = 1;
+    repeated TypeValue elements = 2;
+}
+
+message TypeValueKeyPair {
+    TypeValue key = 1;
+    TypeValue value = 2;
+}
+
+message ModifiedKeyedSetDelta {
+    SequencedTypeValue sequence = 1;
+    repeated TypeValue removes = 2;
+    repeated TypeValueKeyPair adds = 3;
+    repeated TypeValueKeyPair modifies = 4;
+}
+message ModifiedKeyedSetSnapshot {
+    SequencedTypeValue sequence = 1;
+    repeated TypeValueKeyPair elements = 2;
+}
+
+message AppendSetValue {
+    SequencedTypeValue sequence = 1;
+    TypeValue value = 2;
+}
+
+message AppendSetSequence {
+    repeated AppendSetValue values = 1;
+}
+
+message SetDelta {
+    oneof set_types {
+        ModifiedSetDelta modified_set_delta = 1;
+        ModifiedKeyedSetDelta modified_keyed_set_delta = 2;
+        AppendSetSequence append_set_sequence = 3;
+    }
+}
+message SetSnapshot {
+    oneof set_types {
+        ModifiedSetSnapshot modified_set_snapshot = 1;
+        ModifiedKeyedSetSnapshot modified_keyed_set_snapshot = 2;
+        AppendSetSequence append_set_sequence = 3;
+    }
+}
+
+message StreamDelta {
+    SetDelta update = 1;
+}
+
+message ResyncSnapshot {
+    SetSnapshot snapshot = 1;
+}
+message ResyncSession {
+    PeerSessionId session_id = 1;
+    SetSnapshot snapshot = 2;
+}
+
+message AppendEvent {
+    oneof append_types {
+        StreamDelta stream_delta = 1;
+        ResyncSnapshot resync_snapshot = 2;
+        ResyncSession resync_Session = 3;
+    }
+}
+
+message RowAppendEvent {
+    RowId row = 1;
+    AppendEvent append = 2;
+}
+
+message RouteUnresolved {
+    TypeValue routing_key = 1;
+}
+
+message StreamEvent {
+    oneof event_type {
+        RowAppendEvent row_append = 1;
+        RouteUnresolved route_unresolved = 2;
+    }
+}
+
+message ServiceRequest {
+    RowId row = 1;
+    TypeValue value = 2;
+    TypeValue correlation = 3;
+}
+message ServiceResponse {
+    RowId row = 1;
+    TypeValue value = 2;
+    TypeValue correlation = 3;
+}
+
+message SubscriptionSetUpdate {
+    repeated RowId rows = 1;
+}
+message EventBatch {
+    repeated StreamEvent events = 1;
+}
+message ServiceRequestBatch {
+    repeated ServiceRequest requests = 1;
+}
+message ServiceResponseBatch {
+    repeated ServiceResponse responses = 1;
+}
+
+message OptionalTypeValueArray {
+    repeated TypeValue values = 1;
+}
+
+message GatewayClientEvents {
+    OptionalTypeValueArray routes_update = 1;
+    repeated StreamEvent events = 2;
+}
+
+message TypeValue {
+    oneof value_types {
+        double double_value = 1;
+        sint64 sint64_value = 2;
+        bool bool_value = 3;
+        string symbol_value = 4;
+        string text_value = 5;
+        bytes bytes_value = 6;
+        UUID uuid_value = 7;
+        TupleValue tuple_value = 8;
+    }
+}
+
+message SequencedTypeValue {
+    oneof value_types {
+        sint64 sint64_value = 1;
+        TupleValue tuple_value = 2;
+    }
+}
+
+message UUID {
+    fixed64 low = 1;
+    fixed64 high = 2;
+}
+
+message TupleValue {
+    repeated TypeValue element = 1;
+}
