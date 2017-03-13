@@ -29,10 +29,10 @@ object PeerRouteSource {
   val tablePrefix = "__manifest"
 
   def peerRouteRow(peerId: PeerSessionId): RowId = {
-    RowId(TypeValueConversions.toTypeValue(peerId), SymbolVal(s"$tablePrefix"), SymbolVal("routes"))
+    RowId(TypeValueConversions.toTypeValue(peerId), s"$tablePrefix", SymbolVal("routes"))
   }
   def peerIndexRow(peerId: PeerSessionId): RowId = {
-    RowId(TypeValueConversions.toTypeValue(peerId), SymbolVal(s"$tablePrefix"), SymbolVal("indexes"))
+    RowId(TypeValueConversions.toTypeValue(peerId), s"$tablePrefix", SymbolVal("indexes"))
   }
 
   def manifestRows(peerId: PeerSessionId): Set[RowId] = {

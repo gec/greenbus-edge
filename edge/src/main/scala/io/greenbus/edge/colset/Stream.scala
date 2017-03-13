@@ -46,10 +46,10 @@ object RowId {
     b.result()
   }
 }
-case class RowId(routingKey: TypeValue, table: SymbolVal, rowKey: TypeValue) {
+case class RowId(routingKey: TypeValue, table: String, rowKey: TypeValue) {
   def tableRow: TableRow = TableRow(table, rowKey)
 }
-case class TableRow(table: SymbolVal, rowKey: TypeValue) {
+case class TableRow(table: String, rowKey: TypeValue) {
   def toRowId(routingKey: TypeValue): RowId = RowId(routingKey, table, rowKey)
 }
 

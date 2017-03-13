@@ -100,9 +100,9 @@ class MockPeer(val name: String, sessionOpt: Option[PeerSessionId] = None) {
 
 class SimpleRoute {
   val route = UuidVal(UUID.randomUUID())
-  val row1 = RowId(route, SymbolVal("testTable"), SymbolVal("row1"))
-  val row2 = RowId(route, SymbolVal("testTable"), SymbolVal("row2"))
-  val row3 = RowId(route, SymbolVal("testTable"), SymbolVal("row3"))
+  val row1 = RowId(route, "testTable", SymbolVal("row1"))
+  val row2 = RowId(route, "testTable", SymbolVal("row2"))
+  val row3 = RowId(route, "testTable", SymbolVal("row3"))
   val rows = Seq(row1, row2, row3)
   val rowSet = rows.toSet
   val tableRowsSet = rows.map(_.tableRow).toSet

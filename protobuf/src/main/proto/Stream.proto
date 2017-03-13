@@ -154,7 +154,7 @@ message TypeValue {
 message SequencedTypeValue {
     oneof value_types {
         sint64 sint64_value = 1;
-        TupleValue tuple_value = 2;
+        //TupleValue tuple_value = 2;
     }
 }
 
