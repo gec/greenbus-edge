@@ -83,7 +83,13 @@ class RequestIssuerShim(proxy: SubscriberProxy) extends ServiceIssuer {
 
 case class SubscriptionContext(proxy: SubscriberProxyChannel, target: SubscriptionTarget, issuer: ServiceIssuer)
 
-class PeerChannelMachine(logId: String, selfSession: PeerSessionId) {
+trait PeerChannelHandler {
+  def peerOpened(peerSessionId: PeerSessionId, proxy: PeerLinkProxyChannel): Unit
+  def subscriberOpened(proxy: SubscriberProxyChannel): Unit
+  def gatewayClientOpened(clientProxy: GatewayClientProxyChannel): Unit
+}
+
+class PeerChannelMachine(logId: String, selfSession: PeerSessionId) extends PeerChannelHandler {
 
   private val gateway = new Gateway
   private val streams = new PeerStreamEngine(logId, selfSession, gateway)
