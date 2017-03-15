@@ -21,12 +21,10 @@ package io.greenbus.edge.amqp.colset
 import java.util
 import java.util.UUID
 
-import io.greenbus.edge.amqp.channel.{ AmqpChannelParsed, AmqpChannelParser }
+import io.greenbus.edge.amqp.channel.{ AmqpChannelDescriber, AmqpChannelDescription, AmqpChannelParsed, AmqpChannelParser }
 import io.greenbus.edge.channel2.{ ChannelDescriptor, ChannelSerializationProvider }
 import io.greenbus.edge.colset.PeerSessionId
 import org.apache.qpid.proton.amqp.{ Binary, Symbol }
-import org.apache.qpid.proton.amqp.messaging.{ Source, Target }
-import org.apache.qpid.proton.engine.{ Link, Receiver, Sender, Session }
 
 object ChannelIdentifiers {
   val prefix = "_gbe/"
@@ -111,12 +109,20 @@ class ChannelParserImpl(serialization: ChannelSerializationProvider) extends Amq
       .map(corr => AmqpChannelParsed(obj(corr), emptyProperties))
   }
 
+  // Note these are duplicated but the sender/receiver may eventually have different props
+
   def sender(address: String, propertiesOpt: Option[util.Map[Symbol, AnyRef]]): Option[AmqpChannelParsed] = {
     address match {
+      case `peerLinkEventAddress` => peerLink(PeerEventReceiverDesc, propertiesOpt)
+      case `peerLinkServiceResponseAddress` => peerLink(PeerServiceResponsesDesc, propertiesOpt)
       case `peerLinkSubSetAddress` => peerLink(PeerSubscriptionSetSenderDesc, propertiesOpt)
       case `peerLinkServiceRequestAddress` => peerLink(PeerServiceRequestsDesc, propertiesOpt)
+      case `subscriberSubSetAddress` => stringCorrelated(SubSubscriptionSetDesc, propertiesOpt, subscriberCorrelationProp)
+      case `subscriberServiceRequestAddress` => stringCorrelated(SubServiceRequestsDesc, propertiesOpt, subscriberCorrelationProp)
       case `subscriberEventAddress` => stringCorrelated(SubEventReceiverDesc, propertiesOpt, subscriberCorrelationProp)
       case `subscriberServiceResponseAddress` => stringCorrelated(SubServiceResponsesDesc, propertiesOpt, subscriberCorrelationProp)
+      case `gatewayEventAddress` => stringCorrelated(GateEventReceiverDesc, propertiesOpt, gatewayCorrelationProp)
+      case `gatewayServiceResponseAddress` => stringCorrelated(GateServiceResponsesDesc, propertiesOpt, gatewayCorrelationProp)
       case `gatewaySubSetAddress` => stringCorrelated(GateSubscriptionSetSenderDesc, propertiesOpt, gatewayCorrelationProp)
       case `gatewayServiceRequestAddress` => stringCorrelated(GateServiceRequestsDesc, propertiesOpt, gatewayCorrelationProp)
     }
@@ -126,10 +132,49 @@ class ChannelParserImpl(serialization: ChannelSerializationProvider) extends Amq
     address match {
       case `peerLinkEventAddress` => peerLink(PeerEventReceiverDesc, propertiesOpt)
       case `peerLinkServiceResponseAddress` => peerLink(PeerServiceResponsesDesc, propertiesOpt)
+      case `peerLinkSubSetAddress` => peerLink(PeerSubscriptionSetSenderDesc, propertiesOpt)
+      case `peerLinkServiceRequestAddress` => peerLink(PeerServiceRequestsDesc, propertiesOpt)
       case `subscriberSubSetAddress` => stringCorrelated(SubSubscriptionSetDesc, propertiesOpt, subscriberCorrelationProp)
       case `subscriberServiceRequestAddress` => stringCorrelated(SubServiceRequestsDesc, propertiesOpt, subscriberCorrelationProp)
+      case `subscriberEventAddress` => stringCorrelated(SubEventReceiverDesc, propertiesOpt, subscriberCorrelationProp)
+      case `subscriberServiceResponseAddress` => stringCorrelated(SubServiceResponsesDesc, propertiesOpt, subscriberCorrelationProp)
       case `gatewayEventAddress` => stringCorrelated(GateEventReceiverDesc, propertiesOpt, gatewayCorrelationProp)
       case `gatewayServiceResponseAddress` => stringCorrelated(GateServiceResponsesDesc, propertiesOpt, gatewayCorrelationProp)
+      case `gatewaySubSetAddress` => stringCorrelated(GateSubscriptionSetSenderDesc, propertiesOpt, gatewayCorrelationProp)
+      case `gatewayServiceRequestAddress` => stringCorrelated(GateServiceRequestsDesc, propertiesOpt, gatewayCorrelationProp)
     }
+  }
+}
+
+class ChannelDescriberImpl extends AmqpChannelDescriber {
+  import ChannelIdentifiers._
+  import io.greenbus.edge.colset.channel.Channels._
+
+  def describe[A](desc: ChannelDescriptor[A]): Option[AmqpChannelDescription] = {
+    desc match {
+      case d: PeerSubscriptionSetSenderDesc => Some(AmqpChannelDescription("PeerSubscriptionSet", peerLinkSubSetAddress, peerLinkProps(d.linkSession)))
+      case d: PeerEventReceiverDesc => Some(AmqpChannelDescription("PeerEventReceiver", peerLinkEventAddress, peerLinkProps(d.linkSession)))
+      case d: PeerServiceRequestsDesc => Some(AmqpChannelDescription("PeerServiceRequest", peerLinkServiceRequestAddress, peerLinkProps(d.linkSession)))
+      case d: PeerServiceResponsesDesc => Some(AmqpChannelDescription("PeerServiceResponse", peerLinkServiceResponseAddress, peerLinkProps(d.linkSession)))
+      case d: SubSubscriptionSetDesc => Some(AmqpChannelDescription("SubscriberSubscriptionSet", subscriberSubSetAddress, stringCorrelated(subscriberCorrelationProp, d.correlation)))
+      case d: SubEventReceiverDesc => Some(AmqpChannelDescription("SubscriberEventReceiver", subscriberEventAddress, stringCorrelated(subscriberCorrelationProp, d.correlation)))
+      case d: SubServiceRequestsDesc => Some(AmqpChannelDescription("SubscriberServiceRequest", subscriberServiceRequestAddress, stringCorrelated(subscriberCorrelationProp, d.correlation)))
+      case d: SubServiceResponsesDesc => Some(AmqpChannelDescription("SubscriberServiceResponse", subscriberServiceResponseAddress, stringCorrelated(subscriberCorrelationProp, d.correlation)))
+      case d: GateSubscriptionSetSenderDesc => Some(AmqpChannelDescription("GatewaySubscriptionSet", gatewaySubSetAddress, stringCorrelated(gatewayCorrelationProp, d.correlation)))
+      case d: GateEventReceiverDesc => Some(AmqpChannelDescription("GatewayEventReceiver", gatewayEventAddress, stringCorrelated(gatewayCorrelationProp, d.correlation)))
+      case d: GateServiceRequestsDesc => Some(AmqpChannelDescription("GatewayServiceRequest", gatewayServiceRequestAddress, stringCorrelated(gatewayCorrelationProp, d.correlation)))
+      case d: GateServiceResponsesDesc => Some(AmqpChannelDescription("GatewayServiceResponse", gatewayServiceResponseAddress, stringCorrelated(gatewayCorrelationProp, d.correlation)))
+      case _ => None
+    }
+  }
+
+  private def peerLinkProps(session: PeerSessionId): Map[String, AnyRef] = {
+    Map(
+      peerPersistenceIdProp -> session.persistenceId,
+      peerInstanceIdProp -> new java.lang.Long(session.instanceId))
+  }
+
+  private def stringCorrelated(key: String, correlation: String): Map[String, AnyRef] = {
+    Map(key -> correlation)
   }
 }
