@@ -18,6 +18,7 @@
  */
 package io.greenbus.edge.colset
 
+import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.flow._
 
 trait StreamSubscribable {
@@ -67,7 +68,8 @@ class PeerLinkShim(proxy: PeerLinkProxy) extends PeerLink {
 
 case class PeerLinkContext(
   proxy: PeerLinkProxyChannel,
-  link: PeerLink)
+  link: PeerLink,
+  session: PeerSessionId)
 
 class SubscriptionTargetShim(proxy: SubscriberProxy) extends SubscriptionTarget {
   def handleBatch(events: Seq[StreamEvent]): Unit = {
@@ -89,15 +91,16 @@ trait PeerChannelHandler {
   def gatewayClientOpened(clientProxy: GatewayClientProxyChannel): Unit
 }
 
-class PeerChannelMachine(logId: String, selfSession: PeerSessionId) extends PeerChannelHandler {
+class PeerChannelMachine(logId: String, selfSession: PeerSessionId) extends PeerChannelHandler with LazyLogging {
 
   private val gateway = new Gateway
   private val streams = new PeerStreamEngine(logId, selfSession, gateway)
   private val services = new PeerServiceEngine(logId, streams)
 
   def peerOpened(peerSessionId: PeerSessionId, proxy: PeerLinkProxyChannel): Unit = {
+    logger.info(s"Peer link for $peerSessionId opened")
     val link = new PeerLinkShim(proxy)
-    val ctx = PeerLinkContext(proxy, link)
+    val ctx = PeerLinkContext(proxy, link, peerSessionId)
 
     proxy.events.bind(events => peerEvents(ctx, events))
     proxy.responses.bind(events => peerResponses(ctx, events))
@@ -116,6 +119,7 @@ class PeerChannelMachine(logId: String, selfSession: PeerSessionId) extends Peer
   }
 
   private def peerClosed(ctx: PeerLinkContext): Unit = {
+    logger.info(s"Peer link for ${ctx.session} closed")
     streams.sourceDisconnected(ctx.link)
     // TODO: flush subs
   }
@@ -129,20 +133,24 @@ class PeerChannelMachine(logId: String, selfSession: PeerSessionId) extends Peer
   }
 
   private def subscriberRequests(ctx: SubscriptionContext, requests: Seq[ServiceRequest]): Unit = {
+    logger.info("Subscriber client opened")
     services.requestsIssued(ctx.issuer, requests)
   }
 
   private def subscriberClosed(ctx: SubscriptionContext): Unit = {
+    logger.info("Subscriber client closed")
     streams.subscriberRemoved(ctx.target)
     services.issuerClosed(ctx.issuer)
   }
 
   def gatewayClientOpened(clientProxy: GatewayClientProxyChannel): Unit = {
+    logger.info("Gateway client opened")
     clientProxy.onClose.subscribe(() => gatewayClientClosed(clientProxy))
     gateway.handleClientOpened(clientProxy)
   }
 
   private def gatewayClientClosed(clientProxy: GatewayClientProxyChannel): Unit = {
+    logger.info("Gateway client closed")
     gateway.handleClientClosed(clientProxy)
   }
 

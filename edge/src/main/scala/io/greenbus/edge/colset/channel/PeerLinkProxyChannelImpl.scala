@@ -21,8 +21,6 @@ package io.greenbus.edge.colset.channel
 import io.greenbus.edge.colset._
 import io.greenbus.edge.flow._
 
-import scala.util.Try
-
 class PeerLinkProxyChannelImpl(
     subChannel: SenderChannel[SubscriptionSetUpdate, Boolean],
     eventChannel: ReceiverChannel[EventBatch, Boolean],
@@ -30,7 +28,7 @@ class PeerLinkProxyChannelImpl(
     serviceResponsesChannel: ReceiverChannel[ServiceResponseBatch, Boolean]) extends PeerLinkProxyChannel with CloseableChannelAggregate {
 
   private val channels = Seq(subChannel, eventChannel, serviceRequestsChannel, serviceResponsesChannel)
-  protected def closeables: Seq[CloseableComponent] = channels
+  protected val closeableHolder = new CloseableHolder(channels)
 
   private val subSink = ChannelHelpers.bindSink(subChannel, { set: Set[RowId] => SubscriptionSetUpdate(set) })
 

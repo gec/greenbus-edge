@@ -71,7 +71,7 @@ class PeerLinkAggregator(sessionId: PeerSessionId, handler: (PeerSessionId, Peer
 
   }
 }
-class SubscriberAggregator(correlation: String, handler: (PeerSessionId, PeerLinkProxyChannel) => Unit) extends CloseableAggregator {
+class SubscriberAggregator(correlation: String, handler: SubscriberProxyChannel => Unit) extends CloseableAggregator {
 
   val subChannel = bucket[ReceiverChannel[SubscriptionSetUpdate, Boolean]]
   val eventChannel = bucket[SenderChannel[EventBatch, Boolean]]
@@ -79,10 +79,11 @@ class SubscriberAggregator(correlation: String, handler: (PeerSessionId, PeerLin
   val serviceResponsesChannel = bucket[SenderChannel[ServiceResponseBatch, Boolean]]
 
   protected def onComplete(): Unit = {
-
+    val proxy = new SubscriberChannelProxyImpl(subChannel.get, eventChannel.get, serviceRequestsChannel.get, serviceResponsesChannel.get)
+    handler(proxy)
   }
 }
-class GatewayAggregator(correlation: String, handler: (PeerSessionId, PeerLinkProxyChannel) => Unit) extends CloseableAggregator {
+class GatewayAggregator(correlation: String, handler: GatewayClientProxyChannel => Unit) extends CloseableAggregator {
 
   val subChannel = bucket[SenderChannel[SubscriptionSetUpdate, Boolean]]
   val eventChannel = bucket[ReceiverChannel[GatewayClientEvents, Boolean]]
@@ -90,15 +91,15 @@ class GatewayAggregator(correlation: String, handler: (PeerSessionId, PeerLinkPr
   val serviceResponsesChannel = bucket[ReceiverChannel[ServiceResponseBatch, Boolean]]
 
   protected def onComplete(): Unit = {
-
+    handler(new GatewayClientProxyChannelImpl(subChannel.get, eventChannel.get, serviceRequestsChannel.get, serviceResponsesChannel.get))
   }
 }
 
 class ChannelHandler(handler: PeerChannelHandler) extends ChannelServerHandler {
 
   val peerLinkTable = AggregatorTable.forBuilder { key: PeerLinkGroupKey => new PeerLinkAggregator(key.linkSession, handler.peerOpened) }
-  val subscriberTable = AggregatorTable.forBuilder { key: SubscriberGroupKey => new SubscriberAggregator(key.correlation, handler.peerOpened) }
-  val gatewayTable = AggregatorTable.forBuilder { key: GatewayClientGroupKey => new GatewayAggregator(key.correlation, handler.peerOpened) }
+  val subscriberTable = AggregatorTable.forBuilder { key: SubscriberGroupKey => new SubscriberAggregator(key.correlation, handler.subscriberOpened) }
+  val gatewayTable = AggregatorTable.forBuilder { key: GatewayClientGroupKey => new GatewayAggregator(key.correlation, handler.gatewayClientOpened) }
 
   def handleReceiver[Message](desc: ChannelDescriptor[Message], channel: ReceiverChannel[Message, Boolean]): Unit = {
     desc match {

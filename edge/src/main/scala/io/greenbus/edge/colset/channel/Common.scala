@@ -22,24 +22,25 @@ import io.greenbus.edge.flow._
 
 import scala.util.Try
 
-trait CloseableChannelAggregate extends Closeable with CloseObservable {
-
-  private val closeLatch = new SingleThreadedLatchSubscribable
+class CloseableHolder(closeables: Seq[CloseableComponent]) {
+  val closeLatch = new SingleThreadedLatchSubscribable
   private val channelCloseSubs = closeables.map(_.onClose.subscribe(() => onSubChannelClosed()))
 
-  protected def closeables: Seq[CloseableComponent]
-
   private def onSubChannelClosed(): Unit = {
-    onClose
+    closeLatch()
     closeables.foreach(_.close())
     channelCloseSubs.foreach(_.close())
   }
+}
+trait CloseableChannelAggregate extends Closeable with CloseObservable {
+
+  protected val closeableHolder: CloseableHolder
 
   def close(): Unit = {
-    closeLatch()
+    closeableHolder.closeLatch()
   }
 
-  def onClose: LatchSubscribable = closeLatch
+  def onClose: LatchSubscribable = closeableHolder.closeLatch
 }
 
 object ChannelHelpers {

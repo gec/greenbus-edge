@@ -28,7 +28,7 @@ class GatewayClientProxyChannelImpl(
     serviceResponsesChannel: ReceiverChannel[ServiceResponseBatch, Boolean]) extends GatewayClientProxyChannel with CloseableChannelAggregate {
 
   private val channels = Seq(subChannel, eventChannel, serviceRequestsChannel, serviceResponsesChannel)
-  protected def closeables: Seq[CloseableComponent] = channels
+  protected val closeableHolder = new CloseableHolder(channels)
 
   private val subSink = ChannelHelpers.bindSink(subChannel, { set: Set[RowId] => SubscriptionSetUpdate(set) })
 

@@ -446,7 +446,7 @@ object ProtocolConversions {
     b.build()
   }
 
-  def gatewayFromProto(msg: proto.GatewayClientEvents): Either[String, colset.GatewayClientEvents] = {
+  def gatewayEventsFromProto(msg: proto.GatewayClientEvents): Either[String, colset.GatewayClientEvents] = {
     val routesOptEither: Either[String, Option[Set[TypeValue]]] = if (msg.hasRoutesUpdate) {
       rightSequence(msg.getRoutesUpdate.getValuesList.asScala.map(fromProto)).map(r => Some(r.toSet))
     } else {
@@ -460,8 +460,15 @@ object ProtocolConversions {
       colset.GatewayClientEvents(routesOpt, events)
     }
   }
-  def gatewayToProto(obj: colset.GatewayClientEvents): proto.GatewayClientEvents = {
+  def gatewayEventsToProto(obj: colset.GatewayClientEvents): proto.GatewayClientEvents = {
     val b = proto.GatewayClientEvents.newBuilder()
+
+    obj.routesUpdate.map { set =>
+      val tvb = proto.OptionalTypeValueArray.newBuilder()
+      set.map(toProto).foreach(tvb.addValues)
+      tvb.build()
+    }.foreach(b.setRoutesUpdate)
+
     obj.events.map(streamToProto).foreach(b.addEvents)
     b.build()
   }
