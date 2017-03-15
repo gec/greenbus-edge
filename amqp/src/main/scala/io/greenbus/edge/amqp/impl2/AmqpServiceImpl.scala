@@ -1,29 +1,46 @@
+/**
+ * Copyright 2011-2017 Green Energy Corp.
+ *
+ * Licensed to Green Energy Corp (www.greenenergycorp.com) under one or more
+ * contributor license agreements. See the NOTICE file distributed with this
+ * work for additional information regarding copyright ownership. Green Energy
+ * Corp licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 package io.greenbus.edge.amqp.impl2
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.CallMarshaller
-import io.greenbus.edge.amqp.{AmqpChannelServer, AmqpListener}
-import io.greenbus.edge.amqp.channel.AmqpChannelDescriber
-import io.greenbus.edge.amqp.impl.{ResourceContainer, _}
-import io.greenbus.edge.channel2.{ChannelClient, ChannelSerializationProvider}
+import io.greenbus.edge.amqp.{ AmqpChannelServer, AmqpListener }
+import io.greenbus.edge.amqp.channel.{ AmqpChannelDescriber, AmqpClientResponseParser }
+import io.greenbus.edge.amqp.impl.{ ResourceContainer, _ }
+import io.greenbus.edge.channel2.{ ChannelClient, ChannelSerializationProvider }
 import org.apache.qpid.proton.Proton
-import org.apache.qpid.proton.engine.{BaseHandler, Connection, Event, Session}
+import org.apache.qpid.proton.engine.{ BaseHandler, Connection, Event, Session }
 
-import scala.concurrent.{Future, Promise}
-
+import scala.concurrent.{ Future, Promise }
 
 trait AmqpChannelClientSource {
-  def open(describer: AmqpChannelDescriber, serialization: ChannelSerializationProvider): Future[ChannelClient]
+  def open(describer: AmqpChannelDescriber, responseParser: AmqpClientResponseParser, serialization: ChannelSerializationProvider): Future[ChannelClient]
 }
 
 class AmqpChannelClientSourceImpl(ioThread: CallMarshaller, c: Connection, promise: Promise[AmqpChannelClientSource]) extends AmqpChannelClientSource {
   private val children = new ResourceContainer
 
-  def open(describer: AmqpChannelDescriber, serialization: ChannelSerializationProvider): Future[ChannelClient] = {
+  def open(describer: AmqpChannelDescriber, responseParser: AmqpClientResponseParser, serialization: ChannelSerializationProvider): Future[ChannelClient] = {
     val promise = Promise[ChannelClient]
     ioThread.marshal {
       val sess = c.session()
-      val impl = new ChannelClientImpl(ioThread, sess, describer, serialization, promise, children)
+      val impl = new ChannelClientImpl(ioThread, sess, describer, responseParser, serialization, promise, children)
       children.add(impl)
       sess.setContext(impl.handler)
       sess.open()
@@ -48,10 +65,9 @@ class AmqpChannelClientSourceImpl(ioThread: CallMarshaller, c: Connection, promi
   }
 }
 
-
 object AmqpService {
   def build(threadId: Option[String] = None): AmqpService = {
-    new AmqpIoImpl(threadId)
+    new AmqpServiceImpl(threadId)
   }
 }
 trait AmqpService {
@@ -61,7 +77,7 @@ trait AmqpService {
   def listen(host: String, port: Int, handler: AmqpChannelServer): Future[AmqpListener]
 }
 
-class AmqpIoImpl(idOpt: Option[String] = None) extends AmqpService {
+class AmqpServiceImpl(idOpt: Option[String] = None) extends AmqpService {
   private val opQueue = new OperationQueue
   private val baseHandler = new ReactorHandler
   private val r = Proton.reactor(baseHandler)

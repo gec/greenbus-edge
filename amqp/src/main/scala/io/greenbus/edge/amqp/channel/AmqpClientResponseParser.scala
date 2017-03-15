@@ -16,13 +16,12 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.channel2
+package io.greenbus.edge.amqp.channel
 
-import io.greenbus.edge.flow.{ ReceiverChannel, SenderChannel }
+import io.greenbus.edge.channel2.ChannelDescriptor
+import java.util
 
-import scala.concurrent.{ ExecutionContext, Future }
-
-trait ChannelClient {
-  def openSender[Message, Desc <: ChannelDescriptor[Message]](desc: Desc)(implicit ec: ExecutionContext): Future[(SenderChannel[Message, Boolean], ChannelDescriptor[Message])]
-  def openReceiver[Message, Desc <: ChannelDescriptor[Message]](desc: Desc)(implicit ec: ExecutionContext): Future[(ReceiverChannel[Message, Boolean], ChannelDescriptor[Message])]
+trait AmqpClientResponseParser {
+  def sender[A](clientDesc: ChannelDescriptor[A], properties: Option[util.Map[org.apache.qpid.proton.amqp.Symbol, AnyRef]]): Option[ChannelDescriptor[A]]
+  def receiver[A](clientDesc: ChannelDescriptor[A], properties: Option[util.Map[org.apache.qpid.proton.amqp.Symbol, AnyRef]]): Option[ChannelDescriptor[A]]
 }

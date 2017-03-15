@@ -20,7 +20,6 @@ package io.greenbus.edge.channel2
 
 import io.greenbus.edge.flow.{ ReceiverChannel, SenderChannel }
 
-
 trait ChannelDescriptor[Message] {
   type Sender = SenderChannel[Message, Boolean]
   type Receiver = ReceiverChannel[Message, Boolean]
