@@ -123,7 +123,6 @@ class Gateway(localSession: PeerSessionId) extends LocalGateway {
   }
 }
 
-
 trait GatewayRowSynthesizer {
   def append(event: AppendEvent): Seq[AppendEvent]
   def current: SequencedTypeValue
