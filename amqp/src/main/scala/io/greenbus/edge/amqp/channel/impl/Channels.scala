@@ -21,14 +21,13 @@ package io.greenbus.edge.amqp.channel.impl
 import java.util.concurrent.TimeoutException
 
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.CallMarshaller
 import io.greenbus.edge.amqp.impl._
+import io.greenbus.edge.{CallMarshaller, flow}
 import io.greenbus.edge.flow._
-import io.greenbus.edge.flow
-import org.apache.qpid.proton.engine.{ Delivery, Link, Receiver, Sender }
+import org.apache.qpid.proton.engine.{Delivery, Link, Receiver, Sender}
 
-import scala.concurrent.{ Future, Promise }
-import scala.util.{ Failure, Try }
+import scala.concurrent.Promise
+import scala.util.{Failure, Try}
 
 class ServerSenderChannelImpl[A](
   ioThread: CallMarshaller,
@@ -162,8 +161,6 @@ abstract class BaseReceiverChannelImpl[A](
           deserializer(buffer) match {
             case None => logger.warn("Deserialization failed in receiver channel")
             case Some(obj) => {
-
-              val promise = Promise[Boolean]
 
               def onResponse(resp: Boolean): Unit = {
                 ioThread.marshal { d.settle() } // TODO: distinguish delivery state?

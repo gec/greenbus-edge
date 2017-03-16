@@ -64,10 +64,3 @@ case class RowAppendEvent(rowId: RowId, appendEvent: AppendEvent) extends Stream
 // TODO: rowunavailable event?
 case class RouteUnresolved(routingKey: TypeValue) extends StreamEvent
 
-/*
-case class StreamEventBatch(events: Seq[StreamEvent])
-case class StreamNotifications(batches: Seq[StreamEventBatch])
-
-case class IndexSpecifier(key: TypeValue, value: Option[IndexableTypeValue])
-
-*/

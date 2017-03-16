@@ -93,7 +93,7 @@ trait PeerChannelHandler {
 
 class PeerChannelMachine(logId: String, selfSession: PeerSessionId) extends PeerChannelHandler with LazyLogging {
 
-  private val gateway = new Gateway
+  private val gateway = new Gateway(selfSession)
   private val streams = new PeerStreamEngine(logId, selfSession, gateway)
   private val services = new PeerServiceEngine(logId, streams)
 

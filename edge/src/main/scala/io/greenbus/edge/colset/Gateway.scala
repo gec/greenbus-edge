@@ -18,6 +18,9 @@
  */
 package io.greenbus.edge.colset
 
+import java.util.UUID
+
+import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.collection.OneToManyUniquely
 import io.greenbus.edge.flow._
 
@@ -37,7 +40,9 @@ trait GatewayClientProxy extends ServiceProvider {
 trait GatewayClientProxyChannel extends GatewayClientProxy with CloseableComponent
 
 case class GatewayEvents(routesUpdate: Option[Set[TypeValue]], events: Seq[StreamEvent])
-class Gateway extends LocalGateway {
+case class GatewayClientContext(proxy: GatewayClientProxy, id: UUID)
+
+class Gateway(localSession: PeerSessionId) extends LocalGateway {
 
   private val clientToRoutes = OneToManyUniquely.empty[GatewayClientProxy, TypeValue]
   private val subscriptions = mutable.Map.empty[TypeValue, Set[TableRow]]
@@ -45,12 +50,17 @@ class Gateway extends LocalGateway {
   private val eventDist = new QueuedDistributor[GatewayEvents]
   private val respDist = new QueuedDistributor[Seq[ServiceResponse]]
 
+  // Keyed off of UUID because the source ID stays around until re-written, which may be never
+  private val synthesizer = new GatewaySynthesizer[UUID](localSession)
+
   def events: Source[GatewayEvents] = eventDist
   def responses: Source[Seq[ServiceResponse]] = respDist
 
   def handleClientOpened(proxy: GatewayClientProxy): Unit = {
-    proxy.events.bind(ev => clientEvents(proxy, ev.routesUpdate, ev.events))
-    proxy.responses.bind(resps => clientServiceResponses(proxy, resps))
+    val id = UUID.randomUUID()
+    val ctx = GatewayClientContext(proxy, id)
+    proxy.events.bind(ev => clientEvents(ctx, ev.routesUpdate, ev.events))
+    proxy.responses.bind(resps => clientServiceResponses(ctx, resps))
   }
 
   def handleClientClosed(proxy: GatewayClientProxy): Unit = {
@@ -62,19 +72,19 @@ class Gateway extends LocalGateway {
     }
   }
 
-  private def clientEvents(proxy: GatewayClientProxy, routeUpdate: Option[Set[TypeValue]], events: Seq[StreamEvent]): Unit = {
+  private def clientEvents(ctx: GatewayClientContext, routeUpdate: Option[Set[TypeValue]], events: Seq[StreamEvent]): Unit = {
     val setUpdate = routeUpdate.flatMap { routes =>
       val gatewayRoutesBefore = clientToRoutes.values
 
-      val proxyRoutesBefore = clientToRoutes.getFirst(proxy).getOrElse(Set())
+      val proxyRoutesBefore = clientToRoutes.getFirst(ctx.proxy).getOrElse(Set())
       val subsBefore = proxyRoutesBefore.flatMap(r => subscriptions.getOrElse(r, Set()).map(_.toRowId(r)))
 
-      routes.foreach(r => clientToRoutes.put(proxy, r))
+      routes.foreach(r => clientToRoutes.put(ctx.proxy, r))
 
-      val proxyRoutesAfter = clientToRoutes.getFirst(proxy).getOrElse(Set())
+      val proxyRoutesAfter = clientToRoutes.getFirst(ctx.proxy).getOrElse(Set())
       val subsAfter = proxyRoutesAfter.flatMap(r => subscriptions.getOrElse(r, Set()).map(_.toRowId(r)))
       if (subsBefore != subsAfter) {
-        proxy.subscriptions.push(subsAfter)
+        ctx.proxy.subscriptions.push(subsAfter)
       }
 
       val gatewayRoutesAfter = clientToRoutes.values
@@ -86,10 +96,12 @@ class Gateway extends LocalGateway {
       }
     }
 
-    eventDist.push(GatewayEvents(setUpdate, events))
+    val synthesizedEvents = synthesizer.handle(ctx.id, events)
+
+    eventDist.push(GatewayEvents(setUpdate, synthesizedEvents))
   }
 
-  private def clientServiceResponses(proxy: GatewayClientProxy, responses: Seq[ServiceResponse]): Unit = {
+  private def clientServiceResponses(ctx: GatewayClientContext, responses: Seq[ServiceResponse]): Unit = {
     respDist.push(responses)
   }
 
@@ -107,6 +119,149 @@ class Gateway extends LocalGateway {
     requests.groupBy(_.row.routingKey).foreach {
       case (route, reqs) =>
         clientToRoutes.getSecond(route).foreach(p => p.requests.push(reqs))
+    }
+  }
+}
+
+
+trait GatewayRowSynthesizer {
+  def append(event: AppendEvent): Seq[AppendEvent]
+  def current: SequencedTypeValue
+}
+
+object GatewayRowSynthesizerImpl {
+
+  def resequenceAppendEvent(appendEvent: AppendEvent, localSession: PeerSessionId, start: SequencedTypeValue): (AppendEvent, SequencedTypeValue) = {
+    appendEvent match {
+      case sd: StreamDelta => {
+        val (delta, endSeq) = resequenceDelta(sd.update, start)
+        (StreamDelta(delta), endSeq)
+      }
+      case rs: ResyncSnapshot => {
+        val (snap, endSeq) = resequenceSnapshot(rs.snapshot, start)
+        (ResyncSnapshot(snap), endSeq)
+      }
+      case rss: ResyncSession => {
+        val (snap, endSeq) = resequenceSnapshot(rss.snapshot, start)
+        (ResyncSession(localSession, snap), endSeq)
+      }
+    }
+
+  }
+
+  private def resequenceAppendSeq(original: AppendSetSequence, startSequence: SequencedTypeValue): (AppendSetSequence, SequencedTypeValue) = {
+    var seqVar = startSequence
+    val values = original.appends.map { v =>
+      val vseq = seqVar
+      seqVar = seqVar.next
+      AppendSetValue(vseq, v.value)
+    }
+    (AppendSetSequence(values), seqVar)
+  }
+
+  def resequenceDelta(delta: SetDelta, seq: SequencedTypeValue): (SetDelta, SequencedTypeValue) = {
+    delta match {
+      case d: ModifiedSetDelta => (d.copy(sequence = seq), seq.next)
+      case d: ModifiedKeyedSetDelta => (d.copy(sequence = seq), seq.next)
+      case d: AppendSetSequence => resequenceAppendSeq(d, seq)
+    }
+  }
+
+  def resequenceSnapshot(snapshot: SetSnapshot, seq: SequencedTypeValue): (SetSnapshot, SequencedTypeValue) = {
+    snapshot match {
+      case d: ModifiedSetSnapshot => (d.copy(sequence = seq), seq.next)
+      case d: ModifiedKeyedSetSnapshot => (d.copy(sequence = seq), seq.next)
+      case d: AppendSetSequence => resequenceAppendSeq(d, seq)
+    }
+  }
+}
+class GatewayRowSynthesizerImpl(row: RowId, filter: SessionSynthesizingFilter, peerSession: PeerSessionId, startSequence: SequencedTypeValue) extends GatewayRowSynthesizer {
+  import GatewayRowSynthesizerImpl._
+
+  private var sessionSequence: SequencedTypeValue = startSequence
+
+  def current: SequencedTypeValue = sessionSequence
+
+  def append(event: AppendEvent): Seq[AppendEvent] = {
+    event match {
+      case delta: StreamDelta => {
+        val deltaOpt = filter.handleDelta(delta.update).map { filteredDelta =>
+          val (resequenced, updatedSeq) = resequenceDelta(filteredDelta, sessionSequence)
+          sessionSequence = updatedSeq
+          StreamDelta(resequenced)
+        }
+
+        deltaOpt.map(Seq(_)).getOrElse(Seq())
+      }
+      case snap: ResyncSnapshot => {
+        filter.handleResync(snap.snapshot).map { appendEvent =>
+          val (resequenced, updatedSeq) = resequenceAppendEvent(appendEvent, peerSession, sessionSequence)
+          sessionSequence = updatedSeq
+          Seq(resequenced)
+        }.getOrElse(Seq())
+      }
+      case snap: ResyncSession => {
+        filter.handleResync(snap.snapshot).map { appendEvent =>
+          val (resequenced, updatedSeq) = resequenceAppendEvent(appendEvent, peerSession, sessionSequence)
+          sessionSequence = updatedSeq
+          Seq(resequenced)
+        }.getOrElse(Seq())
+      }
+    }
+  }
+}
+
+import scala.collection.mutable
+
+class GatewaySynthesizer[Source](localSession: PeerSessionId) extends LazyLogging {
+
+  private val rowSynthesizers = mutable.Map.empty[TypeValue, mutable.Map[TableRow, (Source, GatewayRowSynthesizer)]]
+
+  def handle(source: Source, events: Seq[StreamEvent]): Seq[StreamEvent] = {
+    events.flatMap {
+      case ev: RowAppendEvent =>
+        val routeMap = rowSynthesizers.getOrElseUpdate(ev.rowId.routingKey, mutable.Map.empty[TableRow, (Source, GatewayRowSynthesizer)])
+        routeMap.get(ev.rowId.tableRow) match {
+          case None => {
+            addRowSynthesizer(ev, Int64Val(0), source, routeMap)
+          }
+          case Some((rowSource, synthesizer)) =>
+            if (rowSource == source) {
+              synthesizer.append(ev.appendEvent).map { appendEvent => RowAppendEvent(ev.rowId, appendEvent) }
+            } else {
+              // Restart the filter with the same resequencing
+              addRowSynthesizer(ev, synthesizer.current, source, routeMap)
+            }
+        }
+      case other =>
+        logger.warn("Gateway saw unexpected stream event: " + other)
+        Seq()
+    }
+  }
+
+  private def addRowSynthesizer(ev: RowAppendEvent, startSequence: SequencedTypeValue, source: Source, routeMap: mutable.Map[TableRow, (Source, GatewayRowSynthesizer)]): Seq[RowAppendEvent] = {
+    val snapOpt = ev.appendEvent match {
+      case sd: StreamDelta =>
+        logger.warn("Tried to synthesize new row with stream delta: " + ev)
+        None
+      case rs: ResyncSnapshot => Some(rs.snapshot)
+      case rs: ResyncSession => Some(rs.snapshot)
+    }
+
+    snapOpt match {
+      case None => Seq()
+      case Some(snap) =>
+        SessionRowLog.build(ev.rowId, localSession, snap) match {
+          case None =>
+            logger.warn("Could not build log from snapshot: " + ev)
+            Seq()
+          case Some(log) =>
+            val (initial, filter) = log.activate()
+            val synthesizer = new GatewayRowSynthesizerImpl(ev.rowId, filter, localSession, startSequence)
+            routeMap.put(ev.rowId.tableRow, (source, synthesizer))
+            initial.map(synthesizer.append)
+              .flatMap(appends => appends.map(append => RowAppendEvent(ev.rowId, append)))
+        }
     }
   }
 }
