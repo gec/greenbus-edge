@@ -145,9 +145,7 @@ abstract class BaseReceiverChannelImpl[A](
 
   private val rcvImpl = new QueueingReceiverImpl[A, Boolean](ioThread)
 
-  def bind(responder: Responder[A, Boolean]): Unit = rcvImpl.bind(rcvImpl)
-
-  //def receiver: flow.Receiver[A, Boolean] = rcvImpl
+  def bind(responder: Responder[A, Boolean]): Unit = rcvImpl.bind(responder)
 
   private val self = this
 
@@ -198,7 +196,6 @@ abstract class CloseableChannel(ioThread: CallMarshaller, startOpen: Boolean, pa
 
   private var opened = startOpen
   private var userClosed = false
-  //private val closeSink = LatchSink(handleUserClose)
   protected val closeSource = new LocallyAppliedLatchSubscribable(ioThread)
 
   protected def handleOpenTransition(): Unit

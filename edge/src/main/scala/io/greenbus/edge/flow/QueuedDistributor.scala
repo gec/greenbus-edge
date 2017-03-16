@@ -61,6 +61,7 @@ class QueueingReceiverImpl[A, B](self: CallMarshaller) extends Receiver[A, B] wi
   private var state: State[A, B] = Unopened(ArrayBuffer.empty[(A, B => Unit)])
 
   def bind(responder: Responder[A, B]): Unit = {
+    assert(responder != this)
     self.marshal {
       state match {
         case Unopened(queue) =>
