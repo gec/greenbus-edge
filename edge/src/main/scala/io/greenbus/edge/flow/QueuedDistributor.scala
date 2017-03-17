@@ -18,6 +18,7 @@
  */
 package io.greenbus.edge.flow
 
+import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.CallMarshaller
 
 import scala.collection.mutable.ArrayBuffer
@@ -39,6 +40,36 @@ class QueuedDistributor[A] extends Source[A] with Sink[A] {
         queue.foreach(handler.handle)
       case Opened(_) =>
         throw new IllegalStateException("Queued distributor bound twice")
+    }
+  }
+
+  def push(obj: A): Unit = {
+    state match {
+      case Unbound(queue) => queue += obj
+      case Opened(handler) => handler.handle(obj)
+    }
+  }
+}
+
+object RemoteBoundQueuedDistributor {
+  sealed trait State[A]
+  case class Unbound[A](queue: ArrayBuffer[A]) extends State[A]
+  case class Opened[A](handler: Handler[A]) extends State[A]
+}
+class RemoteBoundQueuedDistributor[A](eventThread: CallMarshaller) extends Source[A] with Sink[A] with LazyLogging {
+  import QueuedDistributor._
+
+  private var state: State[A] = Unbound(ArrayBuffer.empty[A])
+
+  def bind(handler: Handler[A]): Unit = {
+    eventThread.marshal {
+      state match {
+        case Unbound(queue) =>
+          state = Opened(handler)
+          queue.foreach(handler.handle)
+        case Opened(_) =>
+          logger.error("Queued distributor bound twice")
+      }
     }
   }
 
