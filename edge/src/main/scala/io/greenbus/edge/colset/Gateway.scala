@@ -28,7 +28,7 @@ import scala.collection.mutable
 
 trait GatewayProxy extends ServiceConsumer {
   def subscriptions: Source[Set[RowId]]
-  def events: Sink[GatewayEvents]
+  def events: Sender[GatewayEvents, Boolean]
 }
 trait GatewayProxyChannel extends GatewayProxy with CloseableComponent
 

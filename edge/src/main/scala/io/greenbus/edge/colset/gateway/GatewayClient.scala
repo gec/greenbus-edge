@@ -18,9 +18,13 @@
  */
 package io.greenbus.edge.colset.gateway
 
+import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.CallMarshaller
 import io.greenbus.edge.colset._
-import io.greenbus.edge.flow.{ Closeable, Source }
+import io.greenbus.edge.flow.{ Closeable, Responder, Sender, Sink, Source }
+
+import scala.collection.mutable
+import scala.util.{ Failure, Success, Try }
 
 case class RouteServiceRequest(row: TableRow, value: TypeValue, respond: TypeValue => Unit)
 
@@ -62,9 +66,9 @@ trait RouteSource {
   def close(): Unit
 }
 
-trait GatewayClient {
+/*trait GatewayClient {
 
-}
+}*/
 
 trait RouteSourceHandle {
   def setRow(id: TableRow): SetEventSink
@@ -82,11 +86,6 @@ trait RouteSourceSubscription extends Closeable {
 
 }
 
-class RouteSourceMgr(route: TypeValue) {
-
-  //def resync(): Seq[StreamEvent]
-
-}
 /*
 - user pushes data
 - event logs store some amount of it (latest value for sets)
@@ -97,10 +96,139 @@ class RouteSourceMgr(route: TypeValue) {
 
  */
 
+trait BindableRowMgr {
+  def bind(sink: Sender[SetDelta, Boolean]): SetSnapshot
+  def unbind(): Unit
+}
+
 class SetLog extends SetEventSink {
 
   def update(set: Set[TypeValue]): Unit = {
 
+  }
+}
+class AppendLog(maxBuffered: Int, eventThread: CallMarshaller) extends AppendEventSink with BindableRowMgr with LazyLogging {
+  private var buffer = Vector.empty[(Long, TypeValue)]
+  private var sequence: Long = 0
+  private var publishOpt = Option.empty[Sender[SetDelta, Boolean]]
+
+  def bind(sink: Sender[SetDelta, Boolean]): SetSnapshot = {
+    publishOpt = Some(sink)
+    toAppendSeq(buffer)
+  }
+  def unbind(): Unit = {
+    publishOpt = None
+  }
+
+  def confirmed(seq: Long): Unit = {
+    eventThread.marshal {
+      buffer = buffer.dropWhile(_._1 <= seq)
+    }
+  }
+
+  def append(values: TypeValue*): Unit = {
+    eventThread.marshal {
+      if (values.nonEmpty) {
+        val vseq = Range(0, values.size).map(_ + sequence).zip(values).toVector
+        buffer ++= vseq
+        sequence += values.size
+        publishOpt.foreach { publisher =>
+          publish(publisher, vseq)
+        }
+      }
+    }
+  }
+
+  private def publish(publisher: Sender[SetDelta, Boolean], updates: Seq[(Long, TypeValue)]): Unit = {
+    if (updates.nonEmpty) {
+
+      val last = updates.last._1
+
+      def handleResult(result: Try[Boolean]): Unit = {
+        result match {
+          case Success(_) => confirmed(last)
+          case Failure(ex) =>
+            logger.debug(s"AppendLog send failure: " + ex)
+        }
+      }
+
+      publisher.send(toAppendSeq(updates), handleResult)
+    }
+  }
+
+  private def toAppendSeq(updates: Seq[(Long, TypeValue)]): AppendSetSequence = {
+    val values = updates.map {
+      case (seq, v) => AppendSetValue(Int64Val(seq), v)
+    }
+
+    AppendSetSequence(values)
+  }
+}
+
+class RouteHandleImpl(mgr: RouteSourceMgr) extends RouteSourceHandle {
+  def setRow(id: TableRow): SetEventSink = ???
+
+  def keyedSetRow(id: TableRow): KeyedSetEventSink = ???
+
+  def appendSetRow(id: TableRow): AppendEventSink = ???
+
+  def requests: Source[Seq[RouteServiceRequest]] = ???
+
+  def flushEvents(): Unit = ???
+
+  def close(): Unit = ???
+}
+
+class RouteSourceMgr(route: TypeValue) {
+
+  private var rows = Map.empty[TableRow, BindableRowMgr]
+  //private var unfulfilledSubs = Map.empty[TableRow, Sender[]]
+
+  def subscriptionUpdate(buffer: EventBuffer, added: Set[TableRow], removed: Set[TableRow]): Seq[RowAppendEvent] = {
+    removed.flatMap(rows.get).foreach(_.unbind())
+    val snaps = added.toVector.flatMap { row =>
+      rows.get(row).map(mgr => mgr.bind(buffer.sender(row.toRowId(route)))).map(ss => (row, ss))
+    }
+
+    snaps.map { case (tr, ss) => RowAppendEvent(tr.toRowId(route), ResyncSnapshot(ss)) }
+  }
+  def unbindAll(): Unit = {
+    rows.values.foreach(_.unbind())
+  }
+
+}
+
+class EventBuffer(proxy: GatewayProxy) extends LazyLogging {
+
+  private val events = mutable.ArrayBuffer.empty[StreamEvent]
+  private val callbacks = mutable.ArrayBuffer.empty[Try[Boolean] => Unit]
+
+  def sender(row: RowId): Sender[SetDelta, Boolean] = {
+    new Sender[SetDelta, Boolean] {
+      def send(obj: SetDelta, handleResponse: (Try[Boolean]) => Unit): Unit = {
+        events += RowAppendEvent(row, StreamDelta(obj))
+        callbacks += handleResponse
+      }
+    }
+  }
+
+  def flush(routeUpdates: Option[Set[TypeValue]]): Unit = {
+    if (events.nonEmpty || routeUpdates.nonEmpty) {
+      val evs = events.toVector
+      val cbs = callbacks.toVector
+      events.clear()
+      callbacks.clear()
+
+      def onResponse(result: Try[Boolean]): Unit = {
+        result match {
+          case Success(_) => cbs.foreach(f => f(Success(true)))
+          case Failure(ex) =>
+            logger.debug(s"EventBuffer send failure: " + ex)
+        }
+      }
+
+      proxy.events.send(GatewayEvents(routeUpdates, evs), onResponse)
+    }
   }
 }
 
@@ -110,6 +238,7 @@ class RouteManager(eventThread: CallMarshaller) {
 
   private var subscribedRows = Set.empty[RowId]
 
+  private var bufferOpt = Option.empty[EventBuffer]
   //private var subscription
 
   def connected(proxy: GatewayProxyChannel): Unit = {
@@ -118,7 +247,7 @@ class RouteManager(eventThread: CallMarshaller) {
     proxy.subscriptions.bind(rows => subscribed(proxy, rows))
 
     val initialEvent = GatewayEvents(Some(routes.keySet), Seq())
-    proxy.events.push(initialEvent)
+    proxy.events.send(initialEvent, _ => {})
   }
 
   def subscribed(proxy: GatewayProxyChannel, rows: Set[RowId]): Unit = {
@@ -127,7 +256,25 @@ class RouteManager(eventThread: CallMarshaller) {
     val removed = subscribedRows -- rows
     subscribedRows = rows
 
-    //added.groupBy(_.routingKey)
+    val addedPerRoute = added.groupBy(_.routingKey)
+    val removedPerRoute = removed.groupBy(_.routingKey)
+
+    val allModifiedRoutes = addedPerRoute.keySet ++ removedPerRoute.keySet
+
+    val buffer = new EventBuffer(proxy)
+    bufferOpt = Some(buffer)
+
+    allModifiedRoutes.flatMap { route =>
+      routes.get(route) match {
+        case None => Seq()
+        case Some(mgr) => {
+          val addedForRoute = addedPerRoute.getOrElse(route, Set())
+          val removedForRoute = removedPerRoute.getOrElse(route, Set())
+          mgr.subscriptionUpdate(buffer, addedForRoute.map(_.tableRow), removedForRoute.map(_.tableRow))
+        }
+      }
+    }
+
   }
 
   def serviceRequest(proxy: GatewayProxyChannel, serviceRequestBatch: Seq[ServiceRequest]): Unit = {
@@ -135,7 +282,11 @@ class RouteManager(eventThread: CallMarshaller) {
   }
 
   def connectionClosed(proxy: GatewayProxyChannel): Unit = {
-
+    routes.foreach {
+      case (route, mgr) => mgr.unbindAll()
+    }
+    subscribedRows = Set()
+    bufferOpt = None
   }
 }
 

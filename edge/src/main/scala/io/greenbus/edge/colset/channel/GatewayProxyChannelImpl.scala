@@ -21,6 +21,8 @@ package io.greenbus.edge.colset.channel
 import io.greenbus.edge.colset._
 import io.greenbus.edge.flow._
 
+import scala.util.Try
+
 class GatewayProxyChannelImpl(
     subChannel: ReceiverChannel[SubscriptionSetUpdate, Boolean],
     eventChannel: SenderChannel[GatewayClientEvents, Boolean],
@@ -32,7 +34,11 @@ class GatewayProxyChannelImpl(
 
   private val subDist = ChannelHelpers.bindDistributor(subChannel, { msg: SubscriptionSetUpdate => msg.rows })
 
-  private val eventSink = ChannelHelpers.bindSink(eventChannel, { obj: GatewayEvents => GatewayClientEvents(obj.routesUpdate, obj.events) })
+  private val eventSender = new Sender[GatewayEvents, Boolean] {
+    def send(obj: GatewayEvents, handleResponse: (Try[Boolean]) => Unit): Unit = {
+      eventChannel.send(GatewayClientEvents(obj.routesUpdate, obj.events), handleResponse)
+    }
+  }
 
   private val requestDist = ChannelHelpers.bindDistributor(serviceRequestsChannel, { msg: ServiceRequestBatch => msg.requests })
 
@@ -40,7 +46,7 @@ class GatewayProxyChannelImpl(
 
   def subscriptions: Source[Set[RowId]] = subDist
 
-  def events: Sink[GatewayEvents] = eventSink
+  def events: Sender[GatewayEvents, Boolean] = eventSender
 
   def requests: Source[Seq[ServiceRequest]] = requestDist
 

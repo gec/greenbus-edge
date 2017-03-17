@@ -70,7 +70,7 @@ object GatewayTest {
 
     val gateway = Await.result(client.openGatewayClient(), 5000.milliseconds)
 
-    gateway.events.push(GatewayEvents(Some(Set(SymbolVal("my_route"))), Seq()))
+    gateway.events.send(GatewayEvents(Some(Set(SymbolVal("my_route"))), Seq()), _ => {})
 
     System.in.read()
   }
