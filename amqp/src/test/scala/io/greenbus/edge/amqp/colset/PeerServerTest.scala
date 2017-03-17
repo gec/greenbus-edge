@@ -84,6 +84,13 @@ object GatewayTest {
     val appRow1 = route.appendSetRow(TableRow("append_table", SymbolVal("row1")), 30)
     appRow1.append(Int64Val(22), Int64Val(23))
 
+    route.requests.bind { requests =>
+      requests.foreach { req =>
+        println("Got service request: " + req)
+        req.respond(BoolVal(true))
+      }
+    }
+
     route.flushEvents()
 
     gatewaySource.connect(channel)
@@ -116,6 +123,16 @@ object SubscriberTest {
 
     subChannel.events.bind { events =>
       println(events)
+    }
+
+    subChannel.responses.bind(responses => println(responses))
+
+    var i = 0
+    while (true) {
+      val correlation = i
+      subChannel.requests.push(Seq(ServiceRequest(RowId(SymbolVal("my_route"), "request_table", SymbolVal("req1")), Int64Val(55 + i), Int64Val(correlation))))
+      i += 1
+      Thread.sleep(2000)
     }
 
   }

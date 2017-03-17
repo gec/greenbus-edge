@@ -143,7 +143,7 @@ class PeerChannelMachine(logId: String, selfSession: PeerSessionId) extends Peer
   }
 
   private def subscriberRequests(ctx: SubscriptionContext, requests: Seq[ServiceRequest]): Unit = {
-    logger.info("Subscriber client opened")
+    logger.trace("Subscriber service requests: " + requests)
     services.requestsIssued(ctx.issuer, requests)
   }
 
