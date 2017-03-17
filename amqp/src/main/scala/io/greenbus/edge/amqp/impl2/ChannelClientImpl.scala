@@ -93,7 +93,7 @@ class ChannelClientImpl(
             responseParser.receiver(desc, Option(r.getRemoteProperties)) match {
               case None =>
                 ch.close()
-                promise.failure(new IllegalArgumentException("Did not recognize response descriptor"))
+                promise.failure(new IllegalArgumentException("Did not recognize response descriptor to: " + desc))
               case Some(respDesc) => promise.success((ch, respDesc))
             }
           }

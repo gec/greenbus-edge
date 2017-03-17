@@ -97,6 +97,9 @@ class PeerChannelMachine(logId: String, selfSession: PeerSessionId) extends Peer
   private val streams = new PeerStreamEngine(logId, selfSession, gateway)
   private val services = new PeerServiceEngine(logId, streams)
 
+  gateway.events.bind(ev => streams.localGatewayEvents(ev.routesUpdate, ev.events))
+  gateway.responses.bind(resps => services.handleResponses(resps))
+
   def peerOpened(peerSessionId: PeerSessionId, proxy: PeerLinkProxyChannel): Unit = {
     logger.info(s"Peer link for $peerSessionId opened")
     val link = new PeerLinkShim(proxy)
@@ -125,11 +128,18 @@ class PeerChannelMachine(logId: String, selfSession: PeerSessionId) extends Peer
   }
 
   def subscriberOpened(proxy: SubscriberProxyChannel): Unit = {
+    logger.debug(s"Subscriber opened")
     val target = new SubscriptionTargetShim(proxy)
     val issuer = new RequestIssuerShim(proxy)
     val ctx = SubscriptionContext(proxy, target, issuer)
+    proxy.subscriptions.bind(rows => subscriberSetUpdate(ctx, rows))
     proxy.requests.bind(reqs => subscriberRequests(ctx, reqs))
     proxy.onClose.subscribe(() => subscriberClosed(ctx))
+  }
+
+  private def subscriberSetUpdate(ctx: SubscriptionContext, rows: Set[RowId]): Unit = {
+    logger.info("Subscriber client updated subscriptions: " + rows)
+    streams.subscriptionsRegistered(ctx.target, StreamSubscriptionParams(rows))
   }
 
   private def subscriberRequests(ctx: SubscriptionContext, requests: Seq[ServiceRequest]): Unit = {

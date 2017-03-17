@@ -42,7 +42,7 @@ trait GatewayClientProxyChannel extends GatewayClientProxy with CloseableCompone
 case class GatewayEvents(routesUpdate: Option[Set[TypeValue]], events: Seq[StreamEvent])
 case class GatewayClientContext(proxy: GatewayClientProxy, id: UUID)
 
-class Gateway(localSession: PeerSessionId) extends LocalGateway {
+class Gateway(localSession: PeerSessionId) extends LocalGateway with LazyLogging {
 
   private val clientToRoutes = OneToManyUniquely.empty[GatewayClientProxy, TypeValue]
   private val subscriptions = mutable.Map.empty[TypeValue, Set[TableRow]]
@@ -73,6 +73,7 @@ class Gateway(localSession: PeerSessionId) extends LocalGateway {
   }
 
   private def clientEvents(ctx: GatewayClientContext, routeUpdate: Option[Set[TypeValue]], events: Seq[StreamEvent]): Unit = {
+    logger.debug(s"Client events $routeUpdate with $events")
     val setUpdate = routeUpdate.flatMap { routes =>
       val gatewayRoutesBefore = clientToRoutes.values
 
@@ -106,6 +107,7 @@ class Gateway(localSession: PeerSessionId) extends LocalGateway {
   }
 
   def updateRowsForRoute(route: TypeValue, rows: Set[TableRow]): Unit = {
+    logger.debug(s"Rows for route $route updates: $rows")
     val existing = subscriptions.get(route)
     if (existing != rows) {
       subscriptions.put(route, rows)
@@ -258,8 +260,7 @@ class GatewaySynthesizer[Source](localSession: PeerSessionId) extends LazyLoggin
             val (initial, filter) = log.activate()
             val synthesizer = new GatewayRowSynthesizerImpl(ev.rowId, filter, localSession, startSequence)
             routeMap.put(ev.rowId.tableRow, (source, synthesizer))
-            initial.map(synthesizer.append)
-              .flatMap(appends => appends.map(append => RowAppendEvent(ev.rowId, append)))
+            initial.map(append => RowAppendEvent(ev.rowId, append))
         }
     }
   }

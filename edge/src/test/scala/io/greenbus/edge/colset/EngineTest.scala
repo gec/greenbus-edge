@@ -72,7 +72,7 @@ class MockPeerSource(val name: String, val source: MockPeer, val target: MockPee
 
   def pushSubs(): Unit = {
     subUpdates.foreach { rowSet =>
-      source.engine.subscriptionsRegistered(this, StreamSubscriptionParams(rowSet.toVector))
+      source.engine.subscriptionsRegistered(this, StreamSubscriptionParams(rowSet))
     }
     subUpdates.clear()
   }
@@ -140,7 +140,7 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
 
     val engine = new PeerStreamEngine("peer", sessA, gateway)
 
-    engine.subscriptionsRegistered(subQ, StreamSubscriptionParams(route1.rows))
+    engine.subscriptionsRegistered(subQ, StreamSubscriptionParams(route1.rowSet))
 
     engine.localGatewayEvents(Some(Set(route1.route)), Seq())
 
@@ -219,7 +219,7 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
   }
   def matchAndPushSourceUpdate(link: MockPeerSource, updates: Set[RowId]*): Unit = {
     matchSourceUpdate(link, updates: _*)
-    link.subUpdates.foreach(up => link.source.engine.subscriptionsRegistered(link, StreamSubscriptionParams(up.toSeq)))
+    link.subUpdates.foreach(up => link.source.engine.subscriptionsRegistered(link, StreamSubscriptionParams(up)))
     link.subUpdates.clear()
   }
 
@@ -372,7 +372,7 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
 
     checkAllClear()
 
-    peerD.engine.subscriptionsRegistered(subQ, StreamSubscriptionParams(route1.rows))
+    peerD.engine.subscriptionsRegistered(subQ, StreamSubscriptionParams(route1.rowSet))
     matchAndClearEventBatches(subQ, Seq(RouteUnresolved(route1.route)))
 
     checkAllClear()
@@ -404,7 +404,7 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
     checkAllClear()
 
     // now subscribe
-    peerD.engine.subscriptionsRegistered(subQ, StreamSubscriptionParams(route1.rows))
+    peerD.engine.subscriptionsRegistered(subQ, StreamSubscriptionParams(route1.rowSet))
 
     matchAndPushSourceUpdate(bToD, route1.rowSet ++ Set(bToD.source.routeRow))
     matchAndPushSourceUpdate(aToB, route1.rowSet ++ Set(aToB.source.routeRow))
@@ -431,7 +431,7 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
     checkAllClear()
 
     // Now subscribe
-    peerD.engine.subscriptionsRegistered(subQ, StreamSubscriptionParams(route1.rows))
+    peerD.engine.subscriptionsRegistered(subQ, StreamSubscriptionParams(route1.rowSet))
 
     matchAndPushSourceUpdate(bToD, route1.rowSet ++ Set(bToD.source.routeRow))
     matchAndPushSourceUpdate(aToB, route1.rowSet ++ Set(aToB.source.routeRow))
@@ -503,7 +503,7 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
     checkAllClear()
 
     // Now subscribe
-    peerD.engine.subscriptionsRegistered(subQ, StreamSubscriptionParams(route1.rows))
+    peerD.engine.subscriptionsRegistered(subQ, StreamSubscriptionParams(route1.rowSet))
 
     matchAndPushSourceUpdate(bToD, route1.rowSet ++ Set(bToD.source.routeRow))
     matchAndPushSourceUpdate(aToB, route1.rowSet ++ Set(aToB.source.routeRow))
@@ -717,7 +717,7 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
       checkAllClear()
 
       // Now subscribe
-      peerD.engine.subscriptionsRegistered(subQ, StreamSubscriptionParams(route1.rows))
+      peerD.engine.subscriptionsRegistered(subQ, StreamSubscriptionParams(route1.rowSet))
 
       matchAndPushSourceUpdate(bToD, route1.rowSet ++ Set(bToD.source.routeRow))
       matchAndPushSourceUpdate(aToB, route1.rowSet ++ Set(aToB.source.routeRow))

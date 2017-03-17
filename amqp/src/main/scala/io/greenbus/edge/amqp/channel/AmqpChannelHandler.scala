@@ -113,6 +113,8 @@ class AmqpChannelHandler(ioThread: CallMarshaller, parser: AmqpChannelParser, pr
       parser.sender(address, propsOpt)
     }
 
+    logger.debug(s"Responding with $resultOpt")
+
     resultOpt.map { result =>
       s.setProperties(result.localProperties)
       handleSenderDescriptor(s, result.desc, parent)
@@ -131,8 +133,10 @@ class AmqpChannelHandler(ioThread: CallMarshaller, parser: AmqpChannelParser, pr
     logger.debug(s"Handling receiver for address $addrOpt, properties ${propsOpt}")
 
     val resultOpt = addrOpt.flatMap { address =>
-      parser.sender(address, propsOpt)
+      parser.receiver(address, propsOpt)
     }
+
+    logger.debug(s"Responding for address $addrOpt with properties $resultOpt")
 
     resultOpt.map { result =>
       r.setProperties(result.localProperties)

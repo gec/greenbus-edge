@@ -64,12 +64,6 @@ trait RouteSourceHandle {
   def requests: Source[Seq[RouteServiceRequest]]
 
   def flushEvents(): Unit
-
-  //def close(): Unit
-}
-
-trait RouteSourceSubscription extends Closeable {
-
 }
 
 /*
@@ -174,9 +168,19 @@ class RouteMgr(route: TypeValue, mgr: SourceMgr, requestSink: Sink[Seq[RouteServ
 
 }
 
+object GatewayRouteSource {
+  def build(eventThread: CallMarshaller): GatewayRouteSource = {
+    new SourceMgr(eventThread)
+  }
+}
+trait GatewayRouteSource {
+  def route(route: TypeValue): RouteSourceHandle
+  def connect(channel: GatewayProxyChannel): Unit
+}
+
 case class SourceConnectedState(buffer: EventBuffer, subscribedRows: Set[RowId], unsourcedRoutes: Map[TypeValue, Set[TableRow]])
 
-class SourceMgr(eventThread: CallMarshaller) extends LazyLogging {
+class SourceMgr(eventThread: CallMarshaller) extends GatewayRouteSource with LazyLogging {
 
   private var routes = Map.empty[TypeValue, RouteMgr]
 
@@ -207,7 +211,8 @@ class SourceMgr(eventThread: CallMarshaller) extends LazyLogging {
     connectionOpt.foreach(_.buffer.flush(None))
   }
 
-  def connected(proxy: GatewayProxyChannel): Unit = {
+  def connect(proxy: GatewayProxyChannel): Unit = {
+    logger.debug(s"Channel connected")
     proxy.onClose.subscribe(() => connectionClosed(proxy))
     proxy.requests.bind(reqs => serviceRequest(proxy, reqs))
     proxy.subscriptions.bind(rows => subscribed(rows))
@@ -222,6 +227,7 @@ class SourceMgr(eventThread: CallMarshaller) extends LazyLogging {
   }
 
   def subscribed(rows: Set[RowId]): Unit = {
+    logger.debug(s"Row subscriptions updated: " + rows)
 
     connectionOpt match {
       case None => logger.warn(s"Received subscriptions while disconnected")
@@ -281,6 +287,7 @@ class SourceMgr(eventThread: CallMarshaller) extends LazyLogging {
   }
 
   def connectionClosed(proxy: GatewayProxyChannel): Unit = {
+    logger.debug(s"Channel closed")
     connectionOpt = None
     routes.foreach {
       case (route, mgr) => mgr.unbindAll()

@@ -38,7 +38,7 @@ trait ColsetClient {
 class MultiChannelColsetClientImpl(client: ChannelClient)(implicit val ex: ExecutionContext) extends ColsetClient {
   import io.greenbus.edge.colset.channel.Channels._
 
-  def openGatewayClient(): Future[GatewayProxyChannel] = {
+  def openGatewayChannel(): Future[GatewayProxyChannel] = {
     val correlator = UUID.randomUUID().toString
     val subFut = client.openReceiver[SubscriptionSetUpdate, GateSubscriptionSetSenderDesc](GateSubscriptionSetSenderDesc(correlator))
     val eventFut = client.openSender[GatewayClientEvents, GateEventReceiverDesc](GateEventReceiverDesc(correlator))

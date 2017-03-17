@@ -101,7 +101,7 @@ class ContextualProtonHandler(id: String) extends BaseHandler with LazyLogging {
       case r: Receiver =>
         d.getContext match {
           case ctx: ReceiverDeliveryContext => ctx.onDelivery(r, d)
-          case o => logger.trace(s"$id receiver delivery context unrecognized: " + o)
+          case o => //logger.trace(s"$id receiver delivery context unrecognized: " + o)
         }
         r.getContext match {
           case ctx: ReceiverContext => ctx.onDelivery(r, d)

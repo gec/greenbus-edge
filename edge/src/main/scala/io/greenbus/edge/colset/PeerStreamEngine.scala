@@ -47,7 +47,7 @@ manifest rows -> source (manifest)
 
  */
 
-case class StreamSubscriptionParams(rows: Seq[RowId])
+case class StreamSubscriptionParams(rows: Set[RowId])
 
 trait SubscriptionTarget {
   def handleBatch(events: Seq[StreamEvent])

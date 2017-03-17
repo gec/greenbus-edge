@@ -19,12 +19,15 @@
 package io.greenbus.edge.amqp.colset
 
 import java.util.UUID
+import java.util.concurrent.{ ExecutorService, Executors }
 
+import io.greenbus.edge.CallMarshaller
 import io.greenbus.edge.amqp.channel.AmqpChannelHandler
 import io.greenbus.edge.amqp.impl2.AmqpService
 import io.greenbus.edge.colset.channel.ChannelHandler
 import io.greenbus.edge.colset.client.MultiChannelColsetClientImpl
 import io.greenbus.edge.colset._
+import io.greenbus.edge.colset.gateway.GatewayRouteSource
 import io.greenbus.edge.colset.proto.provider.ProtoSerializationProvider
 
 import scala.concurrent.Await
@@ -56,7 +59,7 @@ object GatewayTest {
 
   def main(args: Array[String]): Unit = {
 
-    val service = AmqpService.build(Some("server"))
+    val service = AmqpService.build(Some("gateway"))
 
     val connection = Await.result(service.connect("127.0.0.1", 50001, 5000), 5000.milliseconds)
 
@@ -68,10 +71,67 @@ object GatewayTest {
 
     val client = new MultiChannelColsetClientImpl(session)
 
-    val gateway = Await.result(client.openGatewayClient(), 5000.milliseconds)
+    val channel = Await.result(client.openGatewayChannel(), 5000.milliseconds)
 
-    gateway.events.send(GatewayEvents(Some(Set(SymbolVal("my_route"))), Seq()), _ => {})
+    val exe = new ExecutorEventThread
+    val gatewaySource = GatewayRouteSource.build(exe)
+
+    val route = gatewaySource.route(SymbolVal("my_route"))
+
+    val setRow1 = route.setRow(TableRow("set_table", SymbolVal("row1")))
+    setRow1.update(Set(Int64Val(5), Int64Val(11)))
+
+    val appRow1 = route.appendSetRow(TableRow("append_table", SymbolVal("row1")), 30)
+    appRow1.append(Int64Val(22), Int64Val(23))
+
+    route.flushEvents()
+
+    gatewaySource.connect(channel)
 
     System.in.read()
+  }
+}
+
+object SubscriberTest {
+
+  def main(args: Array[String]): Unit = {
+
+    val service = AmqpService.build(Some("subscriber"))
+
+    val connection = Await.result(service.connect("127.0.0.1", 50001, 5000), 5000.milliseconds)
+
+    val describer = new ChannelDescriberImpl
+    val responseParser = new ClientResponseParser
+    val serialization = new ProtoSerializationProvider
+
+    val session = Await.result(connection.open(describer, responseParser, serialization), 5000.milliseconds)
+
+    val client = new MultiChannelColsetClientImpl(session)
+
+    val (peerSess, subChannel) = Await.result(client.openPeerLinkClient(), 5000.milliseconds)
+
+    subChannel.subscriptions.push(Set(
+      RowId(SymbolVal("my_route"), "set_table", SymbolVal("row1")),
+      RowId(SymbolVal("my_route"), "append_table", SymbolVal("row1"))))
+
+    subChannel.events.bind { events =>
+      println(events)
+    }
+
+  }
+}
+
+class ExecutorEventThread extends CallMarshaller {
+
+  private val s = Executors.newSingleThreadExecutor()
+
+  def marshal(f: => Unit): Unit = {
+    s.execute(new Runnable {
+      def run(): Unit = f
+    })
+  }
+
+  def close(): Unit = {
+    s.shutdown()
   }
 }

@@ -57,7 +57,7 @@ object StreamConversions {
     val b = proto.RowId.newBuilder()
     b.setRoutingKey(toProto(obj.routingKey))
     b.setTable(obj.table)
-    b.setRowKey(toProto(obj.routingKey))
+    b.setRowKey(toProto(obj.rowKey))
     b.build()
   }
 
