@@ -27,12 +27,8 @@ import io.greenbus.edge.colset._
 import scala.concurrent.{ ExecutionContext, Future }
 
 trait ColsetClient {
-  /*def openGatewayClient(): Future[GatewayProxyChannel]
-  def openGatewayClientProxy(): Future[GatewayClientProxyChannel]
-
-  def openPeerLinkClient(): Future[PeerLinkProxyChannel]
-
-  def openSubscriberProxyClient(): Future[SubscriberProxyChannel]*/
+  def openGatewayChannel(): Future[GatewayProxyChannel]
+  def openPeerLinkClient(): Future[(PeerSessionId, PeerLinkProxyChannel)]
 }
 
 class MultiChannelColsetClientImpl(client: ChannelClient)(implicit val ex: ExecutionContext) extends ColsetClient {

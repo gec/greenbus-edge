@@ -208,16 +208,12 @@ class SourceMgr(eventThread: CallMarshaller) extends GatewayRouteSource with Laz
   }
 
   def routeFlushed(route: TypeValue): Unit = {
-    connectionOpt.foreach(_.buffer.flush(None))
+    eventThread.marshal {
+      connectionOpt.foreach(_.buffer.flush(None))
+    }
   }
 
-  def connect(proxy: GatewayProxyChannel): Unit = {
-    logger.debug(s"Channel connected")
-    proxy.onClose.subscribe(() => connectionClosed(proxy))
-    proxy.requests.bind(reqs => serviceRequest(proxy, reqs))
-    proxy.subscriptions.bind(rows => subscribed(rows))
-
-    val buffer = new EventBuffer(proxy)
+  private def onConnect(buffer: EventBuffer): Unit = {
     connectionOpt = Some(SourceConnectedState(buffer, Set(), Map()))
 
     routes.foreach {
@@ -226,7 +222,19 @@ class SourceMgr(eventThread: CallMarshaller) extends GatewayRouteSource with Laz
     buffer.flush(Some(routes.keySet))
   }
 
-  def subscribed(rows: Set[RowId]): Unit = {
+  def connect(proxy: GatewayProxyChannel): Unit = {
+    logger.debug(s"Channel connected")
+    proxy.onClose.subscribe(() => eventThread.marshal { onConnectionClosed(proxy) })
+    proxy.requests.bind(reqs => eventThread.marshal { onServiceRequest(proxy, reqs) })
+    proxy.subscriptions.bind(rows => eventThread.marshal { onSubscriptionUpdate(rows) })
+
+    val buffer = new EventBuffer(proxy)
+    eventThread.marshal {
+      onConnect(buffer)
+    }
+  }
+
+  private def onSubscriptionUpdate(rows: Set[RowId]): Unit = {
     logger.debug(s"Row subscriptions updated: " + rows)
 
     connectionOpt match {
@@ -263,7 +271,7 @@ class SourceMgr(eventThread: CallMarshaller) extends GatewayRouteSource with Laz
 
   }
 
-  def serviceRequest(proxy: GatewayProxyChannel, serviceRequestBatch: Seq[ServiceRequest]): Unit = {
+  private def onServiceRequest(proxy: GatewayProxyChannel, serviceRequestBatch: Seq[ServiceRequest]): Unit = {
 
     serviceRequestBatch.groupBy(_.row.routingKey).foreach {
       case (route, reqs) => {
@@ -286,7 +294,7 @@ class SourceMgr(eventThread: CallMarshaller) extends GatewayRouteSource with Laz
     }
   }
 
-  def connectionClosed(proxy: GatewayProxyChannel): Unit = {
+  private def onConnectionClosed(proxy: GatewayProxyChannel): Unit = {
     logger.debug(s"Channel closed")
     connectionOpt = None
     routes.foreach {
