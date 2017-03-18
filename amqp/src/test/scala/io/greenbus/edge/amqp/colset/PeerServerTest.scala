@@ -19,13 +19,13 @@
 package io.greenbus.edge.amqp.colset
 
 import java.util.UUID
-import java.util.concurrent.{ExecutorService, Executors}
+import java.util.concurrent.{ ExecutorService, Executors }
 
 import io.greenbus.edge.CallMarshaller
 import io.greenbus.edge.amqp.channel.AmqpChannelHandler
 import io.greenbus.edge.amqp.impl2.AmqpService
 import io.greenbus.edge.colset.channel.ChannelHandler
-import io.greenbus.edge.colset.client.{ColsetClient, MultiChannelColsetClientImpl}
+import io.greenbus.edge.colset.client.{ ColsetClient, MultiChannelColsetClientImpl }
 import io.greenbus.edge.colset._
 import io.greenbus.edge.colset.gateway.GatewayRouteSource
 import io.greenbus.edge.colset.proto.provider.ProtoSerializationProvider
@@ -70,7 +70,6 @@ object PeerServerTest {
     System.in.read()
   }
 }
-
 
 object SecondPeerServerTest {
 

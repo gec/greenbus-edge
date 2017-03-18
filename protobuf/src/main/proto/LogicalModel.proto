@@ -1,0 +1,166 @@
+syntax = "proto3";
+
+package greenbus.edge.data;
+
+
+option java_package = "io.greenbus.edge.lem.proto";
+option java_multiple_files = true;
+
+
+message LatestKeyValueDescriptor {
+    bool placeholder = 1;
+}
+message TimeSeriesValueDescriptor {
+    bool placeholder = 1;
+}
+message EventTopicValueDescriptor {
+    bool placeholder = 1;
+}
+message ActiveSetValueDescriptor {
+    bool placeholder = 1;
+}
+
+message DataKeyDescriptor {
+    repeated IndexKeyValue indexes = 1;
+    repeated MetadataKeyValue metadata = 2;
+
+    oneof value_types {
+        LatestKeyValueDescriptor latest_key_value = 3;
+        TimeSeriesValueDescriptor time_series_value = 4;
+        EventTopicValueDescriptor event_topic_value = 5;
+        ActiveSetValueDescriptor active_set_value = 6;
+    }
+}
+
+message OutputKeyDescriptor {
+    repeated IndexKeyValue indexes = 1;
+    repeated MetadataKeyValue metadata = 2;
+}
+
+message IndexKeyValue {
+    Path key = 1;
+    IndexableValue value = 2;
+}
+message MetadataKeyValue {
+    Path key = 1;
+    Value value = 2;
+}
+message DataKeyValue {
+    Path key = 1;
+    DataKeyDescriptor value = 2;
+}
+message OutputKeyValue {
+    Path key = 1;
+    OutputKeyDescriptor value = 2;
+}
+
+message EndpointDescriptor {
+    repeated IndexKeyValue indexes = 1;
+    repeated MetadataKeyValue metadata = 2;
+    repeated DataKeyValue data_key_set = 3;
+    repeated OutputKeyValue output_key_set = 4;
+}
+
+
+message Path {
+    repeated string part = 1;
+}
+
+message UUIDEndpointId {
+    UUID uuid = 1;
+    Path name = 2;
+}
+
+message EndpointId {
+    oneof id_types {
+        Path named_id = 1;
+        UUIDEndpointId uuid_id = 2;
+    }
+}
+
+
+message EndpointPath {
+    EndpointId endpoint_id = 1;
+    Path key = 2;
+}
+
+message OptionalString {
+    string value = 1;
+}
+message OptionalBool {
+    bool value = 1;
+}
+message OptionalUInt64 {
+    uint64 value = 1;
+}
+
+message UUID {
+    fixed64 low = 1;
+    fixed64 high = 2;
+}
+
+message AnnotatedBytesValue {
+    bytes value = 1;
+    OptionalString mime_type = 2;
+    OptionalBool is_text = 3;
+}
+message TextValue {
+    string value = 1;
+    OptionalString mime_type = 2;
+}
+
+
+message ArrayValue {
+    repeated Value element = 1;
+}
+message ObjectValue {
+    map<string, Value> fields = 2;
+}
+
+message SampleValue {
+    oneof value_types {
+        float float_value = 1;
+        double double_value = 2;
+        sint32 sint32_value = 3;
+        uint32 uint32_value = 4;
+        sint64 sint64_value = 5;
+        uint64 uint64_value = 6;
+        bool bool_value = 7;
+    }
+}
+
+message IndexableValue {
+    oneof value_types {
+        float float_value = 1;
+        double double_value = 2;
+        sint32 sint32_value = 3;
+        uint32 uint32_value = 4;
+        sint64 sint64_value = 5;
+        uint64 uint64_value = 6;
+        bool bool_value = 7;
+        string string_value = 8;
+        bytes bytes_value = 9;
+        UUID uuid_value = 10;
+    }
+}
+
+message Value {
+    oneof value_types {
+        float float_value = 1;
+        double double_value = 2;
+        sint32 sint32_value = 3;
+        uint32 uint32_value = 4;
+        sint64 sint64_value = 5;
+        uint64 uint64_value = 6;
+        bool bool_value = 7;
+        string string_value = 8;
+        bytes bytes_value = 9;
+        TextValue text_value = 10;
+        AnnotatedBytesValue bytes_annotated_value = 11;
+        UUID uuid_value = 12;
+        Path path_value = 13;
+        EndpointPath endpoint_path_value = 14;
+        ArrayValue array_value = 15;
+        ObjectValue object_value = 16;
+    }
+}

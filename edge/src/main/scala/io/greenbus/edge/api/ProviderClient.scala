@@ -1,0 +1,317 @@
+/**
+ * Copyright 2011-2017 Green Energy Corp.
+ *
+ * Licensed to Green Energy Corp (www.greenenergycorp.com) under one or more
+ * contributor license agreements. See the NOTICE file distributed with this
+ * work for additional information regarding copyright ownership. Green Energy
+ * Corp licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
+package io.greenbus.edge.api
+
+import io.greenbus.edge.CallMarshaller
+import io.greenbus.edge.colset._
+import io.greenbus.edge.colset.gateway._
+import io.greenbus.edge.flow.{ Handler, QueuedDistributor, Sink }
+
+import scala.collection.mutable
+
+case class CommonMetadata(indexes: Map[Path, IndexableValue] = Map(), metadata: Map[Path, Value] = Map())
+
+trait EndpointProviderBuilder {
+
+  def seriesBool(): BoolSeriesHandle
+
+  def build()
+}
+
+class EndpointProviderBuilderImpl(endpointId: EndpointId) {
+
+  private var indexes = Map.empty[Path, IndexableValue]
+  private var metadata = Map.empty[Path, Value]
+  private val data = mutable.Map.empty[Path, DataKeyDescriptor]
+  private val outputs = mutable.Map.empty[Path, OutputKeyDescriptor]
+
+  private val dataDescs = mutable.ArrayBuffer.empty[ProviderDataEntry]
+
+  def setIndexes(paramIndexes: Map[Path, IndexableValue]): Unit = {
+    indexes = paramIndexes
+  }
+  def setMetadata(paramMetadata: Map[Path, Value]): Unit = {
+    metadata = paramMetadata
+  }
+
+  def seriesBool(key: Path, metadata: CommonMetadata = CommonMetadata()): BoolSeriesHandle = {
+    val desc = TimeSeriesValueDescriptor(metadata.indexes, metadata.metadata)
+    val handle = new BoolSeriesQueue
+    dataDescs += ProviderDataEntry(key, desc, handle)
+    handle
+  }
+
+  def seriesLong(key: Path, metadata: CommonMetadata = CommonMetadata()): LongSeriesHandle = {
+    val desc = TimeSeriesValueDescriptor(metadata.indexes, metadata.metadata)
+    val handle = new LongSeriesQueue
+    dataDescs += ProviderDataEntry(key, desc, handle)
+    handle
+  }
+
+  def seriesDouble(key: Path, metadata: CommonMetadata = CommonMetadata()): DoubleSeriesHandle = {
+    val desc = TimeSeriesValueDescriptor(metadata.indexes, metadata.metadata)
+    val handle = new DoubleSeriesQueue
+    dataDescs += ProviderDataEntry(key, desc, handle)
+    handle
+  }
+
+  def latestKeyValue(key: Path, metadata: CommonMetadata = CommonMetadata()): LatestKeyValueHandle = {
+    val desc = LatestKeyValueDescriptor(metadata.indexes, metadata.metadata)
+    val handle = new LatestKeyValueQueue
+    dataDescs += ProviderDataEntry(key, desc, handle)
+    handle
+  }
+
+  def topicEventValue(key: Path, metadata: CommonMetadata = CommonMetadata()): LatestKeyValueHandle = {
+    val desc = LatestKeyValueDescriptor(metadata.indexes, metadata.metadata)
+    val handle = new LatestKeyValueQueue
+    dataDescs += ProviderDataEntry(key, desc, handle)
+    handle
+  }
+
+  def activeSet(key: Path, metadata: CommonMetadata = CommonMetadata()): ActiveSetHandle = {
+    val desc = ActiveSetValueDescriptor(metadata.indexes, metadata.metadata)
+    val handle = new ActiveSetQueue
+    dataDescs += ProviderDataEntry(key, desc, handle)
+    handle
+  }
+
+  def ouput() = ???
+
+  def build(): EndpointProviderDesc = {
+    val desc = EndpointDescriptor(indexes, metadata, data.toMap, outputs.toMap)
+    EndpointProviderDesc(desc, dataDescs.toVector)
+  }
+}
+
+trait BoolSeriesHandle extends Sink[(Boolean, Long)] {
+  def update(value: Boolean, timeMs: Long): Unit
+}
+trait LongSeriesHandle extends Sink[(Long, Long)] {
+  def update(value: Long, timeMs: Long): Unit
+}
+trait DoubleSeriesHandle extends Sink[(Double, Long)] {
+  def update(value: Double, timeMs: Long): Unit
+}
+trait TopicEventHandle extends Sink[(Path, Value, Long)] {
+  def update(topic: Path, value: Value, timeMs: Long): Unit
+}
+trait LatestKeyValueHandle extends Sink[Value] {
+  def update(value: Value): Unit
+}
+trait ActiveSetHandle extends Sink[Map[Value, Value]] {
+  def update(value: Map[Value, Value]): Unit
+}
+
+sealed trait DataValueQueue
+class BoolSeriesQueue extends QueuedDistributor[(Boolean, Long)] with DataValueQueue with BoolSeriesHandle {
+  def update(value: Boolean, timeMs: Long): Unit = push((value, timeMs))
+}
+class LongSeriesQueue extends QueuedDistributor[(Long, Long)] with DataValueQueue with LongSeriesHandle {
+  def update(value: Long, timeMs: Long): Unit = push((value, timeMs))
+}
+class DoubleSeriesQueue extends QueuedDistributor[(Double, Long)] with DataValueQueue with DoubleSeriesHandle {
+  def update(value: Double, timeMs: Long): Unit = push((value, timeMs))
+}
+class TopicEventQueue extends QueuedDistributor[(Path, Value, Long)] with DataValueQueue with TopicEventHandle {
+  def update(topic: Path, value: Value, timeMs: Long): Unit = push((topic, value, timeMs))
+}
+class LatestKeyValueQueue extends QueuedDistributor[Value] with DataValueQueue with LatestKeyValueHandle {
+  def update(value: Value): Unit = push(value)
+}
+class ActiveSetQueue extends QueuedDistributor[Map[Value, Value]] with DataValueQueue with ActiveSetHandle {
+  def update(value: Map[Value, Value]): Unit = push(value)
+}
+
+object ColsetCodec {
+
+  def encodeBoolSeries(obj: (Boolean, Long)): TypeValue = {
+    TupleVal(Seq(BoolVal(obj._1), Int64Val(obj._2)))
+  }
+  def encodeLongSeries(obj: (Long, Long)): TypeValue = {
+    TupleVal(Seq(Int64Val(obj._1), Int64Val(obj._2)))
+  }
+  def encodeDoubleSeries(obj: (Double, Long)): TypeValue = {
+    TupleVal(Seq(DoubleVal(obj._1), Int64Val(obj._2)))
+  }
+
+  def encodeTopicEvent(obj: (Path, Value, Long)): TypeValue = {
+    TupleVal(Seq(encodePath(obj._1), encodeValue(obj._2), Int64Val(obj._3)))
+  }
+
+  def encodePath(path: Path): TypeValue = {
+    ???
+  }
+
+  def encodeMap(map: Map[Value, Value]): Map[TypeValue, TypeValue] = {
+    ???
+  }
+
+  def encodeValue(value: Value): TypeValue = {
+    ???
+  }
+}
+
+case class ProviderDataEntry(path: Path, dataType: DataKeyDescriptor, distributor: DataValueQueue)
+
+object EndpointProviderDesc {
+}
+case class EndpointProviderDesc(
+  descriptor: EndpointDescriptor,
+  data: Seq[ProviderDataEntry])
+
+trait ProviderUserBuffer {
+  def enqueue(path: Path, data: TypeValue)
+}
+trait ProviderHandle {
+  def flush(): Unit
+}
+
+class ProviderHandleImpl(handle: RouteSourceHandle) extends ProviderHandle {
+
+  def flush(): Unit = {
+    handle.flushEvents()
+  }
+}
+
+object ProviderSketch {
+
+  val latestKeyValueTable = "edm.lkv"
+  val timeSeriesValueTable = "edm.tsv"
+  val eventTopicValueTable = "edm.events"
+  val activeSetValueTable = "edm.set"
+
+  private def pathToRowKey(path: Path): TypeValue = ???
+
+  private def bindAppend(sink: AppendEventSink, queue: DataValueQueue): Unit = {
+    queue match {
+      case q: BoolSeriesQueue => q.bind(obj => sink.append(ColsetCodec.encodeBoolSeries(obj)))
+      case q: LongSeriesQueue => q.bind(obj => sink.append(ColsetCodec.encodeLongSeries(obj)))
+      case q: DoubleSeriesQueue => q.bind(obj => sink.append(ColsetCodec.encodeDoubleSeries(obj)))
+      case q: LatestKeyValueQueue => q.bind(obj => sink.append(ColsetCodec.encodeValue(obj)))
+      case _ => throw new IllegalArgumentException(s"Data value type did not queue type")
+    }
+  }
+
+  private def bindKeyed(sink: KeyedSetEventSink, queue: DataValueQueue): Unit = {
+    queue match {
+      case q: ActiveSetQueue => q.bind(obj => sink.update(ColsetCodec.encodeMap(obj)))
+      case _ => throw new IllegalArgumentException(s"Data value type did not queue type")
+    }
+  }
+
+  def build(provider: EndpointProviderDesc, seriesBuffersSize: Int, eventBuffersSize: Int): ProviderHandle = {
+
+    val routeSource: GatewayRouteSource = null
+    val routeHandle = routeSource.route(SymbolVal("endpoint-id-encoded"))
+
+    val endpointDescriptorRow = TableRow("edm.endpoint", SymbolVal("the id encoded maybe?"))
+    val descSink = routeHandle.appendSetRow(endpointDescriptorRow, 1)
+    descSink.append(SymbolVal("this would be the binary protobuf of the endpoint desc"))
+
+    provider.data.foreach { entry =>
+      val rowKey = pathToRowKey(entry.path)
+
+      val (tableRow, sink) = entry.dataType match {
+        case d: LatestKeyValueDescriptor =>
+          val tableRow = TableRow(latestKeyValueTable, rowKey)
+          val sink = routeHandle.appendSetRow(tableRow, 1)
+          bindAppend(sink, entry.distributor)
+          (tableRow, routeHandle.appendSetRow(tableRow, 1))
+        case d: TimeSeriesValueDescriptor =>
+          val tableRow = TableRow(timeSeriesValueTable, rowKey)
+          val sink = routeHandle.appendSetRow(tableRow, seriesBuffersSize)
+          bindAppend(sink, entry.distributor)
+          (tableRow, sink)
+        case d: EventTopicValueDescriptor =>
+          val tableRow = TableRow(eventTopicValueTable, rowKey)
+          val sink = routeHandle.appendSetRow(tableRow, eventBuffersSize)
+          bindAppend(sink, entry.distributor)
+          (tableRow, sink)
+        case d: ActiveSetValueDescriptor =>
+          val tableRow = TableRow(activeSetValueTable, rowKey)
+          val sink = routeHandle.keyedSetRow(tableRow)
+          bindKeyed(sink, entry.distributor)
+          (tableRow, sink)
+      }
+
+      (tableRow, sink)
+    }
+
+    new ProviderHandleImpl(routeHandle)
+  }
+
+}
+
+/*class DeferredCallBuffer {
+  private val calls = mutable.ArrayBuffer.empty[() => Unit]
+  def enqueue(f: () => Unit): Unit = {
+    calls += f
+  }
+  def flush(): Unit = {
+    calls.foreach(_())
+    calls.clear()
+  }
+}*/
+
+/*object EncodedSourceQueue {
+  sealed trait State[A, +B]
+  case class Unbound[A](queue: mutable.ArrayBuffer[A]) extends State[A, Nothing]
+  case class Opened[A, B](encoder: A => B, handler: Handler[B]) extends State[A, B]
+}
+class EncodedSourceQueue[A, B] extends Sink[A] {
+  import EncodedSourceQueue._
+
+  private var state: State[A, B] = Unbound(mutable.ArrayBuffer.empty[A])
+
+  def bind(encoder: A => B, handler: Handler[B]): Unit = {
+    state match {
+      case Unbound(queue) =>
+        state = Opened(encoder, handler)
+        queue.foreach(obj => handler.handle(encoder(obj)))
+      case o: Opened[A, B] =>
+        throw new IllegalStateException("Queued distributor bound twice")
+    }
+  }
+
+  def push(obj: A): Unit = {
+    state match {
+      case Unbound(queue) => queue += obj
+      case Opened(encoder, handler) => handler.handle(encoder(obj))
+    }
+  }
+}*/
+
+/*class BoolSeriesEncoder(eventThread: CallMarshaller) extends Sink[(Boolean, Long)] with Source[TypeValue] {
+  // TODO: concurrent queue, event buffer pulls on flush? one big concurrent queue for entire route? (unit of flushability)?
+  private val queue = new RemoteBoundQueuedDistributor[TypeValue](eventThread)
+
+  def push(obj: (Boolean, Long)): Unit = {
+    ???
+  }
+
+  def bind(handler: Handler[TypeValue]): Unit = {
+    ???
+  }
+}*/
+
+/*sealed trait ProviderDataType
+case object SetProviderDataType extends ProviderDataType
+case object MapProviderDataType extends ProviderDataType
+case class AppendProviderDataType(maxBuffered: Int) extends ProviderDataType*/ 
