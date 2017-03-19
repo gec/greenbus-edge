@@ -196,3 +196,22 @@ class LocallyAppliedLatchSubscribable(self: CallMarshaller) extends LatchSubscri
     }
   }
 }
+
+class RemotelyAppliedLatchSource(self: CallMarshaller) extends LatchSource with LatchSink {
+  private var latched = false
+  private var handlerOpt = Option.empty[LatchHandler]
+
+  def bind(handler: LatchHandler): Unit = {
+    handlerOpt = Some(handler)
+    if (latched) handler.handle()
+  }
+
+  def apply(): Unit = {
+    self.marshal {
+      if (!latched) {
+        latched = true
+        handlerOpt.foreach(_.handle())
+      }
+    }
+  }
+}

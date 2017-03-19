@@ -115,8 +115,8 @@ trait TopicEventHandle extends Sink[(Path, Value, Long)] {
 trait LatestKeyValueHandle extends Sink[Value] {
   def update(value: Value): Unit
 }
-trait ActiveSetHandle extends Sink[Map[Value, Value]] {
-  def update(value: Map[Value, Value]): Unit
+trait ActiveSetHandle extends Sink[Map[IndexableValue, Value]] {
+  def update(value: Map[IndexableValue, Value]): Unit
 }
 
 sealed trait DataValueQueue
@@ -135,8 +135,8 @@ class TopicEventQueue extends QueuedDistributor[(Path, Value, Long)] with DataVa
 class LatestKeyValueQueue extends QueuedDistributor[Value] with DataValueQueue with LatestKeyValueHandle {
   def update(value: Value): Unit = push(value)
 }
-class ActiveSetQueue extends QueuedDistributor[Map[Value, Value]] with DataValueQueue with ActiveSetHandle {
-  def update(value: Map[Value, Value]): Unit = push(value)
+class ActiveSetQueue extends QueuedDistributor[Map[IndexableValue, Value]] with DataValueQueue with ActiveSetHandle {
+  def update(value: Map[IndexableValue, Value]): Unit = push(value)
 }
 
 object ColsetCodec {
@@ -159,7 +159,7 @@ object ColsetCodec {
     ???
   }
 
-  def encodeMap(map: Map[Value, Value]): Map[TypeValue, TypeValue] = {
+  def encodeMap(map: Map[IndexableValue, Value]): Map[TypeValue, TypeValue] = {
     ???
   }
 
@@ -190,7 +190,12 @@ class ProviderHandleImpl(handle: RouteSourceHandle) extends ProviderHandle {
   }
 }
 
-object ProviderSketch {
+trait ProviderFactory {
+
+  def bindEndpoint(provider: EndpointProviderDesc, seriesBuffersSize: Int, eventBuffersSize: Int): ProviderHandle
+}
+
+object ColsetProviderFactory {
 
   val latestKeyValueTable = "edm.lkv"
   val timeSeriesValueTable = "edm.tsv"
@@ -216,9 +221,12 @@ object ProviderSketch {
     }
   }
 
-  def build(provider: EndpointProviderDesc, seriesBuffersSize: Int, eventBuffersSize: Int): ProviderHandle = {
+}
 
-    val routeSource: GatewayRouteSource = null
+class ColsetProviderFactory(routeSource: GatewayRouteSource) extends ProviderFactory {
+  import ColsetProviderFactory._
+
+  def bindEndpoint(provider: EndpointProviderDesc, seriesBuffersSize: Int, eventBuffersSize: Int): ProviderHandle = {
     val routeHandle = routeSource.route(SymbolVal("endpoint-id-encoded"))
 
     val endpointDescriptorRow = TableRow("edm.endpoint", SymbolVal("the id encoded maybe?"))
@@ -256,62 +264,4 @@ object ProviderSketch {
 
     new ProviderHandleImpl(routeHandle)
   }
-
 }
-
-/*class DeferredCallBuffer {
-  private val calls = mutable.ArrayBuffer.empty[() => Unit]
-  def enqueue(f: () => Unit): Unit = {
-    calls += f
-  }
-  def flush(): Unit = {
-    calls.foreach(_())
-    calls.clear()
-  }
-}*/
-
-/*object EncodedSourceQueue {
-  sealed trait State[A, +B]
-  case class Unbound[A](queue: mutable.ArrayBuffer[A]) extends State[A, Nothing]
-  case class Opened[A, B](encoder: A => B, handler: Handler[B]) extends State[A, B]
-}
-class EncodedSourceQueue[A, B] extends Sink[A] {
-  import EncodedSourceQueue._
-
-  private var state: State[A, B] = Unbound(mutable.ArrayBuffer.empty[A])
-
-  def bind(encoder: A => B, handler: Handler[B]): Unit = {
-    state match {
-      case Unbound(queue) =>
-        state = Opened(encoder, handler)
-        queue.foreach(obj => handler.handle(encoder(obj)))
-      case o: Opened[A, B] =>
-        throw new IllegalStateException("Queued distributor bound twice")
-    }
-  }
-
-  def push(obj: A): Unit = {
-    state match {
-      case Unbound(queue) => queue += obj
-      case Opened(encoder, handler) => handler.handle(encoder(obj))
-    }
-  }
-}*/
-
-/*class BoolSeriesEncoder(eventThread: CallMarshaller) extends Sink[(Boolean, Long)] with Source[TypeValue] {
-  // TODO: concurrent queue, event buffer pulls on flush? one big concurrent queue for entire route? (unit of flushability)?
-  private val queue = new RemoteBoundQueuedDistributor[TypeValue](eventThread)
-
-  def push(obj: (Boolean, Long)): Unit = {
-    ???
-  }
-
-  def bind(handler: Handler[TypeValue]): Unit = {
-    ???
-  }
-}*/
-
-/*sealed trait ProviderDataType
-case object SetProviderDataType extends ProviderDataType
-case object MapProviderDataType extends ProviderDataType
-case class AppendProviderDataType(maxBuffered: Int) extends ProviderDataType*/ 
