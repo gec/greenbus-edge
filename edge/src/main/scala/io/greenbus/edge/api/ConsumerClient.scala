@@ -56,10 +56,20 @@ case object Unresolved extends ValueUpdate
 case class RowUpdate(row: RowId, update: ValueUpdate)
 
 object ConsumerSetFilter extends LazyLogging {
-  def build(snap: SetSnapshot): Option[ConsumerSetFilter] = {
+  def build(snap: SetSnapshot, prev: Option[ConsumerSetFilter]): Option[ConsumerSetFilter] = {
     snap match {
-      case s: ModifiedSetSnapshot => Some(new ModifiedSetConsumerFilter(s))
-      case s: ModifiedKeyedSetSnapshot => Some(new ModifiedKeyedSetConsumerFilter(s))
+      case s: ModifiedSetSnapshot =>
+        val prevValueOpt = prev.flatMap {
+          case f: ModifiedSetConsumerFilter => Some(f.latest)
+          case _ => None
+        }
+        Some(new ModifiedSetConsumerFilter(s, prevValueOpt))
+      case s: ModifiedKeyedSetSnapshot =>
+        val prevValueOpt = prev.flatMap {
+          case f: ModifiedKeyedSetConsumerFilter => Some(f.latest)
+          case _ => None
+        }
+        Some(new ModifiedKeyedSetConsumerFilter(s, prevValueOpt))
       case s: AppendSetSequence =>
         if (s.appends.nonEmpty) {
           Some(new AppendSetConsumerFilter(s))
@@ -75,10 +85,12 @@ trait ConsumerSetFilter {
   def snapshot(snapshot: SetSnapshot): Option[ValueUpdate]
 }
 
-class ModifiedSetConsumerFilter(start: ModifiedSetSnapshot) extends ConsumerSetFilter with LazyLogging {
+class ModifiedSetConsumerFilter(start: ModifiedSetSnapshot, prev: Option[Set[TypeValue]]) extends ConsumerSetFilter with LazyLogging {
 
   private var seq: SequencedTypeValue = start.sequence
-  private var current = Set.empty[TypeValue]
+  private var current = prev.getOrElse(Set.empty[TypeValue])
+
+  def latest: Set[TypeValue] = current
 
   def delta(delta: SetDelta): Option[ValueUpdate] = {
     delta match {
@@ -125,10 +137,12 @@ class ModifiedSetConsumerFilter(start: ModifiedSetSnapshot) extends ConsumerSetF
   }
 }
 
-class ModifiedKeyedSetConsumerFilter(start: ModifiedKeyedSetSnapshot) extends ConsumerSetFilter with LazyLogging {
+class ModifiedKeyedSetConsumerFilter(start: ModifiedKeyedSetSnapshot, prevOpt: Option[Map[TypeValue, TypeValue]]) extends ConsumerSetFilter with LazyLogging {
 
   private var seq: SequencedTypeValue = start.sequence
-  private var current = Map.empty[TypeValue, TypeValue]
+  private var current = prevOpt.getOrElse(Map.empty[TypeValue, TypeValue])
+
+  def latest: Map[TypeValue, TypeValue] = current
 
   def delta(delta: SetDelta): Option[ValueUpdate] = {
     delta match {
@@ -220,12 +234,7 @@ class AppendSetConsumerFilter(start: AppendSetSequence) extends ConsumerSetFilte
   }
 }
 
-object RowFilterImpl {
-
-  sealed trait State
-  case object Uninit
-}
-class RowFilterImpl {
+class RowFilterImpl extends RowFilter with LazyLogging {
 
   private var activeFilterOpt = Option.empty[ConsumerSetFilter]
 
@@ -234,19 +243,18 @@ class RowFilterImpl {
       case ev: StreamDelta => activeFilterOpt.flatMap(_.delta(ev.update))
       case ev: ResyncSnapshot => activeFilterOpt.flatMap(_.snapshot(ev.snapshot))
       case ev: ResyncSession => {
-        // TODO: grab last one optionally to figure out the diff
-        ConsumerSetFilter.build(ev.snapshot)
-        ???
+        val nextOpt = ConsumerSetFilter.build(ev.snapshot, activeFilterOpt)
+        nextOpt match {
+          case None =>
+            logger.warn(s"Could not create consumer filter for: $ev")
+            None
+          case Some(next) =>
+            activeFilterOpt = Some(next)
+            next.snapshot(ev.snapshot)
+        }
       }
     }
   }
-
-  /*def delta(delta: SetDelta): Unit = {
-    delta match {
-      case d: AppendSetSequence =>
-    }
-  }*/
-
 }
 
 /*
@@ -273,9 +281,8 @@ trait RowFilter {
 
 }
 
-class SubMgr extends ColsetSubscriptionManager {
+class SubscriptionFilterMap(sink: Sink[Seq[RowUpdate]]) {
 
-  private val dist = new QueuedDistributor[Seq[RowUpdate]]
   private val map = mutable.Map.empty[TypeValue, mutable.Map[TableRow, RowFilter]]
 
   private def lookup(rowId: RowId): Option[RowFilter] = {
@@ -283,20 +290,85 @@ class SubMgr extends ColsetSubscriptionManager {
   }
 
   def handle(sevs: Seq[StreamEvent]): Unit = {
-    val updates = sevs.map {
+
+    val updates: Seq[RowUpdate] = sevs.flatMap {
       case ev: RowAppendEvent => {
         lookup(ev.rowId) match {
-          case None => ???
-          case Some(filter) => filter.handle(ev.appendEvent).map(up => RowUpdate(ev.rowId, up))
+          case None => {
+            val filter = new RowFilterImpl
+            val routeMap = map.getOrElseUpdate(ev.rowId.routingKey, mutable.Map.empty[TableRow, RowFilter])
+            routeMap.put(ev.rowId.tableRow, filter)
+            filter.handle(ev.appendEvent).map(up => RowUpdate(ev.rowId, up))
+          }
+          case Some(filter) =>
+            filter.handle(ev.appendEvent).map(up => RowUpdate(ev.rowId, up))
         }
-
       }
-      case ev: RouteUnresolved => ???
+      case ev: RouteUnresolved => {
+        map.get(ev.routingKey).map { rowMap =>
+          rowMap.keys.map { tr =>
+            val row = tr.toRowId(ev.routingKey)
+            RowUpdate(row, Unresolved)
+          }.toVector
+        }.getOrElse(Seq())
+      }
+    }
+
+    sink.push(updates)
+  }
+
+  def removeRows(removes: Set[RowId]): Unit = {
+    removes.groupBy(_.routingKey).foreach {
+      case (route, rows) =>
+        map.get(route).foreach { trMap =>
+          rows.foreach(row => trMap.remove(row.tableRow))
+          if (trMap.isEmpty) {
+            map.remove(route)
+          }
+        }
     }
   }
 
-  def update(set: Set[RowId]): Unit = {
+  def handleDisconnected(): Unit = {
+    val updates = map.flatMap {
+      case (route, rowMap) =>
+        rowMap.map {
+          case (tableRow, _) =>
+            RowUpdate(tableRow.toRowId(route), Unresolved)
+        }
+    }
+    sink.push(updates.toVector)
+  }
+}
 
+class SubscriptionManager(eventThread: CallMarshaller) extends ColsetSubscriptionManager {
+
+  private val dist = new QueuedDistributor[Seq[RowUpdate]]
+  private val filters = new SubscriptionFilterMap(dist)
+  private var subscriptionSet = Set.empty[RowId]
+
+  private var connectionOpt = Option.empty[PeerLinkProxy]
+
+  // TODO: PeerLinkProxyChannel needs to have cross thread marshalling
+  def connected(proxy: PeerLinkProxyChannel): Unit = {
+    eventThread.marshal {
+      connectionOpt = Some(proxy)
+      proxy.subscriptions.push(subscriptionSet)
+    }
+    proxy.onClose.subscribe(() => eventThread.marshal { disconnected() })
+    proxy.events.bind(events => eventThread.marshal { filters.handle(events) })
+  }
+
+  private def disconnected(): Unit = {
+    connectionOpt = None
+    filters.handleDisconnected()
+  }
+
+  def update(set: Set[RowId]): Unit = {
+    val removes = subscriptionSet -- set
+    connectionOpt.foreach(_.subscriptions.push(set))
+    subscriptionSet = set
+    filters.removeRows(removes)
   }
 
   def source: Source[Seq[RowUpdate]] = dist
@@ -320,9 +392,23 @@ case class ActiveSetUpdate(value: Map[IndexableValue, Value]) extends EdgeDataKe
 
 trait EdgeDataKeyValueCodec {
   def fromTypeValue(v: TypeValue): Either[String, EdgeDataKeyValue]
+  def dataKeyToRow(endpointPath: EndpointPath): RowId
+}
+trait EdgeCodec {
+  def endpointIdToRow(id: EndpointId): RowId
+
+  def fromTypeValue(v: TypeValue): Either[String, EndpointDescriptor]
 }
 
-//case class EdgeUpdate()
+object EdgeCodecCommon {
+
+  def endpointIdToRow(id: EndpointId): RowId = ???
+
+  def fromTypeValue(v: TypeValue): Either[String, EndpointDescriptor] = {
+    ???
+  }
+}
+
 sealed trait IdentifiedEdgeUpdate
 case class IdEndpointUpdate(id: EndpointId, data: EdgeDataState[EndpointDescriptor]) extends IdentifiedEdgeUpdate
 case class IdDataKeyUpdate(id: EndpointPath, data: EdgeDataState[EdgeDataKeyValue]) extends IdentifiedEdgeUpdate
@@ -338,13 +424,6 @@ case object Pending extends EdgeDataState[Nothing]
 case object DataUnresolved extends EdgeDataState[Nothing]
 case object ResolvedAbsent extends EdgeDataState[Nothing]
 case class ResolvedValue[A](value: A) extends EdgeDataState[A]
-
-/*sealed trait EdgeUpdate
-/*case class EndpointUnresolved(endpointId: EndpointId) extends EdgeUpdate
-case class EndpointResolvedAbsent(endpointId: EndpointId) extends EdgeUpdate*/
-case class EndpointDescriptorUpdate(endpointId: EndpointId, descriptor: EndpointDescriptor) extends EdgeUpdate
-case class DataKeyUpdate(id: EndpointPath, update: EdgeDataKeyUpdate) extends EdgeUpdate*/
-//case class EdgeUpdate(endpoints: Seq[EndpointDescriptorUpdate], keys: Seq[DataKeyUpdate])
 
 trait EdgeUpdateQueue {
   def enqueue(update: IdentifiedEdgeUpdate): Unit
@@ -373,55 +452,6 @@ trait EdgeTypeSubMgr {
   def addObserver(buffer: EdgeUpdateQueue): Unit
   def removeObserver(buffer: EdgeUpdateQueue): Unit
 }
-
-/*object EndpointDescSubMgr {
-
-  def fromTypeValue(v: TypeValue): Either[String, EndpointDescriptor] = ???
-}
-class EndpointDescSubMgr(id: EndpointId) extends EdgeTypeSubMgr with EdgeUpdateSubjectImpl with LazyLogging {
-  import EndpointDescSubMgr._
-
-  protected type Data = EndpointDescriptor
-
-  def toUpdate(v: EdgeDataState[Data]): IdentifiedEdgeUpdate = IdEndpointUpdate(id, v)
-
-  private var state: EdgeDataState[EndpointDescriptor] = Pending
-
-  protected def current(): EdgeDataState[EndpointDescriptor] = state
-
-  private def handleValue(v: Data): Set[EdgeUpdateQueue] = {
-    val nextOpt = state match {
-      case ResolvedValue(prev) => if (v != prev) Some(ResolvedValue(v)) else None
-      case _ => Some(ResolvedValue(v))
-    }
-
-    nextOpt match {
-      case None => Set()
-      case Some(next) =>
-        state = next
-        val up = toUpdate(next)
-        observers.foreach(_.enqueue(up))
-        observers
-    }
-  }
-
-  def handle(update: ValueUpdate): Set[EdgeUpdateQueue] = {
-    update match {
-      case Appended(values) => {
-        values.lastOption.map { last =>
-          fromTypeValue(last) match {
-            case Left(str) =>
-              logger.warn(s"Could not extract endpoint descriptor for $id: $str")
-              Set.empty[EdgeUpdateQueue]
-            case Right(desc) =>
-              handleValue(desc)
-          }
-        }.getOrElse(Set())
-      }
-      case _ => Set()
-    }
-  }
-}*/
 
 trait GenEdgeTypeSubMgr extends EdgeUpdateSubjectImpl with LazyLogging {
 
@@ -479,7 +509,7 @@ class EndpointDescSubMgr(id: EndpointId) extends GenEdgeTypeSubMgr {
   def toUpdate(v: EdgeDataState[EndpointDescriptor]): IdentifiedEdgeUpdate = IdEndpointUpdate(id, v)
 
   def fromTypeValue(v: TypeValue): Either[String, EndpointDescriptor] = {
-    ???
+    EdgeCodecCommon.fromTypeValue(v)
   }
 }
 
@@ -531,12 +561,7 @@ trait EdgeSubscription {
   def close(): Unit
 }
 
-object EdgeSubscriptionManager {
-  def endpointIdToRow(id: EndpointId): RowId = ???
-  def dataKeyToRow(endpointPath: EndpointPath): RowId = ???
-}
-class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: ColsetSubscriptionManager) {
-  import EdgeSubscriptionManager._
+class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: ColsetSubscriptionManager, mainCodec: EdgeCodec) {
 
   private val rowMap = mutable.Map.empty[RowId, EdgeTypeSubMgr]
 
@@ -549,7 +574,7 @@ class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: ColsetSubscr
     eventThread.marshal {
       val prevRowSet = rowMap.keySet.toSet
 
-      val endpointIdToRows = endpoints.map(id => (id, endpointIdToRow(id)))
+      val endpointIdToRows = endpoints.map(id => (id, mainCodec.endpointIdToRow(id)))
 
       endpointIdToRows.foreach {
         case (id, row) =>
@@ -557,7 +582,9 @@ class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: ColsetSubscr
           mgr.addObserver(updateQueue)
       }
 
-      val dataKeyAndRows = keys.map(entry => (entry._1, entry._2, dataKeyToRow(entry._1)))
+      val dataKeyAndRows = keys.map {
+        case (endPath, codec) => (endPath, codec, codec.dataKeyToRow(endPath))
+      }
 
       dataKeyAndRows.foreach {
         case (id, codec, row) =>
@@ -608,84 +635,3 @@ class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: ColsetSubscr
   }
 }
 
-/*
-trait DataKeySubMgr {
-
-  def observers: Set[BufferedRowObserver]
-
-  def handle(ev: AppendEvent): Boolean
-
-  def handleUnresolved(): Boolean
-}
-
-/*class AppendDataKeySubMgr(endpointId: EndpointId, path: Path) extends DataKeySubMgr {
-  private var latestValue = Option.empty[TypeValue]
-}*/
-
-class AppendSubMgr(row: RowId) extends DataKeySubMgr {
-  private var latestValue = Option.empty[TypeValue]
-
-  def handle(ev: AppendEvent): Boolean = {
-
-  }
-
-  def handleUnresolved(): Boolean = {
-
-  }
-}
-
-trait RowObserver {
-  def handle()
-}
-
-trait BufferedRowObserver {
-
-  def handle()
-
-  def flush(): Unit
-}
-
-class ColsetSubscriptionMgr {
-
-  //private val dataKeySubs = mutable.Map.empty[EndpointPath, DataKeySubMgr]
-
-  private var map = mutable.Map.empty[TypeValue, mutable.Map[TableRow, DataKeySubMgr]]
-
-  private def lookup(row: RowId): Option[DataKeySubMgr] = {
-    map.get(row.routingKey).flatMap(_.get(row.tableRow))
-  }
-
-  def handleEvents(events: Seq[StreamEvent]): Unit = {
-
-    val affected = mutable.Set.empty[BufferedRowObserver]
-
-    events.foreach {
-      case se: RowAppendEvent => {
-        lookup(se.rowId).foreach { mgr =>
-          if (mgr.handle(se.appendEvent)) {
-            affected ++= mgr.observers
-          }
-        }
-      }
-      case se: RouteUnresolved => {
-        map.get(se.routingKey).flatMap(_.values).foreach { mgr =>
-          if (mgr.handleUnresolved()) {
-            affected ++= mgr.observers
-          }
-        }
-      }
-    }
-
-  }
-
-}
-
-class DataSubscription(peerLinkProxy: PeerLinkProxy) {
-
-  def subscribe(): Unit = {
-
-    //peerLinkProxy.subscriptions.push()
-
-  }
-
-}*/
