@@ -26,10 +26,6 @@ import io.greenbus.edge.flow._
 
 import scala.collection.mutable
 
-class ConsumerClientImpl {
-
-}
-
 /*
 
 info sub,
@@ -47,11 +43,13 @@ case class EndpointDescSub(endpointId: EndpointId)
 class EndpointSubscription(endpointId: EndpointId, descOpt: Option[EndpointDescSub], dataKeys: Set[Path], outputKeys: Path)
 
 sealed trait ValueUpdate
-case class Appended(values: Seq[TypeValue]) extends ValueUpdate
-case class SetUpdated(value: Set[TypeValue], removed: Set[TypeValue], added: Set[TypeValue]) extends ValueUpdate
-case class KeyedSetUpdated(value: Map[TypeValue, TypeValue], removed: Set[TypeValue], added: Set[(TypeValue, TypeValue)], modified: Set[(TypeValue, TypeValue)]) extends ValueUpdate
-case object Absent extends ValueUpdate
-case object Unresolved extends ValueUpdate
+case object ValueAbsent extends ValueUpdate
+case object ValueUnresolved extends ValueUpdate
+case object ValueDisconnected extends ValueUpdate
+sealed trait DataValueUpdate extends ValueUpdate
+case class Appended(values: Seq[TypeValue]) extends DataValueUpdate
+case class SetUpdated(value: Set[TypeValue], removed: Set[TypeValue], added: Set[TypeValue]) extends DataValueUpdate
+case class KeyedSetUpdated(value: Map[TypeValue, TypeValue], removed: Set[TypeValue], added: Set[(TypeValue, TypeValue)], modified: Set[(TypeValue, TypeValue)]) extends DataValueUpdate
 
 case class RowUpdate(row: RowId, update: ValueUpdate)
 
@@ -265,20 +263,8 @@ class RowFilterImpl extends RowFilter with LazyLogging {
 
  */
 
-trait RowSubMgr {
-
-  def addObserver()
-  def removeObserver()
-
-  def update(update: ValueUpdate): Unit
-  def routeUnresolved()
-
-}
-
 trait RowFilter {
-
   def handle(event: AppendEvent): Option[ValueUpdate]
-
 }
 
 class SubscriptionFilterMap(sink: Sink[Seq[RowUpdate]]) {
@@ -308,7 +294,7 @@ class SubscriptionFilterMap(sink: Sink[Seq[RowUpdate]]) {
         map.get(ev.routingKey).map { rowMap =>
           rowMap.keys.map { tr =>
             val row = tr.toRowId(ev.routingKey)
-            RowUpdate(row, Unresolved)
+            RowUpdate(row, ValueUnresolved)
           }.toVector
         }.getOrElse(Seq())
       }
@@ -334,7 +320,7 @@ class SubscriptionFilterMap(sink: Sink[Seq[RowUpdate]]) {
       case (route, rowMap) =>
         rowMap.map {
           case (tableRow, _) =>
-            RowUpdate(tableRow.toRowId(route), Unresolved)
+            RowUpdate(tableRow.toRowId(route), ValueDisconnected)
         }
     }
     sink.push(updates.toVector)
@@ -385,29 +371,11 @@ case class LongValue(value: Long) extends SeriesValue
 case class DoubleValue(value: Double) extends SeriesValue
 
 sealed trait EdgeDataKeyValue
-case class KeyValueUpdate(value: Value) extends EdgeDataKeyValue
-case class SeriesUpdate(value: SeriesValue, time: Long) extends EdgeDataKeyValue
-case class TopicEventUpdate(topic: Path, value: Value, time: Long) extends EdgeDataKeyValue
-case class ActiveSetUpdate(value: Map[IndexableValue, Value]) extends EdgeDataKeyValue
-
-trait EdgeDataKeyValueCodec {
-  def fromTypeValue(v: TypeValue): Either[String, EdgeDataKeyValue]
-  def dataKeyToRow(endpointPath: EndpointPath): RowId
-}
-trait EdgeCodec {
-  def endpointIdToRow(id: EndpointId): RowId
-
-  def fromTypeValue(v: TypeValue): Either[String, EndpointDescriptor]
-}
-
-object EdgeCodecCommon {
-
-  def endpointIdToRow(id: EndpointId): RowId = ???
-
-  def fromTypeValue(v: TypeValue): Either[String, EndpointDescriptor] = {
-    ???
-  }
-}
+sealed trait EdgeSequenceDataKeyValue extends EdgeDataKeyValue
+case class KeyValueUpdate(value: Value) extends EdgeSequenceDataKeyValue
+case class SeriesUpdate(value: SeriesValue, time: Long) extends EdgeSequenceDataKeyValue
+case class TopicEventUpdate(topic: Path, value: Value, time: Long) extends EdgeSequenceDataKeyValue
+case class ActiveSetUpdate(value: Map[IndexableValue, Value], removes: Set[IndexableValue], added: Set[(IndexableValue, Value)], modified: Set[(IndexableValue, ValueUpdate)]) extends EdgeDataKeyValue
 
 sealed trait IdentifiedEdgeUpdate
 case class IdEndpointUpdate(id: EndpointId, data: EdgeDataState[EndpointDescriptor]) extends IdentifiedEdgeUpdate
@@ -424,6 +392,7 @@ case object Pending extends EdgeDataState[Nothing]
 case object DataUnresolved extends EdgeDataState[Nothing]
 case object ResolvedAbsent extends EdgeDataState[Nothing]
 case class ResolvedValue[A](value: A) extends EdgeDataState[A]
+case object Disconnected extends EdgeDataState[Nothing]
 
 trait EdgeUpdateQueue {
   def enqueue(update: IdentifiedEdgeUpdate): Unit
@@ -459,11 +428,33 @@ trait GenEdgeTypeSubMgr extends EdgeUpdateSubjectImpl with LazyLogging {
 
   protected type Data
 
-  private var state: EdgeDataState[Data] = Pending
+  protected var state: EdgeDataState[Data] = Pending
 
   protected def current(): EdgeDataState[Data] = state
 
-  def toUpdate(v: EdgeDataState[Data]): IdentifiedEdgeUpdate
+  protected def toUpdate(v: EdgeDataState[Data]): IdentifiedEdgeUpdate
+
+  protected def handleData(dataUpdate: DataValueUpdate): Set[EdgeUpdateQueue]
+
+  def handle(update: ValueUpdate): Set[EdgeUpdateQueue] = {
+    update match {
+      case dvu: DataValueUpdate => handleData(dvu)
+      case ValueAbsent =>
+        observers.foreach(_.enqueue(toUpdate(ResolvedAbsent)))
+        observers
+      case ValueUnresolved =>
+        observers.foreach(_.enqueue(toUpdate(DataUnresolved)))
+        observers
+      case ValueDisconnected =>
+        observers.foreach(_.enqueue(toUpdate(Disconnected)))
+        observers
+      case _ => Set()
+    }
+  }
+}
+
+trait GenAppendSubMgr extends GenEdgeTypeSubMgr with LazyLogging {
+
   def fromTypeValue(v: TypeValue): Either[String, Data]
 
   private def handleValue(v: Data): Set[EdgeUpdateQueue] = {
@@ -482,25 +473,27 @@ trait GenEdgeTypeSubMgr extends EdgeUpdateSubjectImpl with LazyLogging {
     }
   }
 
-  def handle(update: ValueUpdate): Set[EdgeUpdateQueue] = {
-    update match {
+  protected def handleData(dataUpdate: DataValueUpdate): Set[EdgeUpdateQueue] = {
+    dataUpdate match {
       case Appended(values) => {
         values.lastOption.map { last =>
           fromTypeValue(last) match {
             case Left(str) =>
-              logger.warn(s"Could not extract endpoint descriptor for $logId: $str")
+              logger.warn(s"Could not extract data value for $logId: $str")
               Set.empty[EdgeUpdateQueue]
             case Right(desc) =>
               handleValue(desc)
           }
         }.getOrElse(Set())
       }
-      case _ => Set()
+      case _ =>
+        logger.warn(s"Wrong value update type for $logId: $dataUpdate")
+        Set()
     }
   }
 }
 
-class EndpointDescSubMgr(id: EndpointId) extends GenEdgeTypeSubMgr {
+class EndpointDescSubMgr(id: EndpointId) extends GenAppendSubMgr {
 
   protected type Data = EndpointDescriptor
 
@@ -511,20 +504,61 @@ class EndpointDescSubMgr(id: EndpointId) extends GenEdgeTypeSubMgr {
   def fromTypeValue(v: TypeValue): Either[String, EndpointDescriptor] = {
     EdgeCodecCommon.fromTypeValue(v)
   }
+
 }
 
-class DataKeySubMgr(id: EndpointPath, codec: EdgeDataKeyValueCodec) extends GenEdgeTypeSubMgr {
+// TODO: need different gen for actual series???
+class AppendDataKeySubMgr(id: EndpointPath, codec: AppendDataKeyCodec) extends GenAppendSubMgr {
 
-  protected type Data = EdgeDataKeyValue
+  protected type Data = EdgeSequenceDataKeyValue
 
   protected def logId: String = id.toString
 
-  def toUpdate(v: EdgeDataState[EdgeDataKeyValue]): IdentifiedEdgeUpdate = {
+  def toUpdate(v: EdgeDataState[EdgeSequenceDataKeyValue]): IdentifiedEdgeUpdate = {
     IdDataKeyUpdate(id, v)
   }
 
-  def fromTypeValue(v: TypeValue): Either[String, EdgeDataKeyValue] = {
+  def fromTypeValue(v: TypeValue): Either[String, EdgeSequenceDataKeyValue] = {
     codec.fromTypeValue(v)
+  }
+}
+
+class KeyedSetSubMgr(id: EndpointPath, codec: KeyedSetDataKeyCodec) extends GenEdgeTypeSubMgr with LazyLogging {
+
+  protected def logId: String = id.toString
+
+  protected type Data = ActiveSetUpdate
+
+  protected def toUpdate(v: EdgeDataState[ActiveSetUpdate]): IdentifiedEdgeUpdate = ???
+
+  protected def handleData(dataUpdate: DataValueUpdate): Set[EdgeUpdateQueue] = {
+    dataUpdate match {
+      case up: KeyedSetUpdated => {
+        codec.fromTypeValue(up) match {
+          case Left(str) =>
+            logger.warn(s"Could not extract data update for $logId: $str")
+            Set.empty[EdgeUpdateQueue]
+          case Right(data) =>
+            val updateOpt = if (data.removes.nonEmpty || data.added.nonEmpty || data.modified.nonEmpty) {
+              state = ResolvedValue(ActiveSetUpdate(data.value, Set(), Set(), Set()))
+              Some(ResolvedValue(data))
+            } else {
+              None
+            }
+
+            updateOpt match {
+              case None => Set()
+              case Some(update) =>
+                val identified = toUpdate(update)
+                observers.foreach(_.enqueue(identified))
+                observers
+            }
+        }
+      }
+      case _ =>
+        logger.warn(s"Wrong value update type for $logId: $dataUpdate")
+        Set()
+    }
   }
 }
 
@@ -564,8 +598,9 @@ trait EdgeSubscription {
 class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: ColsetSubscriptionManager, mainCodec: EdgeCodec) {
 
   private val rowMap = mutable.Map.empty[RowId, EdgeTypeSubMgr]
+  subImpl.source.bind(batch => handleBatch(batch))
 
-  def subscribe(endpoints: Seq[EndpointId], keys: Seq[(EndpointPath, EdgeDataKeyValueCodec)]): EdgeSubscription = {
+  def subscribe(endpoints: Seq[EndpointId], keys: Seq[(EndpointPath, EdgeDataKeyCodec)]): EdgeSubscription = {
 
     val batchQueue = new RemoteBoundQueuedDistributor[Seq[IdentifiedEdgeUpdate]](eventThread)
     val updateQueue = new EdgeUpdateQueueImpl(batchQueue)
@@ -588,7 +623,12 @@ class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: ColsetSubscr
 
       dataKeyAndRows.foreach {
         case (id, codec, row) =>
-          val mgr = rowMap.getOrElseUpdate(row, new DataKeySubMgr(id, codec))
+          val mgr = rowMap.getOrElseUpdate(row, {
+            codec match {
+              case c: AppendDataKeyCodec => new AppendDataKeySubMgr(id, c)
+              case c: KeyedSetDataKeyCodec => new KeyedSetSubMgr(id, c)
+            }
+          })
           mgr.addObserver(updateQueue)
       }
 
@@ -622,7 +662,7 @@ class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: ColsetSubscr
     }
   }
 
-  def handleBatch(updates: Seq[RowUpdate]): Unit = {
+  private def handleBatch(updates: Seq[RowUpdate]): Unit = {
     val dirty = Set.newBuilder[EdgeUpdateQueue]
 
     updates.foreach { update =>

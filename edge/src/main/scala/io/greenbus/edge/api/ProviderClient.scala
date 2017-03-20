@@ -18,10 +18,9 @@
  */
 package io.greenbus.edge.api
 
-import io.greenbus.edge.CallMarshaller
 import io.greenbus.edge.colset._
 import io.greenbus.edge.colset.gateway._
-import io.greenbus.edge.flow.{ Handler, QueuedDistributor, Sink }
+import io.greenbus.edge.flow.{QueuedDistributor, Sink}
 
 import scala.collection.mutable
 
@@ -137,35 +136,6 @@ class LatestKeyValueQueue extends QueuedDistributor[Value] with DataValueQueue w
 }
 class ActiveSetQueue extends QueuedDistributor[Map[IndexableValue, Value]] with DataValueQueue with ActiveSetHandle {
   def update(value: Map[IndexableValue, Value]): Unit = push(value)
-}
-
-object ColsetCodec {
-
-  def encodeBoolSeries(obj: (Boolean, Long)): TypeValue = {
-    TupleVal(Seq(BoolVal(obj._1), Int64Val(obj._2)))
-  }
-  def encodeLongSeries(obj: (Long, Long)): TypeValue = {
-    TupleVal(Seq(Int64Val(obj._1), Int64Val(obj._2)))
-  }
-  def encodeDoubleSeries(obj: (Double, Long)): TypeValue = {
-    TupleVal(Seq(DoubleVal(obj._1), Int64Val(obj._2)))
-  }
-
-  def encodeTopicEvent(obj: (Path, Value, Long)): TypeValue = {
-    TupleVal(Seq(encodePath(obj._1), encodeValue(obj._2), Int64Val(obj._3)))
-  }
-
-  def encodePath(path: Path): TypeValue = {
-    ???
-  }
-
-  def encodeMap(map: Map[IndexableValue, Value]): Map[TypeValue, TypeValue] = {
-    ???
-  }
-
-  def encodeValue(value: Value): TypeValue = {
-    ???
-  }
 }
 
 case class ProviderDataEntry(path: Path, dataType: DataKeyDescriptor, distributor: DataValueQueue)
