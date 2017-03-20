@@ -168,11 +168,6 @@ trait ProviderFactory {
 
 object ColsetProviderFactory {
 
-  val latestKeyValueTable = "edm.lkv"
-  val timeSeriesValueTable = "edm.tsv"
-  val eventTopicValueTable = "edm.events"
-  val activeSetValueTable = "edm.set"
-
   private def pathToRowKey(path: Path): TypeValue = ???
 
   private def bindAppend(sink: AppendEventSink, queue: DataValueQueue): Unit = {
@@ -209,22 +204,22 @@ class ColsetProviderFactory(routeSource: GatewayRouteSource) extends ProviderFac
 
       val (tableRow, sink) = entry.dataType match {
         case d: LatestKeyValueDescriptor =>
-          val tableRow = TableRow(latestKeyValueTable, rowKey)
+          val tableRow = TableRow(EdgeTables.latestKeyValueTable, rowKey)
           val sink = routeHandle.appendSetRow(tableRow, 1)
           bindAppend(sink, entry.distributor)
           (tableRow, routeHandle.appendSetRow(tableRow, 1))
         case d: TimeSeriesValueDescriptor =>
-          val tableRow = TableRow(timeSeriesValueTable, rowKey)
+          val tableRow = TableRow(EdgeTables.timeSeriesValueTable, rowKey)
           val sink = routeHandle.appendSetRow(tableRow, seriesBuffersSize)
           bindAppend(sink, entry.distributor)
           (tableRow, sink)
         case d: EventTopicValueDescriptor =>
-          val tableRow = TableRow(eventTopicValueTable, rowKey)
+          val tableRow = TableRow(EdgeTables.eventTopicValueTable, rowKey)
           val sink = routeHandle.appendSetRow(tableRow, eventBuffersSize)
           bindAppend(sink, entry.distributor)
           (tableRow, sink)
         case d: ActiveSetValueDescriptor =>
-          val tableRow = TableRow(activeSetValueTable, rowKey)
+          val tableRow = TableRow(EdgeTables.activeSetValueTable, rowKey)
           val sink = routeHandle.keyedSetRow(tableRow)
           bindKeyed(sink, entry.distributor)
           (tableRow, sink)
