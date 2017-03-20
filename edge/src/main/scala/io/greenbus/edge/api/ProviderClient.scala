@@ -20,7 +20,7 @@ package io.greenbus.edge.api
 
 import io.greenbus.edge.colset._
 import io.greenbus.edge.colset.gateway._
-import io.greenbus.edge.flow.{QueuedDistributor, Sink}
+import io.greenbus.edge.flow.{ QueuedDistributor, Sink }
 
 import scala.collection.mutable
 
