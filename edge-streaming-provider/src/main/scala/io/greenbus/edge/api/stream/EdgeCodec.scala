@@ -19,7 +19,10 @@
 package io.greenbus.edge.api.stream
 
 import io.greenbus.edge.api._
+import io.greenbus.edge.api.proto.convert.{ Conversions, ValueConversions }
 import io.greenbus.edge.colset._
+import io.greenbus.edge.api.proto
+import io.greenbus.edge.util.EitherUtil
 
 object EdgeTables {
 
@@ -35,8 +38,120 @@ trait EdgeDataKeyCodec {
   def dataKeyToRow(endpointPath: EndpointPath): RowId
 }
 
+object AppendDataKeyCodec {
+
+  /*def readSeriesValue(value: TypeValue): Either[String, SeriesValue] = {
+    value match {
+      case v: BoolVal => Right(BoolValue(v.v))
+      case v: Int64Val => Right(LongValue(v.v))
+      case v: DoubleVal => Right(DoubleValue(v.v))
+      case _ => Left("Incorrect value type for series: " + value)
+    }
+  }*/
+
+  def readTimestamp(value: TypeValue): Either[String, Long] = {
+    value match {
+      case v: Int64Val => Right(v.v)
+      case _ => Left("Incorrect value type for timestamp: " + value)
+    }
+  }
+
+  object SeriesCodec extends AppendDataKeyCodec {
+
+    def dataKeyToRow(endpointPath: EndpointPath): RowId = {
+      EdgeCodecCommon.dataKeyRowId(endpointPath, EdgeTables.timeSeriesValueTable)
+    }
+
+    def fromTypeValue(value: TypeValue): Either[String, EdgeSequenceDataKeyValue] = {
+
+      value match {
+        case TupleVal(elems) => {
+          if (elems.size >= 2) {
+            for {
+              sv <- EdgeCodecCommon.readSampleEdgeValue(elems(0))
+              time <- readTimestamp(elems(1))
+            } yield {
+              SeriesUpdate(sv, time)
+            }
+          } else {
+            Left("Insufficient values in tuple for series")
+          }
+        }
+        case _ => Left("Incorrect value type for timestamp: " + value)
+      }
+    }
+  }
+
+  object KeyValueCodec extends AppendDataKeyCodec {
+
+    def dataKeyToRow(endpointPath: EndpointPath): RowId = {
+      EdgeCodecCommon.dataKeyRowId(endpointPath, EdgeTables.latestKeyValueTable)
+    }
+
+    def fromTypeValue(value: TypeValue): Either[String, EdgeSequenceDataKeyValue] = {
+      EdgeCodecCommon.readEdgeValue(value)
+        .map(v => KeyValueUpdate(v))
+    }
+  }
+
+  object TopicEventCodec extends AppendDataKeyCodec {
+
+    def dataKeyToRow(endpointPath: EndpointPath): RowId = {
+      EdgeCodecCommon.dataKeyRowId(endpointPath, EdgeTables.eventTopicValueTable)
+    }
+
+    def fromTypeValue(value: TypeValue): Either[String, EdgeSequenceDataKeyValue] = {
+      value match {
+        case TupleVal(elems) => {
+          if (elems.size >= 2) {
+            for {
+              topic <- EdgeCodecCommon.readPath(elems(0))
+              edgeValue <- EdgeCodecCommon.readEdgeValue(elems(1))
+              time <- readTimestamp(elems(2))
+            } yield {
+              TopicEventUpdate(topic, edgeValue, time)
+            }
+          } else {
+            Left("Insufficient values in tuple for series")
+          }
+        }
+        case _ => Left("Incorrect value type for timestamp: " + value)
+      }
+    }
+  }
+}
 trait AppendDataKeyCodec extends EdgeDataKeyCodec {
   def fromTypeValue(v: TypeValue): Either[String, EdgeSequenceDataKeyValue]
+}
+
+object KeyedSetDataKeyCodec {
+
+  object ActiveSetCodec extends KeyedSetDataKeyCodec {
+
+    def readMapTuple(tup: (TypeValue, TypeValue)): Either[String, (IndexableValue, Value)] = {
+      for {
+        key <- EdgeCodecCommon.readIndexableEdgeValue(tup._1)
+        v <- EdgeCodecCommon.readEdgeValue(tup._2)
+      } yield {
+        (key, v)
+      }
+    }
+
+    def dataKeyToRow(endpointPath: EndpointPath): RowId = {
+      EdgeCodecCommon.dataKeyRowId(endpointPath, EdgeTables.activeSetValueTable)
+    }
+
+    def fromTypeValue(v: KeyedSetUpdated): Either[String, ActiveSetUpdate] = {
+      for {
+        map <- EitherUtil.rightSequence(v.value.toVector.map(readMapTuple)).map(_.toMap)
+        removes <- EitherUtil.rightSequence(v.removed.toVector.map(EdgeCodecCommon.readIndexableEdgeValue))
+        adds <- EitherUtil.rightSequence(v.added.toVector.map(readMapTuple)).map(_.toMap)
+        modifies <- EitherUtil.rightSequence(v.modified.toVector.map(readMapTuple)).map(_.toMap)
+      } yield {
+        ActiveSetUpdate(map, removes.toSet, adds.toSet, modifies.toSet)
+      }
+    }
+  }
 }
 trait KeyedSetDataKeyCodec extends EdgeDataKeyCodec {
   def fromTypeValue(v: KeyedSetUpdated): Either[String, ActiveSetUpdate]
@@ -49,8 +164,67 @@ trait EdgeCodec {
 
 object EdgeCodecCommon {
 
+  def parse[A](bytes: Array[Byte], f: Array[Byte] => A): Either[String, A] = {
+    try {
+      Right(f(bytes))
+    } catch {
+      case ex: Throwable => Left("Error parsing: " + ex.toString)
+    }
+  }
+  def parseAndConvert[A, B](bytes: Array[Byte], p: Array[Byte] => A, c: A => Either[String, B]): Either[String, B] = {
+    parse(bytes, p).flatMap(c)
+  }
+
+  def readSampleEdgeValue(v: TypeValue): Either[String, SampleValue] = {
+    v match {
+      case b: BytesVal =>
+        parse(b.v, proto.SampleValue.parseFrom).flatMap { protoValue =>
+          ValueConversions.fromProto(protoValue)
+        }
+      case _ => Left(s"Wrong value type for edge value: " + v)
+    }
+  }
+
+  def readIndexableEdgeValue(v: TypeValue): Either[String, IndexableValue] = {
+    v match {
+      case b: BytesVal =>
+        parse(b.v, proto.IndexableValue.parseFrom).flatMap { protoValue =>
+          ValueConversions.fromProto(protoValue)
+        }
+      case _ => Left(s"Wrong value type for edge value: " + v)
+    }
+  }
+
+  def readEdgeValue(v: TypeValue): Either[String, Value] = {
+    v match {
+      case b: BytesVal =>
+        parse(b.v, proto.Value.parseFrom).flatMap { protoValue =>
+          ValueConversions.fromProto(protoValue)
+        }
+      case _ => Left(s"Wrong value type for edge value: " + v)
+    }
+  }
+
+  def readPath(v: TypeValue): Either[String, Path] = {
+    v match {
+      case tup: TupleVal => {
+        val elems = tup.elements.map {
+          case SymbolVal(s) => Right(s)
+          case other => Left(s"Wrong value type in path tuple: $other")
+        }
+
+        EitherUtil.rightSequence(elems).map(seq => Path(seq))
+      }
+      case _ => Left(s"Wrong value type for path: $v")
+    }
+  }
+
+  def pathToTuple(path: Path): TupleVal = {
+    TupleVal(path.parts.map(SymbolVal))
+  }
+
   def endpointIdToTuple(id: EndpointId): TupleVal = {
-    TupleVal(id.path.parts.map(SymbolVal))
+    pathToTuple(id.path)
   }
   def endpointIdToRoute(id: EndpointId): TypeValue = endpointIdToTuple(id)
 
@@ -60,7 +234,19 @@ object EdgeCodecCommon {
   }
 
   def endpointDescriptorFromTypeValue(v: TypeValue): Either[String, EndpointDescriptor] = {
-    ???
+    v match {
+      case b: BytesVal =>
+        val protoValue = proto.EndpointDescriptor.parseFrom(b.v)
+        Conversions.fromProto(protoValue)
+      case _ => Left(s"Wrong value type for endpoint descriptor: " + v)
+    }
+  }
+
+  def dataKeyRowId(endpointPath: EndpointPath, table: String): RowId = {
+    val route = endpointIdToRoute(endpointPath.endpoint)
+    val key = pathToTuple(endpointPath.key)
+
+    RowId(route, table, key)
   }
 }
 

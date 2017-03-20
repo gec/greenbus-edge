@@ -366,17 +366,17 @@ trait ColsetSubscriptionManager {
   def source: Source[Seq[RowUpdate]]
 }
 
-sealed trait SeriesValue
+/*sealed trait SeriesValue
 case class BoolValue(value: Boolean) extends SeriesValue
 case class LongValue(value: Long) extends SeriesValue
-case class DoubleValue(value: Double) extends SeriesValue
+case class DoubleValue(value: Double) extends SeriesValue*/
 
 sealed trait EdgeDataKeyValue
 sealed trait EdgeSequenceDataKeyValue extends EdgeDataKeyValue
 case class KeyValueUpdate(value: Value) extends EdgeSequenceDataKeyValue
-case class SeriesUpdate(value: SeriesValue, time: Long) extends EdgeSequenceDataKeyValue
+case class SeriesUpdate(value: SampleValue, time: Long) extends EdgeSequenceDataKeyValue
 case class TopicEventUpdate(topic: Path, value: Value, time: Long) extends EdgeSequenceDataKeyValue
-case class ActiveSetUpdate(value: Map[IndexableValue, Value], removes: Set[IndexableValue], added: Set[(IndexableValue, Value)], modified: Set[(IndexableValue, ValueUpdate)]) extends EdgeDataKeyValue
+case class ActiveSetUpdate(value: Map[IndexableValue, Value], removes: Set[IndexableValue], added: Set[(IndexableValue, Value)], modified: Set[(IndexableValue, Value)]) extends EdgeDataKeyValue
 
 sealed trait IdentifiedEdgeUpdate
 case class IdEndpointUpdate(id: EndpointId, data: EdgeDataState[EndpointDescriptor]) extends IdentifiedEdgeUpdate
