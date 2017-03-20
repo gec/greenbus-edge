@@ -117,13 +117,13 @@ case class ValueBool(v: Boolean) extends NumericConvertible with SampleValue {
   def toLong: Long = if (v) 1 else 0
   def toBoolean: Boolean = v
 }
-case class ValueSimpleString(v: String) extends IndexableValue
-case class ValueSimpleBytes(v: Array[Byte]) extends IndexableValue
+case class ValueString(v: String) extends IndexableValue
+case class ValueBytes(v: Array[Byte]) extends IndexableValue
 case class ValueUuid(v: UUID) extends IndexableValue
 case class ValuePath(v: Path) extends Value
 case class ValueEndpointPath(v: EndpointPath) extends Value
-case class ValueString(v: String, mimeType: Option[String] = None) extends Value
-case class ValueBytes(v: Array[Byte], mimeType: Option[String] = None, isText: Option[Boolean] = None) extends Value
+case class ValueText(v: String, mimeType: Option[String] = None) extends Value
+case class ValueAnnotatedBytes(v: Array[Byte], mimeType: Option[String] = None, isText: Option[Boolean] = None) extends Value
 
 case class ValueArray(seq: IndexedSeq[Value]) extends Value
 case class ValueObject(map: Map[String, Value]) extends Value
