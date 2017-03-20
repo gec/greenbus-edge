@@ -22,6 +22,7 @@ import io.greenbus.edge.api._
 import io.greenbus.edge.api.proto.convert.{ Conversions, ValueConversions }
 import io.greenbus.edge.colset._
 import io.greenbus.edge.api.proto
+import io.greenbus.edge.colset.subscribe.KeyedSetUpdated
 import io.greenbus.edge.util.EitherUtil
 
 object EdgeTables {
