@@ -502,7 +502,7 @@ class EndpointDescSubMgr(id: EndpointId) extends GenAppendSubMgr {
   def toUpdate(v: EdgeDataState[EndpointDescriptor]): IdentifiedEdgeUpdate = IdEndpointUpdate(id, v)
 
   def fromTypeValue(v: TypeValue): Either[String, EndpointDescriptor] = {
-    EdgeCodecCommon.fromTypeValue(v)
+    EdgeCodecCommon.endpointDescriptorFromTypeValue(v)
   }
 
 }
@@ -595,7 +595,11 @@ trait EdgeSubscription {
   def close(): Unit
 }
 
-class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: ColsetSubscriptionManager, mainCodec: EdgeCodec) {
+trait EdgeSubscriptionClient {
+  def subscribe(endpoints: Seq[EndpointId], keys: Seq[(EndpointPath, EdgeDataKeyCodec)]): EdgeSubscription
+}
+
+class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: ColsetSubscriptionManager, mainCodec: EdgeCodec) extends EdgeSubscriptionClient {
 
   private val rowMap = mutable.Map.empty[RowId, EdgeTypeSubMgr]
   subImpl.source.bind(batch => handleBatch(batch))

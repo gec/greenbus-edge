@@ -20,6 +20,16 @@ package io.greenbus.edge.api
 
 import io.greenbus.edge.colset._
 
+object EdgeTables {
+
+  val endpointDescTable = "edm.endpointdesc"
+
+  val latestKeyValueTable = "edm.lkv"
+  val timeSeriesValueTable = "edm.tsv"
+  val eventTopicValueTable = "edm.events"
+  val activeSetValueTable = "edm.set"
+}
+
 trait EdgeDataKeyCodec {
   def dataKeyToRow(endpointPath: EndpointPath): RowId
 }
@@ -38,9 +48,17 @@ trait EdgeCodec {
 
 object EdgeCodecCommon {
 
-  def endpointIdToRow(id: EndpointId): RowId = ???
+  def endpointIdToTuple(id: EndpointId): TupleVal = {
+    TupleVal(id.path.parts.map(SymbolVal))
+  }
+  def endpointIdToRoute(id: EndpointId): TypeValue = endpointIdToTuple(id)
 
-  def fromTypeValue(v: TypeValue): Either[String, EndpointDescriptor] = {
+  def endpointIdToEndpointDescriptorRow(id: EndpointId): RowId = {
+    val route = endpointIdToRoute(id)
+    RowId(route, EdgeTables.endpointDescTable, endpointIdToTuple(id))
+  }
+
+  def endpointDescriptorFromTypeValue(v: TypeValue): Either[String, EndpointDescriptor] = {
     ???
   }
 }

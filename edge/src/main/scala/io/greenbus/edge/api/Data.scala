@@ -20,9 +20,11 @@ package io.greenbus.edge.api
 
 import java.util.UUID
 
-sealed trait EndpointId
+/*sealed trait EndpointId
 case class NamedEndpointId(name: Path) extends EndpointId
-case class UuidEndpointId(uuid: UUID, display: Path) extends EndpointId
+case class UuidEndpointId(uuid: UUID, display: Path) extends EndpointId*/
+
+case class EndpointId(path: Path)
 
 case class EndpointPath(endpoint: EndpointId, key: Path)
 
