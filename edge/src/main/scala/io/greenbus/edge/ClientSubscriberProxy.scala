@@ -20,6 +20,7 @@ package io.greenbus.edge
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.channel.{ Closeable, DeferredLatchHandler, Receiver, Sender }
+import io.greenbus.edge.thread.CallMarshaller
 
 trait ClientSubscriberProxy extends Closeable {
   def params: Receiver[ClientSubscriptionParamsMessage, Boolean]

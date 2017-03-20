@@ -25,6 +25,7 @@ import io.greenbus.edge._
 import io.greenbus.edge.amqp.impl.AmqpIoImpl
 import io.greenbus.edge.client._
 import io.greenbus.edge.proto.provider.EdgeProtobufProvider
+import io.greenbus.edge.thread.CallMarshaller
 
 import scala.concurrent.Await
 import scala.concurrent.duration._

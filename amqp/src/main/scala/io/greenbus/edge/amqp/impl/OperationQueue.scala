@@ -22,7 +22,7 @@ import java.io.{ PrintWriter, StringWriter }
 import java.util.concurrent.ConcurrentLinkedQueue
 
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.CallMarshaller
+import io.greenbus.edge.thread.CallMarshaller
 
 import scala.concurrent.{ Future, Promise }
 

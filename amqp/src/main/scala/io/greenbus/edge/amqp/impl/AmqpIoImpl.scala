@@ -19,9 +19,9 @@
 package io.greenbus.edge.amqp.impl
 
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.CallMarshaller
 import io.greenbus.edge.amqp.{ AmqpChannelServer, AmqpListener, AmqpService, ChannelSessionSource }
 import io.greenbus.edge.channel.{ Sender => _ }
+import io.greenbus.edge.thread.CallMarshaller
 import org.apache.qpid.proton.Proton
 import org.apache.qpid.proton.engine._
 

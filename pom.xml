@@ -38,9 +38,14 @@
     </properties>
 
     <modules>
+        <module>edge-common</module>
+        <module>streaming</module>
+        <module>edge-api</module>
+        <module>edge-streaming-provider</module>
         <module>edge</module>
         <module>protobuf</module>
         <module>amqp</module>
+        <module>edge-peer-relay</module>
     </modules>
 
     <repositories>

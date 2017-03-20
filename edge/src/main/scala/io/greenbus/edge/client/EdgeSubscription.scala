@@ -21,6 +21,7 @@ package io.greenbus.edge.client
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge._
 import io.greenbus.edge.channel._
+import io.greenbus.edge.thread.CallMarshaller
 
 import scala.concurrent.{ Future, Promise }
 

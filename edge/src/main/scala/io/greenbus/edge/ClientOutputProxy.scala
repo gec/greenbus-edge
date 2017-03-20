@@ -20,6 +20,7 @@ package io.greenbus.edge
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.channel.{ Closeable, DeferredLatchHandler, Receiver }
+import io.greenbus.edge.thread.CallMarshaller
 
 trait ClientOutputProxy extends Closeable {
   def respond(correlation: Long, response: OutputResult): Unit

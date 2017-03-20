@@ -20,6 +20,7 @@ package io.greenbus.edge
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.channel.Responder
+import io.greenbus.edge.thread.CallMarshaller
 
 import scala.concurrent.Promise
 

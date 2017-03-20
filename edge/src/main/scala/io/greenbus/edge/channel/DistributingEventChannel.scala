@@ -18,7 +18,7 @@
  */
 package io.greenbus.edge.channel
 
-import io.greenbus.edge.CallMarshaller
+import io.greenbus.edge.thread.CallMarshaller
 
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.{ Future, Promise }

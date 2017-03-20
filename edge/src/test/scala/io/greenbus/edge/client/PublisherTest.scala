@@ -25,6 +25,7 @@ import com.typesafe.config.ConfigFactory
 import io.greenbus.edge._
 import io.greenbus.edge.channel.actor.ActorChannelEngine
 import io.greenbus.edge.channel.{ Handler, Responder }
+import io.greenbus.edge.thread.CallMarshaller
 
 import scala.concurrent.{ Await, Promise }
 import scala.concurrent.duration._

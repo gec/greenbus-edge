@@ -20,7 +20,7 @@ package io.greenbus.edge.channel.actor
 
 import akka.actor.{ Actor, ActorRef, Props }
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.CallMarshaller
+import io.greenbus.edge.thread.CallMarshaller
 
 object CallMarshallingActor {
 

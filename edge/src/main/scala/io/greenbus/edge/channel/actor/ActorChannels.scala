@@ -23,6 +23,7 @@ import java.util.UUID
 import akka.actor.ActorSystem
 import io.greenbus.edge._
 import io.greenbus.edge.channel._
+import io.greenbus.edge.thread.CallMarshaller
 
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.{ Future, Promise }

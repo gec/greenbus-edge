@@ -18,8 +18,8 @@
  */
 package io.greenbus.edge.amqp
 
-import io.greenbus.edge.CallMarshaller
 import io.greenbus.edge.amqp.impl.AmqpIoImpl
+import io.greenbus.edge.thread.CallMarshaller
 
 import scala.concurrent.Future
 

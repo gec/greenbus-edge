@@ -22,8 +22,9 @@ import java.util.concurrent.TimeoutException
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.amqp.impl._
-import io.greenbus.edge.{ CallMarshaller, flow }
+import io.greenbus.edge.flow
 import io.greenbus.edge.flow._
+import io.greenbus.edge.thread.CallMarshaller
 import org.apache.qpid.proton.engine.{ Delivery, Link, Receiver, Sender }
 
 import scala.concurrent.Promise

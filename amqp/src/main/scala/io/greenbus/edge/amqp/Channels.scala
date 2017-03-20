@@ -27,6 +27,7 @@ import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.amqp.impl._
 import io.greenbus.edge._
 import io.greenbus.edge.proto.convert.Conversions
+import io.greenbus.edge.thread.CallMarshaller
 import org.apache.qpid.proton.Proton
 import org.apache.qpid.proton.amqp.Binary
 import org.apache.qpid.proton.amqp.messaging.{ Data, Source, Target }

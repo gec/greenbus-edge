@@ -21,6 +21,7 @@ package io.greenbus.edge.client
 import java.util.UUID
 
 import io.greenbus.edge._
+import io.greenbus.edge.thread.CallMarshaller
 
 import scala.concurrent.{ Future, Promise }
 import scala.concurrent.ExecutionContext.Implicits.global

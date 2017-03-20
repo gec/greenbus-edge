@@ -26,7 +26,8 @@ import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.amqp.{ ChannelSessionSource, EdgeAmqpChannelInitiator, EdgeChannelInitiatorImpl }
 import io.greenbus.edge.channel.{ Receiver => _, Sender => _, _ }
 import io.greenbus.edge.proto.provider.EdgeProtobufProvider
-import io.greenbus.edge.{ CallMarshaller, ChannelDescriptor, EdgeChannelClient, channel }
+import io.greenbus.edge.thread.CallMarshaller
+import io.greenbus.edge.{ ChannelDescriptor, EdgeChannelClient, channel }
 import org.apache.qpid.proton.engine.{ Receiver, _ }
 
 import scala.concurrent.{ Future, Promise }
