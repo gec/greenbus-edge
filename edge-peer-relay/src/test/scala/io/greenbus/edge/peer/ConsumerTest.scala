@@ -20,6 +20,7 @@ package io.greenbus.edge.peer
 
 import java.util.concurrent.{ Executors, ThreadFactory }
 
+import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.amqp.colset.{ ChannelDescriberImpl, ClientResponseParser }
 import io.greenbus.edge.amqp.impl2.AmqpService
 import io.greenbus.edge.api.{ EndpointId, EndpointPath, Path, ValueString }
@@ -35,7 +36,7 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 
-object ConsumerTest {
+object ConsumerTest extends LazyLogging {
 
   def main(args: Array[String]): Unit = {
 
@@ -59,11 +60,12 @@ object ConsumerTest {
       .topicEvent(EndpointPath(EndpointId(Path("my-endpoint")), Path("event-1")))
       .build()
 
+    logger.debug("Subscribing...")
     val subscription = edgeSubMgr.subscribe(sub)
 
     subscription.updates.bind { batch =>
-      println("Got batch: ")
-      batch.foreach(up => println("\t" + up))
+      logger.info("Got batch: ")
+      batch.foreach(up => logger.info("\t" + up))
     }
 
     System.in.read()

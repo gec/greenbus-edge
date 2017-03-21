@@ -64,7 +64,7 @@ abstract class BaseSenderChannelImpl[A](
   serializer: A => (Array[Byte], Int),
   startOpened: Boolean,
   parent: ResourceRemoveObserver)
-    extends CloseableChannel(ioThread, startOpened, parent, s) with SenderChannel[A, Boolean] with HandlerResource {
+    extends CloseableChannel(ioThread, startOpened, parent, s) with SenderChannel[A, Boolean] with HandlerResource with LazyLogging {
 
   private val deliverySequencer = new DeliverySequencer()
 
@@ -77,6 +77,7 @@ abstract class BaseSenderChannelImpl[A](
         // TODO: keep track of outstanding deliveries to cancel? or do it through the sender's iterator?
         delivery.setContext(new SentTransferDeliveryContextTry(handleResponse))
 
+        logger.debug(s"Send: ${s.getName} ... $obj")
         s.send(data, 0, length)
 
         s.advance()
@@ -167,6 +168,7 @@ abstract class BaseReceiverChannelImpl[A](
                 ioThread.marshal { d.settle() } // TODO: distinguish delivery state?
               }
 
+              logger.debug(s"Receive: ${r.getName} ... $obj")
               rcvImpl.handle(obj, onResponse)
             }
           }

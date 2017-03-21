@@ -81,7 +81,9 @@ class AmqpServiceImpl(idOpt: Option[String] = None) extends AmqpService {
   private val opQueue = new OperationQueue
   private val baseHandler = new ReactorHandler
   private val r = Proton.reactor(baseHandler)
-  r.getGlobalHandler.add(new UnhandledLogger(idOpt.getOrElse("AMQP")))
+  if (Option(System.getProperty("amqptrace")).map(_.toLowerCase).contains("true")) {
+    r.getGlobalHandler.add(new UnhandledLogger(idOpt.getOrElse("AMQP")))
+  }
 
   private val threadId = idOpt.map(id => s"AMQP reactor - $id").getOrElse("AMQP reactor")
   private val threadPump = new ThreadReactorPump(r, opQueue.handle, threadId)
