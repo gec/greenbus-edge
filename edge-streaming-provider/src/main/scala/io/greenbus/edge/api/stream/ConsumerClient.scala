@@ -358,3 +358,96 @@ class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: ColsetSubscr
   }
 }
 
+trait EdgeEnumeration {
+
+}
+
+trait ValueSubscription[State, Update] {
+
+
+
+}
+
+/*
+
+sealed trait EdgeDataKeyValue
+sealed trait EdgeSequenceDataKeyValue extends EdgeDataKeyValue
+case class KeyValueUpdate(value: Value) extends EdgeSequenceDataKeyValue
+case class SeriesUpdate(value: SampleValue, time: Long) extends EdgeSequenceDataKeyValue
+case class TopicEventUpdate(topic: Path, value: Value, time: Long) extends EdgeSequenceDataKeyValue
+case class ActiveSetUpdate(value: Map[IndexableValue, Value], removes: Set[IndexableValue], added: Set[(IndexableValue, Value)], modified: Set[(IndexableValue, Value)]) extends EdgeDataKeyValue
+
+sealed trait IdentifiedEdgeUpdate
+case class IdEndpointUpdate(id: EndpointId, data: EdgeDataState[EndpointDescriptor]) extends IdentifiedEdgeUpdate
+case class IdDataKeyUpdate(id: EndpointPath, data: EdgeDataState[EdgeDataKeyValue]) extends IdentifiedEdgeUpdate
+
+sealed trait EdgeDataState[+A]
+case object Pending extends EdgeDataState[Nothing]
+case object DataUnresolved extends EdgeDataState[Nothing]
+case object ResolvedAbsent extends EdgeDataState[Nothing]
+case class ResolvedValue[A](value: A) extends EdgeDataState[A]
+case object Disconnected extends EdgeDataState[Nothing]
+
+ */
+
+/*case class EdgeSubscriptionParams(
+                                 descriptors: Seq[EndpointId],
+                                 series: Seq[EndpointPath],
+                                 keyValues: Seq[EndpointPath],
+                                 topicEvents: Seq[EndpointPath],
+                                 activeSets: Seq[EndpointPath])*/
+
+trait SubscriptionParams {
+  def descriptors: Seq[EndpointId]
+  def keys: Seq[(EndpointPath, EdgeDataKeyCodec)]
+}
+
+object SubscriptionBuilder {
+
+  case class SubParams(descriptors: Seq[EndpointId], keys: Seq[(EndpointPath, EdgeDataKeyCodec)]) extends SubscriptionParams
+
+  class SubscriptionBuilderImpl extends SubscriptionBuilder {
+    private val endpointBuffer = mutable.ArrayBuffer.empty[EndpointId]
+    private val keys = mutable.ArrayBuffer.empty[(EndpointPath, EdgeDataKeyCodec)]
+
+    def endpointDescriptor(endpointId: EndpointId): SubscriptionBuilder ={
+      endpointBuffer += endpointId
+      this
+    }
+    def series(path: EndpointPath): SubscriptionBuilder = {
+      keys += ((path, AppendDataKeyCodec.SeriesCodec))
+      this
+    }
+    def keyValue(path: EndpointPath): SubscriptionBuilder = {
+      keys += ((path, AppendDataKeyCodec.KeyValueCodec))
+      this
+    }
+    def topicEvent(path: EndpointPath): SubscriptionBuilder = {
+      keys += ((path, AppendDataKeyCodec.TopicEventCodec))
+      this
+    }
+    def activeSet(path: EndpointPath): SubscriptionBuilder = {
+      keys += ((path, KeyedSetDataKeyCodec.ActiveSetCodec))
+      this
+    }
+
+    def build(): SubscriptionParams = {
+      SubParams(endpointBuffer.toVector, keys.toVector)
+    }
+  }
+
+  def newBuilder: SubscriptionBuilder = {
+    new SubscriptionBuilderImpl
+  }
+}
+trait SubscriptionBuilder {
+
+  def endpointDescriptor(endpointId: EndpointId): SubscriptionBuilder
+  def series(endpointPath: EndpointPath): SubscriptionBuilder
+  def keyValue(path: EndpointPath): SubscriptionBuilder
+  def topicEvent(path: EndpointPath): SubscriptionBuilder
+  def activeSet(path: EndpointPath): SubscriptionBuilder
+
+  def build(): SubscriptionParams
+}
+
