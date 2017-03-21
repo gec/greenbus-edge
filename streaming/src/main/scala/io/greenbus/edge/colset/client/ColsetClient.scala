@@ -46,7 +46,7 @@ class MultiChannelColsetClientImpl(client: ChannelClient)(implicit val ex: Execu
       (event, eventDesc) <- eventFut
       (req, reqDesc) <- reqFut
       (resp, respDesc) <- respFut
-    } yieldco {
+    } yield {
       new GatewayProxyChannelImpl(sub, event, req, resp)
     }
 
