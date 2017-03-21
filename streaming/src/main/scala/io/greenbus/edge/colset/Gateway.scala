@@ -73,8 +73,9 @@ class Gateway(localSession: PeerSessionId) extends LocalGateway with LazyLogging
   }
 
   private def clientEvents(ctx: GatewayClientContext, routeUpdate: Option[Set[TypeValue]], events: Seq[StreamEvent]): Unit = {
-    logger.debug(s"Client events $routeUpdate with $events")
+    logger.trace(s"Client events $routeUpdate with $events")
     val setUpdate = routeUpdate.flatMap { routes =>
+      logger.debug(s"Client route update: $routes")
       val gatewayRoutesBefore = clientToRoutes.values
 
       val proxyRoutesBefore = clientToRoutes.getFirst(ctx.proxy).getOrElse(Set())
@@ -98,6 +99,7 @@ class Gateway(localSession: PeerSessionId) extends LocalGateway with LazyLogging
     }
 
     val synthesizedEvents = synthesizer.handle(ctx.id, events)
+    logger.trace(s"Synthesized gateway events: $events")
 
     eventDist.push(GatewayEvents(setUpdate, synthesizedEvents))
   }

@@ -181,7 +181,7 @@ class EndpointDescSubMgr(id: EndpointId) extends GenAppendSubMgr {
   def toUpdate(v: EdgeDataState[EndpointDescriptor]): IdentifiedEdgeUpdate = IdEndpointUpdate(id, v)
 
   def fromTypeValue(v: TypeValue): Either[String, EndpointDescriptor] = {
-    EdgeCodecCommon.endpointDescriptorFromTypeValue(v)
+    EdgeCodecCommon.readEndpointDescriptor(v)
   }
 
 }
@@ -278,10 +278,14 @@ trait EdgeSubscriptionClient {
   def subscribe(endpoints: Seq[EndpointId], keys: Seq[(EndpointPath, EdgeDataKeyCodec)]): EdgeSubscription
 }
 
-class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: ColsetSubscriptionManager, mainCodec: EdgeCodec) extends EdgeSubscriptionClient {
+class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: StreamSubscriptionManager) extends EdgeSubscriptionClient {
 
   private val rowMap = mutable.Map.empty[RowId, EdgeTypeSubMgr]
   subImpl.source.bind(batch => handleBatch(batch))
+
+  def subscribe(params: SubscriptionParams): EdgeSubscription = {
+    subscribe(params.descriptors, params.keys)
+  }
 
   def subscribe(endpoints: Seq[EndpointId], keys: Seq[(EndpointPath, EdgeDataKeyCodec)]): EdgeSubscription = {
 
@@ -292,7 +296,7 @@ class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: ColsetSubscr
     eventThread.marshal {
       val prevRowSet = rowMap.keySet.toSet
 
-      val endpointIdToRows = endpoints.map(id => (id, mainCodec.endpointIdToRow(id)))
+      val endpointIdToRows = endpoints.map(id => (id, EdgeCodecCommon.endpointIdToEndpointDescriptorRow(id)))
 
       endpointIdToRows.foreach {
         case (id, row) =>
@@ -364,38 +368,7 @@ trait EdgeEnumeration {
 
 trait ValueSubscription[State, Update] {
 
-
-
 }
-
-/*
-
-sealed trait EdgeDataKeyValue
-sealed trait EdgeSequenceDataKeyValue extends EdgeDataKeyValue
-case class KeyValueUpdate(value: Value) extends EdgeSequenceDataKeyValue
-case class SeriesUpdate(value: SampleValue, time: Long) extends EdgeSequenceDataKeyValue
-case class TopicEventUpdate(topic: Path, value: Value, time: Long) extends EdgeSequenceDataKeyValue
-case class ActiveSetUpdate(value: Map[IndexableValue, Value], removes: Set[IndexableValue], added: Set[(IndexableValue, Value)], modified: Set[(IndexableValue, Value)]) extends EdgeDataKeyValue
-
-sealed trait IdentifiedEdgeUpdate
-case class IdEndpointUpdate(id: EndpointId, data: EdgeDataState[EndpointDescriptor]) extends IdentifiedEdgeUpdate
-case class IdDataKeyUpdate(id: EndpointPath, data: EdgeDataState[EdgeDataKeyValue]) extends IdentifiedEdgeUpdate
-
-sealed trait EdgeDataState[+A]
-case object Pending extends EdgeDataState[Nothing]
-case object DataUnresolved extends EdgeDataState[Nothing]
-case object ResolvedAbsent extends EdgeDataState[Nothing]
-case class ResolvedValue[A](value: A) extends EdgeDataState[A]
-case object Disconnected extends EdgeDataState[Nothing]
-
- */
-
-/*case class EdgeSubscriptionParams(
-                                 descriptors: Seq[EndpointId],
-                                 series: Seq[EndpointPath],
-                                 keyValues: Seq[EndpointPath],
-                                 topicEvents: Seq[EndpointPath],
-                                 activeSets: Seq[EndpointPath])*/
 
 trait SubscriptionParams {
   def descriptors: Seq[EndpointId]
@@ -410,7 +383,7 @@ object SubscriptionBuilder {
     private val endpointBuffer = mutable.ArrayBuffer.empty[EndpointId]
     private val keys = mutable.ArrayBuffer.empty[(EndpointPath, EdgeDataKeyCodec)]
 
-    def endpointDescriptor(endpointId: EndpointId): SubscriptionBuilder ={
+    def endpointDescriptor(endpointId: EndpointId): SubscriptionBuilder = {
       endpointBuffer += endpointId
       this
     }

@@ -224,36 +224,36 @@ class AppendSink(maxBuffered: Int, eventThread: CallMarshaller) extends AppendEv
 
   def confirmed(seq: Long): Unit = {
     eventThread.marshal {
-      state match {
+      state = state match {
         case s: Unbound => {
           val (confirmed, stillBuffered) = s.buffer.span(_._1 <= seq)
           confirmed.lastOption match {
-            case None => state = s.copy(buffer = stillBuffered)
-            case Some(last) => state = UnboundConfirmed(last, stillBuffered)
+            case None => s.copy(buffer = stillBuffered)
+            case Some(last) => UnboundConfirmed(last, stillBuffered)
           }
         }
         case s: UnboundConfirmed => {
           val (confirmed, stillBuffered) = s.buffer.span(_._1 <= seq)
           confirmed.lastOption match {
-            case None => state = s.copy(buffer = stillBuffered)
-            case Some(last) => state = s.copy(lastConfirmed = last, buffer = stillBuffered)
+            case None => s.copy(buffer = stillBuffered)
+            case Some(last) => s.copy(lastConfirmed = last, buffer = stillBuffered)
           }
         }
         case s: Bound => {
           val (confirmed, stillPending) = s.pending.span(_._1 <= seq)
           confirmed.lastOption match {
-            case None => state = s.copy(pending = stillPending)
-            case Some(last) => state = BoundConfirmed(s.deltaSender, last, stillPending)
+            case None => s.copy(pending = stillPending)
+            case Some(last) => BoundConfirmed(s.deltaSender, last, stillPending)
           }
         }
         case s: BoundConfirmed => {
           val (confirmed, stillPending) = s.pending.span(_._1 <= seq)
           confirmed.lastOption match {
-            case None => state = s.copy(pending = stillPending)
-            case Some(last) => state = s.copy(lastConfirmed = last, pending = stillPending)
+            case None => s.copy(pending = stillPending)
+            case Some(last) => s.copy(lastConfirmed = last, pending = stillPending)
           }
         }
-        case _ =>
+        case _ => state
       }
     }
   }
@@ -263,19 +263,19 @@ class AppendSink(maxBuffered: Int, eventThread: CallMarshaller) extends AppendEv
       if (values.nonEmpty) {
         val vseq = Range(0, values.size).map(_ + sequence).zip(values).toVector
         sequence += values.size
-        state match {
-          case UnboundUninit => state = Unbound(vseq)
-          case s: Unbound => state = s.copy(buffer = s.buffer ++ vseq)
-          case s: UnboundConfirmed => state = s.copy(buffer = s.buffer ++ vseq)
+        state = state match {
+          case UnboundUninit => Unbound(vseq)
+          case s: Unbound => s.copy(buffer = s.buffer ++ vseq)
+          case s: UnboundConfirmed => s.copy(buffer = s.buffer ++ vseq)
           case s: BoundUninit =>
             publishSnapshot(s.snapSender, vseq)
-            state = Bound(s.deltaSender, pending = vseq)
+            Bound(s.deltaSender, pending = vseq)
           case s: Bound =>
             publish(s.deltaSender, vseq)
-            state = s.copy(pending = s.pending ++ vseq)
+            s.copy(pending = s.pending ++ vseq)
           case s: BoundConfirmed =>
             publish(s.deltaSender, vseq)
-            state = s.copy(pending = s.pending ++ vseq)
+            s.copy(pending = s.pending ++ vseq)
         }
       }
     }

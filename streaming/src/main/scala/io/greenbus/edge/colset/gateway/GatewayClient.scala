@@ -84,19 +84,25 @@ trait BindableRowMgr {
 class RouteHandleImpl(eventThread: CallMarshaller, mgr: RouteMgr, reqSrc: Source[Seq[RouteServiceRequest]]) extends RouteSourceHandle {
   def setRow(id: TableRow): SetEventSink = {
     val bindable = new SetSink
-    mgr.addBindable(id, bindable)
+    eventThread.marshal {
+      mgr.addBindable(id, bindable)
+    }
     bindable
   }
 
   def keyedSetRow(id: TableRow): KeyedSetEventSink = {
     val bindable = new KeyedSetSink
-    mgr.addBindable(id, bindable)
+    eventThread.marshal {
+      mgr.addBindable(id, bindable)
+    }
     bindable
   }
 
   def appendSetRow(id: TableRow, maxBuffered: Int): AppendEventSink = {
     val bindable = new AppendSink(maxBuffered, eventThread)
-    mgr.addBindable(id, bindable)
+    eventThread.marshal {
+      mgr.addBindable(id, bindable)
+    }
     bindable
   }
 
@@ -110,13 +116,14 @@ class RouteHandleImpl(eventThread: CallMarshaller, mgr: RouteMgr, reqSrc: Source
 object RouteMgr {
   case class Binding(buffer: EventBuffer, subscribed: Set[TableRow])
 }
-class RouteMgr(route: TypeValue, mgr: SourceMgr, requestSink: Sink[Seq[RouteServiceRequest]]) {
+class RouteMgr(route: TypeValue, mgr: SourceMgr, requestSink: Sink[Seq[RouteServiceRequest]]) extends LazyLogging {
   import RouteMgr._
 
   private var rows = Map.empty[TableRow, BindableRowMgr]
   private var bindingOpt = Option.empty[Binding]
 
   def addBindable(row: TableRow, mgr: BindableRowMgr): Unit = {
+    logger.debug(s"Route $route saw bindable added for row: $row")
     if (rows.contains(row)) {
       throw new IllegalArgumentException(s"Cannot double bind a row: $row for route $route")
     }
@@ -131,12 +138,15 @@ class RouteMgr(route: TypeValue, mgr: SourceMgr, requestSink: Sink[Seq[RouteServ
   }
 
   def subscriptionUpdate(subbed: Set[TableRow]): Unit = {
+    logger.debug(s"Route $route subscription update: $subbed")
     bindingOpt.foreach { binding =>
 
       val before = binding.subscribed
       val added = subbed -- before
       val removed = before -- subbed
 
+      logger.trace(s"added: $added")
+      logger.trace(s"removed: $removed")
       removed.flatMap(rows.get).foreach(_.unbind())
       added.foreach { row =>
         val rowId = row.toRowId(route)
@@ -158,10 +168,12 @@ class RouteMgr(route: TypeValue, mgr: SourceMgr, requestSink: Sink[Seq[RouteServ
   }
 
   def bind(buffer: EventBuffer): Unit = {
+    logger.debug(s"Route $route bound")
     bindingOpt = Some(Binding(buffer, Set()))
   }
 
   def unbindAll(): Unit = {
+    logger.debug(s"Route $route unbound")
     bindingOpt = None
     rows.values.foreach(_.unbind())
   }
@@ -180,6 +192,7 @@ trait GatewayRouteSource {
 
 case class SourceConnectedState(buffer: EventBuffer, subscribedRows: Set[RowId], unsourcedRoutes: Map[TypeValue, Set[TableRow]])
 
+// TODO: get rid of unsourced routes in favor of something like just storing subs separately or blank route mgrs like in peer sourcing mgr
 class SourceMgr(eventThread: CallMarshaller) extends GatewayRouteSource with LazyLogging {
 
   private var routes = Map.empty[TypeValue, RouteMgr]
@@ -198,12 +211,15 @@ class SourceMgr(eventThread: CallMarshaller) extends GatewayRouteSource with Laz
   private def onRouteSourced(route: TypeValue, mgr: RouteMgr): Unit = {
     routes += (route -> mgr)
 
+    logger.debug(s"Route $route sourced, connected: " + connectionOpt.nonEmpty)
     connectionOpt.foreach { ctx =>
+      mgr.bind(ctx.buffer)
       ctx.unsourcedRoutes.get(route).foreach { rows =>
-        mgr.bind(ctx.buffer)
         mgr.subscriptionUpdate(rows)
       }
       ctx.buffer.flush(Some(routes.keySet))
+
+      connectionOpt = Some(ctx.copy(unsourcedRoutes = ctx.unsourcedRoutes - route))
     }
   }
 
@@ -214,6 +230,7 @@ class SourceMgr(eventThread: CallMarshaller) extends GatewayRouteSource with Laz
   }
 
   private def onConnect(buffer: EventBuffer): Unit = {
+    logger.debug(s"SourceMgr connected")
     connectionOpt = Some(SourceConnectedState(buffer, Set(), Map()))
 
     routes.foreach {

@@ -41,15 +41,6 @@ trait EdgeDataKeyCodec {
 
 object AppendDataKeyCodec {
 
-  /*def readSeriesValue(value: TypeValue): Either[String, SeriesValue] = {
-    value match {
-      case v: BoolVal => Right(BoolValue(v.v))
-      case v: Int64Val => Right(LongValue(v.v))
-      case v: DoubleVal => Right(DoubleValue(v.v))
-      case _ => Left("Incorrect value type for series: " + value)
-    }
-  }*/
-
   def readTimestamp(value: TypeValue): Either[String, Long] = {
     value match {
       case v: Int64Val => Right(v.v)
@@ -69,7 +60,7 @@ object AppendDataKeyCodec {
         case TupleVal(elems) => {
           if (elems.size >= 2) {
             for {
-              sv <- EdgeCodecCommon.readSampleEdgeValue(elems(0))
+              sv <- EdgeCodecCommon.readSampleValue(elems(0))
               time <- readTimestamp(elems(1))
             } yield {
               SeriesUpdate(sv, time)
@@ -90,7 +81,7 @@ object AppendDataKeyCodec {
     }
 
     def fromTypeValue(value: TypeValue): Either[String, EdgeSequenceDataKeyValue] = {
-      EdgeCodecCommon.readEdgeValue(value)
+      EdgeCodecCommon.readValue(value)
         .map(v => KeyValueUpdate(v))
     }
   }
@@ -107,7 +98,7 @@ object AppendDataKeyCodec {
           if (elems.size >= 2) {
             for {
               topic <- EdgeCodecCommon.readPath(elems(0))
-              edgeValue <- EdgeCodecCommon.readEdgeValue(elems(1))
+              edgeValue <- EdgeCodecCommon.readValue(elems(1))
               time <- readTimestamp(elems(2))
             } yield {
               TopicEventUpdate(topic, edgeValue, time)
@@ -131,8 +122,8 @@ object KeyedSetDataKeyCodec {
 
     def readMapTuple(tup: (TypeValue, TypeValue)): Either[String, (IndexableValue, Value)] = {
       for {
-        key <- EdgeCodecCommon.readIndexableEdgeValue(tup._1)
-        v <- EdgeCodecCommon.readEdgeValue(tup._2)
+        key <- EdgeCodecCommon.readIndexableValue(tup._1)
+        v <- EdgeCodecCommon.readValue(tup._2)
       } yield {
         (key, v)
       }
@@ -145,7 +136,7 @@ object KeyedSetDataKeyCodec {
     def fromTypeValue(v: KeyedSetUpdated): Either[String, ActiveSetUpdate] = {
       for {
         map <- EitherUtil.rightSequence(v.value.toVector.map(readMapTuple)).map(_.toMap)
-        removes <- EitherUtil.rightSequence(v.removed.toVector.map(EdgeCodecCommon.readIndexableEdgeValue))
+        removes <- EitherUtil.rightSequence(v.removed.toVector.map(EdgeCodecCommon.readIndexableValue))
         adds <- EitherUtil.rightSequence(v.added.toVector.map(readMapTuple)).map(_.toMap)
         modifies <- EitherUtil.rightSequence(v.modified.toVector.map(readMapTuple)).map(_.toMap)
       } yield {
@@ -159,8 +150,8 @@ trait KeyedSetDataKeyCodec extends EdgeDataKeyCodec {
 }
 
 trait EdgeCodec {
-  def endpointIdToRow(id: EndpointId): RowId
-  def fromTypeValue(v: TypeValue): Either[String, EndpointDescriptor]
+  def endpointIdToEndpointDescriptorRow(id: EndpointId): RowId
+  def readEndpointDescriptor(v: TypeValue): Either[String, EndpointDescriptor]
 }
 
 object EdgeCodecCommon {
@@ -176,7 +167,7 @@ object EdgeCodecCommon {
     parse(bytes, p).flatMap(c)
   }
 
-  def readSampleEdgeValue(v: TypeValue): Either[String, SampleValue] = {
+  def readSampleValue(v: TypeValue): Either[String, SampleValue] = {
     v match {
       case b: BytesVal =>
         parse(b.v, proto.SampleValue.parseFrom).flatMap { protoValue =>
@@ -185,8 +176,11 @@ object EdgeCodecCommon {
       case _ => Left(s"Wrong value type for edge value: " + v)
     }
   }
+  def writeSampleValue(v: SampleValue): TypeValue = {
+    BytesVal(ValueConversions.toProto(v).toByteArray)
+  }
 
-  def readIndexableEdgeValue(v: TypeValue): Either[String, IndexableValue] = {
+  def readIndexableValue(v: TypeValue): Either[String, IndexableValue] = {
     v match {
       case b: BytesVal =>
         parse(b.v, proto.IndexableValue.parseFrom).flatMap { protoValue =>
@@ -195,8 +189,11 @@ object EdgeCodecCommon {
       case _ => Left(s"Wrong value type for edge value: " + v)
     }
   }
+  def writeIndexableValue(v: IndexableValue): TypeValue = {
+    BytesVal(ValueConversions.toProto(v).toByteArray)
+  }
 
-  def readEdgeValue(v: TypeValue): Either[String, Value] = {
+  def readValue(v: TypeValue): Either[String, Value] = {
     v match {
       case b: BytesVal =>
         parse(b.v, proto.Value.parseFrom).flatMap { protoValue =>
@@ -204,6 +201,9 @@ object EdgeCodecCommon {
         }
       case _ => Left(s"Wrong value type for edge value: " + v)
     }
+  }
+  def writeValue(v: Value): TypeValue = {
+    BytesVal(ValueConversions.toProto(v).toByteArray)
   }
 
   def readPath(v: TypeValue): Either[String, Path] = {
@@ -220,21 +220,24 @@ object EdgeCodecCommon {
     }
   }
 
-  def pathToTuple(path: Path): TupleVal = {
+  def writePath(path: Path): TupleVal = {
     TupleVal(path.parts.map(SymbolVal))
   }
 
-  def endpointIdToTuple(id: EndpointId): TupleVal = {
-    pathToTuple(id.path)
+  def writeEndpointId(id: EndpointId): TupleVal = {
+    writePath(id.path)
   }
-  def endpointIdToRoute(id: EndpointId): TypeValue = endpointIdToTuple(id)
+  def endpointIdToRoute(id: EndpointId): TypeValue = writeEndpointId(id)
 
+  def endpointIdToEndpointDescriptorTableRow(id: EndpointId): TableRow = {
+    TableRow(EdgeTables.endpointDescTable, writeEndpointId(id))
+  }
   def endpointIdToEndpointDescriptorRow(id: EndpointId): RowId = {
     val route = endpointIdToRoute(id)
-    RowId(route, EdgeTables.endpointDescTable, endpointIdToTuple(id))
+    RowId(route, EdgeTables.endpointDescTable, writeEndpointId(id))
   }
 
-  def endpointDescriptorFromTypeValue(v: TypeValue): Either[String, EndpointDescriptor] = {
+  def readEndpointDescriptor(v: TypeValue): Either[String, EndpointDescriptor] = {
     v match {
       case b: BytesVal =>
         val protoValue = proto.EndpointDescriptor.parseFrom(b.v)
@@ -242,40 +245,29 @@ object EdgeCodecCommon {
       case _ => Left(s"Wrong value type for endpoint descriptor: " + v)
     }
   }
+  def writeEndpointDescriptor(desc: EndpointDescriptor): TypeValue = {
+    BytesVal(Conversions.toProto(desc).toByteArray)
+  }
 
   def dataKeyRowId(endpointPath: EndpointPath, table: String): RowId = {
     val route = endpointIdToRoute(endpointPath.endpoint)
-    val key = pathToTuple(endpointPath.key)
+    val key = writePath(endpointPath.key)
 
     RowId(route, table, key)
   }
-}
 
-object ColsetCodec {
-
-  def encodeBoolSeries(obj: (Boolean, Long)): TypeValue = {
-    TupleVal(Seq(BoolVal(obj._1), Int64Val(obj._2)))
-  }
-  def encodeLongSeries(obj: (Long, Long)): TypeValue = {
-    TupleVal(Seq(Int64Val(obj._1), Int64Val(obj._2)))
-  }
-  def encodeDoubleSeries(obj: (Double, Long)): TypeValue = {
-    TupleVal(Seq(DoubleVal(obj._1), Int64Val(obj._2)))
+  def writeSampleValueSeries(obj: (SampleValue, Long)): TypeValue = {
+    TupleVal(Seq(writeSampleValue(obj._1), Int64Val(obj._2)))
   }
 
-  def encodeTopicEvent(obj: (Path, Value, Long)): TypeValue = {
-    TupleVal(Seq(encodePath(obj._1), encodeValue(obj._2), Int64Val(obj._3)))
+  def writeTopicEvent(obj: (Path, Value, Long)): TypeValue = {
+    TupleVal(Seq(writePath(obj._1), writeValue(obj._2), Int64Val(obj._3)))
   }
 
-  def encodePath(path: Path): TypeValue = {
-    TupleVal(path.parts.map(s => SymbolVal(s)))
-  }
-
-  def encodeMap(map: Map[IndexableValue, Value]): Map[TypeValue, TypeValue] = {
-    ???
-  }
-
-  def encodeValue(value: Value): TypeValue = {
-    ???
+  def writeMap(obj: Map[IndexableValue, Value]): Map[TypeValue, TypeValue] = {
+    obj.map {
+      case (key, value) =>
+        (BytesVal(ValueConversions.toProto(key).toByteArray), BytesVal(ValueConversions.toProto(value).toByteArray))
+    }
   }
 }

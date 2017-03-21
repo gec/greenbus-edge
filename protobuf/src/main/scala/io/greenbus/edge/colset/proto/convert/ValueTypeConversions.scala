@@ -18,6 +18,7 @@
  */
 package io.greenbus.edge.colset.proto.convert
 
+import com.google.protobuf.ByteString
 import io.greenbus.edge.colset
 import io.greenbus.edge.colset._
 
@@ -521,6 +522,7 @@ object ValueTypeConversions {
       case v: colset.SymbolVal => b.setSymbolValue(v.v)
       case v: colset.TextVal => b.setTextValue(v.v)
       case v: colset.UuidVal => b.setUuidValue(toProtoSimple(v.v))
+      case v: colset.BytesVal => b.setBytesValue(ByteString.copyFrom(v.v))
       case v: colset.TupleVal => b.setTupleValue(tupleToProto(v))
       case _ => throw new IllegalArgumentException(s"Unrecognized TypeValue: $obj")
     }

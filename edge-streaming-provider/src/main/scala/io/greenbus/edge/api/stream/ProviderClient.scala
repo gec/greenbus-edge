@@ -21,7 +21,7 @@ package io.greenbus.edge.api.stream
 import io.greenbus.edge.api._
 import io.greenbus.edge.colset._
 import io.greenbus.edge.colset.gateway._
-import io.greenbus.edge.flow.{ QueuedDistributor, Sink }
+import io.greenbus.edge.flow.{ QueuedDistributor, Sink, Source }
 
 import scala.collection.mutable
 
@@ -78,9 +78,9 @@ class EndpointProviderBuilderImpl(endpointId: EndpointId) {
     handle
   }
 
-  def topicEventValue(key: Path, metadata: CommonMetadata = CommonMetadata()): LatestKeyValueHandle = {
-    val desc = LatestKeyValueDescriptor(metadata.indexes, metadata.metadata)
-    val handle = new LatestKeyValueQueue
+  def topicEventValue(key: Path, metadata: CommonMetadata = CommonMetadata()): TopicEventHandle = {
+    val desc = EventTopicValueDescriptor(metadata.indexes, metadata.metadata)
+    val handle = new TopicEventQueue
     dataDescs += ProviderDataEntry(key, desc, handle)
     handle
   }
@@ -96,54 +96,59 @@ class EndpointProviderBuilderImpl(endpointId: EndpointId) {
 
   def build(): EndpointProviderDesc = {
     val desc = EndpointDescriptor(indexes, metadata, data.toMap, outputs.toMap)
-    EndpointProviderDesc(desc, dataDescs.toVector)
+    EndpointProviderDesc(endpointId, desc, dataDescs.toVector)
   }
 }
 
-trait BoolSeriesHandle extends Sink[(Boolean, Long)] {
+trait BoolSeriesHandle {
   def update(value: Boolean, timeMs: Long): Unit
 }
-trait LongSeriesHandle extends Sink[(Long, Long)] {
+trait LongSeriesHandle {
   def update(value: Long, timeMs: Long): Unit
 }
-trait DoubleSeriesHandle extends Sink[(Double, Long)] {
+trait DoubleSeriesHandle {
   def update(value: Double, timeMs: Long): Unit
 }
-trait TopicEventHandle extends Sink[(Path, Value, Long)] {
+trait TopicEventHandle {
   def update(topic: Path, value: Value, timeMs: Long): Unit
 }
-trait LatestKeyValueHandle extends Sink[Value] {
+trait LatestKeyValueHandle {
   def update(value: Value): Unit
 }
-trait ActiveSetHandle extends Sink[Map[IndexableValue, Value]] {
+trait ActiveSetHandle {
   def update(value: Map[IndexableValue, Value]): Unit
 }
 
+trait DataValueDistributor[A] {
+  protected val queue = new QueuedDistributor[A]
+  def source: Source[A] = queue
+}
+
 sealed trait DataValueQueue
-class BoolSeriesQueue extends QueuedDistributor[(Boolean, Long)] with DataValueQueue with BoolSeriesHandle {
-  def update(value: Boolean, timeMs: Long): Unit = push((value, timeMs))
+sealed trait SampleValueQueue extends DataValueQueue with DataValueDistributor[(SampleValue, Long)]
+class BoolSeriesQueue extends SampleValueQueue with BoolSeriesHandle {
+  def update(value: Boolean, timeMs: Long): Unit = queue.push((ValueBool(value), timeMs))
 }
-class LongSeriesQueue extends QueuedDistributor[(Long, Long)] with DataValueQueue with LongSeriesHandle {
-  def update(value: Long, timeMs: Long): Unit = push((value, timeMs))
+class LongSeriesQueue extends SampleValueQueue with LongSeriesHandle {
+  def update(value: Long, timeMs: Long): Unit = queue.push((ValueInt64(value), timeMs))
 }
-class DoubleSeriesQueue extends QueuedDistributor[(Double, Long)] with DataValueQueue with DoubleSeriesHandle {
-  def update(value: Double, timeMs: Long): Unit = push((value, timeMs))
+class DoubleSeriesQueue extends SampleValueQueue with DoubleSeriesHandle {
+  def update(value: Double, timeMs: Long): Unit = queue.push((ValueDouble(value), timeMs))
 }
-class TopicEventQueue extends QueuedDistributor[(Path, Value, Long)] with DataValueQueue with TopicEventHandle {
-  def update(topic: Path, value: Value, timeMs: Long): Unit = push((topic, value, timeMs))
+class TopicEventQueue extends DataValueDistributor[(Path, Value, Long)] with DataValueQueue with TopicEventHandle {
+  def update(topic: Path, value: Value, timeMs: Long): Unit = queue.push((topic, value, timeMs))
 }
-class LatestKeyValueQueue extends QueuedDistributor[Value] with DataValueQueue with LatestKeyValueHandle {
-  def update(value: Value): Unit = push(value)
+class LatestKeyValueQueue extends DataValueDistributor[Value] with DataValueQueue with LatestKeyValueHandle {
+  def update(value: Value): Unit = queue.push(value)
 }
-class ActiveSetQueue extends QueuedDistributor[Map[IndexableValue, Value]] with DataValueQueue with ActiveSetHandle {
-  def update(value: Map[IndexableValue, Value]): Unit = push(value)
+class ActiveSetQueue extends DataValueDistributor[Map[IndexableValue, Value]] with DataValueQueue with ActiveSetHandle {
+  def update(value: Map[IndexableValue, Value]): Unit = queue.push(value)
 }
 
 case class ProviderDataEntry(path: Path, dataType: DataKeyDescriptor, distributor: DataValueQueue)
 
-object EndpointProviderDesc {
-}
 case class EndpointProviderDesc(
+  endpointId: EndpointId,
   descriptor: EndpointDescriptor,
   data: Seq[ProviderDataEntry])
 
@@ -166,48 +171,45 @@ trait ProviderFactory {
   def bindEndpoint(provider: EndpointProviderDesc, seriesBuffersSize: Int, eventBuffersSize: Int): ProviderHandle
 }
 
-object ColsetProviderFactory {
-
-  private def pathToRowKey(path: Path): TypeValue = ???
+object StreamProviderFactory {
 
   private def bindAppend(sink: AppendEventSink, queue: DataValueQueue): Unit = {
     queue match {
-      case q: BoolSeriesQueue => q.bind(obj => sink.append(ColsetCodec.encodeBoolSeries(obj)))
-      case q: LongSeriesQueue => q.bind(obj => sink.append(ColsetCodec.encodeLongSeries(obj)))
-      case q: DoubleSeriesQueue => q.bind(obj => sink.append(ColsetCodec.encodeDoubleSeries(obj)))
-      case q: LatestKeyValueQueue => q.bind(obj => sink.append(ColsetCodec.encodeValue(obj)))
-      case _ => throw new IllegalArgumentException(s"Data value type did not queue type")
+      case q: SampleValueQueue => q.source.bind(obj => sink.append(EdgeCodecCommon.writeSampleValueSeries(obj)))
+      case q: LatestKeyValueQueue => q.source.bind(obj => sink.append(EdgeCodecCommon.writeValue(obj)))
+      case q: TopicEventQueue => q.source.bind(obj => sink.append(EdgeCodecCommon.writeTopicEvent(obj)))
+      case _ => throw new IllegalArgumentException(s"Queue type did not match append stream type: $queue")
     }
   }
 
   private def bindKeyed(sink: KeyedSetEventSink, queue: DataValueQueue): Unit = {
     queue match {
-      case q: ActiveSetQueue => q.bind(obj => sink.update(ColsetCodec.encodeMap(obj)))
-      case _ => throw new IllegalArgumentException(s"Data value type did not queue type")
+      case q: ActiveSetQueue => q.source.bind(obj => sink.update(EdgeCodecCommon.writeMap(obj)))
+      case _ => throw new IllegalArgumentException(s"Queue type did not match keyed set stream type: $queue")
     }
   }
 
 }
 
-class ColsetProviderFactory(routeSource: GatewayRouteSource) extends ProviderFactory {
-  import ColsetProviderFactory._
+class StreamProviderFactory(routeSource: GatewayRouteSource) extends ProviderFactory {
+  import StreamProviderFactory._
 
   def bindEndpoint(provider: EndpointProviderDesc, seriesBuffersSize: Int, eventBuffersSize: Int): ProviderHandle = {
-    val routeHandle = routeSource.route(SymbolVal("endpoint-id-encoded"))
+    val routeHandle = routeSource.route(EdgeCodecCommon.endpointIdToRoute(provider.endpointId))
 
-    val endpointDescriptorRow = TableRow("edm.endpoint", SymbolVal("the id encoded maybe?"))
+    val endpointDescriptorRow = EdgeCodecCommon.endpointIdToEndpointDescriptorTableRow(provider.endpointId)
     val descSink = routeHandle.appendSetRow(endpointDescriptorRow, 1)
-    descSink.append(SymbolVal("this would be the binary protobuf of the endpoint desc"))
+    descSink.append(EdgeCodecCommon.writeEndpointDescriptor(provider.descriptor))
 
     provider.data.foreach { entry =>
-      val rowKey = pathToRowKey(entry.path)
+      val rowKey = EdgeCodecCommon.writePath(entry.path)
 
       val (tableRow, sink) = entry.dataType match {
         case d: LatestKeyValueDescriptor =>
           val tableRow = TableRow(EdgeTables.latestKeyValueTable, rowKey)
           val sink = routeHandle.appendSetRow(tableRow, 1)
           bindAppend(sink, entry.distributor)
-          (tableRow, routeHandle.appendSetRow(tableRow, 1))
+          (tableRow, sink)
         case d: TimeSeriesValueDescriptor =>
           val tableRow = TableRow(EdgeTables.timeSeriesValueTable, rowKey)
           val sink = routeHandle.appendSetRow(tableRow, seriesBuffersSize)

@@ -311,7 +311,7 @@ class SubscriptionFilterMap(sink: Sink[Seq[RowUpdate]]) {
   }
 }
 
-class SubscriptionManager(eventThread: CallMarshaller) extends ColsetSubscriptionManager {
+class SubscriptionManager(eventThread: CallMarshaller) extends StreamSubscriptionManager {
 
   private val dist = new QueuedDistributor[Seq[RowUpdate]]
   private val filters = new SubscriptionFilterMap(dist)
@@ -344,7 +344,7 @@ class SubscriptionManager(eventThread: CallMarshaller) extends ColsetSubscriptio
   def source: Source[Seq[RowUpdate]] = dist
 }
 
-trait ColsetSubscriptionManager {
+trait StreamSubscriptionManager {
   def update(set: Set[RowId])
   def source: Source[Seq[RowUpdate]]
 }
