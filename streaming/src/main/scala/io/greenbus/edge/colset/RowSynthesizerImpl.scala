@@ -288,6 +288,21 @@ trait SessionRowLog {
   def handleResync(snapshot: SetSnapshot): Unit
 }
 
+object SessionSynthesizingFilter {
+  def build(rowId: RowId, sessionId: PeerSessionId, init: SetSnapshot): Option[SessionSynthesizingFilter] = {
+    init match {
+      case snap: ModifiedSetSnapshot => Some(new SessionModifyRowSynthesizingFilter(rowId, sessionId, snap.sequence))
+      case snap: ModifiedKeyedSetSnapshot => Some(new SessionKeyedModifyRowSynthesizingFilter(rowId, sessionId, snap.sequence))
+      case snap: AppendSetSequence => {
+        if (snap.appends.nonEmpty) {
+          Some(new SessionAppendSynthesizingFilter(rowId, sessionId, snap.appends.last.sequence))
+        } else {
+          None
+        }
+      }
+    }
+  }
+}
 trait SessionSynthesizingFilter {
   def handleDelta(delta: SetDelta): Option[SetDelta]
   def handleResync(snapshot: SetSnapshot): Option[AppendEvent]
@@ -411,7 +426,7 @@ class SessionModifyRowLog(rowId: RowId, sessionId: PeerSessionId, init: Modified
   def activate(): (Seq[AppendEvent], SessionModifyRowSynthesizingFilter) = {
     val snap = ModifiedSetSnapshot(sequence, current)
     (resyncEvents,
-      new SessionModifyRowSynthesizingFilter(rowId, sessionId, snap))
+      new SessionModifyRowSynthesizingFilter(rowId, sessionId, sequence))
   }
 
   def resyncEvents: Seq[AppendEvent] = {
@@ -452,9 +467,9 @@ class SessionModifyRowLog(rowId: RowId, sessionId: PeerSessionId, init: Modified
   }
 }
 
-class SessionModifyRowSynthesizingFilter(rowId: RowId, sessionId: PeerSessionId, init: ModifiedSetSnapshot) extends SessionSynthesizingFilter with LazyLogging {
+class SessionModifyRowSynthesizingFilter(rowId: RowId, sessionId: PeerSessionId, startSequence: SequencedTypeValue) extends SessionSynthesizingFilter with LazyLogging {
 
-  private var sequence: SequencedTypeValue = init.sequence
+  private var sequence: SequencedTypeValue = startSequence
   //private var current: Set[TypeValue] = init.snapshot
 
   def handleDelta(delta: SetDelta): Option[SetDelta] = {
@@ -502,7 +517,7 @@ class SessionKeyedModifyRowLog(rowId: RowId, sessionId: PeerSessionId, init: Mod
 
   def activate(): (Seq[AppendEvent], SessionSynthesizingFilter) = {
     val snap = ModifiedKeyedSetSnapshot(sequence, current)
-    (resyncEvents, new SessionKeyedModifyRowSynthesizingFilter(rowId, sessionId, snap))
+    (resyncEvents, new SessionKeyedModifyRowSynthesizingFilter(rowId, sessionId, sequence))
   }
 
   def snapshot: Map[TypeValue, TypeValue] = current
@@ -545,9 +560,9 @@ class SessionKeyedModifyRowLog(rowId: RowId, sessionId: PeerSessionId, init: Mod
   }
 }
 
-class SessionKeyedModifyRowSynthesizingFilter(rowId: RowId, sessionId: PeerSessionId, init: ModifiedKeyedSetSnapshot) extends SessionSynthesizingFilter with LazyLogging {
+class SessionKeyedModifyRowSynthesizingFilter(rowId: RowId, sessionId: PeerSessionId, startSequence: SequencedTypeValue) extends SessionSynthesizingFilter with LazyLogging {
 
-  private var sequence: SequencedTypeValue = init.sequence
+  private var sequence: SequencedTypeValue = startSequence
 
   def handleDelta(delta: SetDelta): Option[SetDelta] = {
     delta match {

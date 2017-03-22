@@ -179,37 +179,63 @@ object GatewayRowSynthesizerImpl {
     }
   }
 }
-class GatewayRowSynthesizerImpl(row: RowId, filter: SessionSynthesizingFilter, peerSession: PeerSessionId, startSequence: SequencedTypeValue) extends GatewayRowSynthesizer {
+
+class GatewayRowSynthesizerImpl(row: RowId, peerSession: PeerSessionId, startSequence: SequencedTypeValue) extends GatewayRowSynthesizer with LazyLogging {
   import GatewayRowSynthesizerImpl._
 
   private var sessionSequence: SequencedTypeValue = startSequence
+  private var filterOpt = Option.empty[SessionSynthesizingFilter]
 
   def current: SequencedTypeValue = sessionSequence
+
+  private def handleSnapshot(snapshot: SetSnapshot): Seq[AppendEvent] = {
+    filterOpt match {
+      case None => {
+        val builtFilterOpt = SessionSynthesizingFilter.build(row, peerSession, snapshot)
+        builtFilterOpt match {
+          case None =>
+            logger.warn(s"Uinitialized gateway synthesizer could not build filter from snapshot: $row")
+            Seq()
+          case Some(filter) =>
+            filterOpt = Some(filter)
+            val (resequenced, updatedSeq) = resequenceSnapshot(snapshot, sessionSequence)
+            sessionSequence = updatedSeq
+            Seq(ResyncSession(peerSession, resequenced))
+        }
+      }
+      case Some(filter) => {
+        filter.handleResync(snapshot).map { appendEvent =>
+          val (resequenced, updatedSeq) = resequenceAppendEvent(appendEvent, peerSession, sessionSequence)
+          sessionSequence = updatedSeq
+          Seq(resequenced)
+        }.getOrElse(Seq())
+      }
+    }
+  }
 
   def append(event: AppendEvent): Seq[AppendEvent] = {
     event match {
       case delta: StreamDelta => {
-        val deltaOpt = filter.handleDelta(delta.update).map { filteredDelta =>
-          val (resequenced, updatedSeq) = resequenceDelta(filteredDelta, sessionSequence)
-          sessionSequence = updatedSeq
-          StreamDelta(resequenced)
-        }
+        filterOpt match {
+          case None =>
+            logger.warn(s"Uinitialized gateway synthesizer saw stream delta instead of snapshot: $row")
+            Seq()
+          case Some(filter) => {
+            val deltaOpt = filter.handleDelta(delta.update).map { filteredDelta =>
+              val (resequenced, updatedSeq) = resequenceDelta(filteredDelta, sessionSequence)
+              sessionSequence = updatedSeq
+              StreamDelta(resequenced)
+            }
 
-        deltaOpt.map(Seq(_)).getOrElse(Seq())
+            deltaOpt.map(Seq(_)).getOrElse(Seq())
+          }
+        }
       }
       case snap: ResyncSnapshot => {
-        filter.handleResync(snap.snapshot).map { appendEvent =>
-          val (resequenced, updatedSeq) = resequenceAppendEvent(appendEvent, peerSession, sessionSequence)
-          sessionSequence = updatedSeq
-          Seq(resequenced)
-        }.getOrElse(Seq())
+        handleSnapshot(snap.snapshot)
       }
       case snap: ResyncSession => {
-        filter.handleResync(snap.snapshot).map { appendEvent =>
-          val (resequenced, updatedSeq) = resequenceAppendEvent(appendEvent, peerSession, sessionSequence)
-          sessionSequence = updatedSeq
-          Seq(resequenced)
-        }.getOrElse(Seq())
+        handleSnapshot(snap.snapshot)
       }
     }
   }
@@ -244,30 +270,9 @@ class GatewaySynthesizer[Source](localSession: PeerSessionId) extends LazyLoggin
   }
 
   private def addRowSynthesizer(ev: RowAppendEvent, startSequence: SequencedTypeValue, source: Source, routeMap: mutable.Map[TableRow, (Source, GatewayRowSynthesizer)]): Seq[RowAppendEvent] = {
-
     logger.trace(s"Adding gateway row synthesizer: " + StreamLogging.logEvent(ev) + ", startSequence: " + startSequence)
-
-    val snapOpt = ev.appendEvent match {
-      case sd: StreamDelta =>
-        logger.warn("Tried to synthesize new row with stream delta: " + ev)
-        None
-      case rs: ResyncSnapshot => Some(rs.snapshot)
-      case rs: ResyncSession => Some(rs.snapshot)
-    }
-
-    snapOpt match {
-      case None => Seq()
-      case Some(snap) =>
-        SessionRowLog.build(ev.rowId, localSession, snap) match {
-          case None =>
-            logger.warn("Could not build log from snapshot: " + ev)
-            Seq()
-          case Some(log) =>
-            val (initial, filter) = log.activate()
-            val synthesizer = new GatewayRowSynthesizerImpl(ev.rowId, filter, localSession, startSequence)
-            routeMap.put(ev.rowId.tableRow, (source, synthesizer))
-            initial.map(append => RowAppendEvent(ev.rowId, append))
-        }
-    }
+    val synthesizer = new GatewayRowSynthesizerImpl(ev.rowId, localSession, startSequence)
+    routeMap.put(ev.rowId.tableRow, (source, synthesizer))
+    synthesizer.append(ev.appendEvent).map(append => RowAppendEvent(ev.rowId, append))
   }
 }
