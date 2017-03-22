@@ -20,7 +20,8 @@ package io.greenbus.edge.api.proto.convert
 
 import com.google.protobuf.ByteString
 import io.greenbus.edge.api.proto
-import io.greenbus.edge.api
+import io.greenbus.edge.{ OutputSuccess, api }
+
 import scala.collection.JavaConversions._
 
 object Conversions {
@@ -171,6 +172,83 @@ object Conversions {
         metadata = metadata.toMap,
         dataKeySet = dataKeys.toMap,
         outputKeySet = outputKeys.toMap)
+    }
+  }
+}
+
+object OutputConversions {
+
+  def toProto(obj: api.OutputKeyStatus): proto.OutputKeyStatus = {
+    val b = proto.OutputKeyStatus.newBuilder()
+    b.setSequenceSession(ValueConversions.toProto(obj.session))
+    b.setSequence(obj.sequence)
+    obj.valueOpt.map(ValueConversions.toProto).foreach(b.setValue)
+    b.build()
+  }
+  def fromProto(msg: proto.OutputKeyStatus): Either[String, api.OutputKeyStatus] = {
+    if (msg.hasSequenceSession) {
+      val sess = ValueConversions.fromProtoSimple(msg.getSequenceSession)
+      for {
+        valueOpt <- if (msg.hasValue) ValueConversions.fromProto(msg.getValue).map(r => Some(r)) else Right(None)
+      } yield {
+        api.OutputKeyStatus(sess, msg.getSequence, valueOpt)
+      }
+    } else {
+      Left("OutputKeyStatus missing sequence session")
+    }
+  }
+
+  def toProto(obj: api.OutputSuccess): proto.OutputSuccess = {
+    val b = proto.OutputSuccess.newBuilder()
+    obj.valueOpt.map(ValueConversions.toProto).foreach(b.setResult)
+    b.build()
+  }
+  def fromProto(msg: proto.OutputSuccess): Either[String, api.OutputSuccess] = {
+    if (msg.hasResult) {
+      ValueConversions.fromProto(msg.getResult).map(r => api.OutputSuccess(Some(r)))
+    } else {
+      Right(api.OutputSuccess(None))
+    }
+  }
+
+  def toProto(obj: api.OutputFailure): proto.OutputFailure = {
+    proto.OutputFailure.newBuilder().setMessage(obj.reason).build()
+  }
+
+  def toProto(obj: api.OutputResult): proto.OutputResult = {
+    val b = proto.OutputResult.newBuilder()
+    obj match {
+      case r: api.OutputSuccess => b.setSuccess(toProto(r))
+      case r: api.OutputFailure => b.setFailure(toProto(r))
+    }
+    b.build()
+  }
+  def fromProto(msg: proto.OutputResult): Either[String, api.OutputResult] = {
+    msg.getResultCase match {
+      case proto.OutputResult.ResultCase.FAILURE => Right(api.OutputFailure(msg.getFailure.getMessage))
+      case proto.OutputResult.ResultCase.SUCCESS => fromProto(msg.getSuccess)
+      case _ => Left("OutputResult type unrecognized")
+    }
+  }
+
+  def toProto(obj: api.OutputParams): proto.OutputRequest = {
+    val b = proto.OutputRequest.newBuilder()
+    obj.sessionOpt.map(ValueConversions.toProto).foreach(b.setSequenceSession)
+    obj.sequenceOpt.map(ValueConversions.toOptionUInt64).foreach(b.setSequence)
+    obj.compareValueOpt.map(ValueConversions.toProto).foreach(b.setCompareValue)
+    obj.outputValueOpt.map(ValueConversions.toProto).foreach(b.setOutputValue)
+    b.build()
+  }
+  def fromProto(msg: proto.OutputRequest): Either[String, api.OutputParams] = {
+    val sessOpt = if (msg.hasSequenceSession) Some(ValueConversions.fromProtoSimple(msg.getSequenceSession)) else None
+    val compareEither = if (msg.hasCompareValue) ValueConversions.fromProto(msg.getCompareValue).map(r => Some(r)) else Right(None)
+    val outputEither = if (msg.hasOutputValue) ValueConversions.fromProto(msg.getOutputValue).map(r => Some(r)) else Right(None)
+    val seqOpt = if (msg.hasSequence) Some(msg.getSequence.getValue) else None
+    for {
+      compareOpt <- compareEither
+      outOpt <- outputEither
+    } yield {
+      api.OutputParams(sessOpt, seqOpt, compareOpt, outOpt)
     }
   }
 }

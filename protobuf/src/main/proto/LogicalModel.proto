@@ -165,3 +165,30 @@ message Value {
         ObjectValue object_value = 16;
     }
 }
+
+message OutputKeyStatus {
+    UUID sequence_session = 1;
+    uint64 sequence = 2;
+    Value value = 3;
+}
+
+message OutputRequest {
+    UUID sequence_session = 1; // optional
+    OptionalUInt64 sequence = 2; // optional
+    Value compare_value = 3; // optional
+    Value output_value = 4; // optional
+}
+
+message OutputSuccess {
+    Value result = 1; // optional
+}
+message OutputFailure {
+    string message = 1;
+}
+
+message OutputResult {
+    oneof result {
+        OutputSuccess success = 1;
+        OutputFailure failure = 2;
+    }
+}

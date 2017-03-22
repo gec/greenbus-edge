@@ -26,11 +26,11 @@ sealed trait OutputResult
 case class OutputSuccess(valueOpt: Option[Value]) extends OutputResult
 case class OutputFailure(reason: String) extends OutputResult
 
-case class OutputKeyStatus(sessionId: SessionId, sequence: Long, valueOpt: Option[Value])
+case class OutputKeyStatus(session: UUID, sequence: Long, valueOpt: Option[Value])
 
 case class OutputRequest(key: Path, value: OutputParams, correlation: Long)
 
-case class OutputParams(sessionOpt: Option[SessionId] = None,
+case class OutputParams(sessionOpt: Option[UUID] = None,
   sequenceOpt: Option[Long] = None,
   compareValueOpt: Option[Value] = None,
   outputValueOpt: Option[Value] = None)

@@ -132,6 +132,41 @@ trait GenEdgeTypeSubMgr extends EdgeUpdateSubjectImpl with LazyLogging {
   }
 }
 
+class OutputStatusSubMgr(id: EndpointPath) extends GenEdgeTypeSubMgr {
+  protected type Data = OutputKeyStatus
+
+  protected def logId: String = id.toString
+
+  protected def toUpdate(v: EdgeDataStatus[OutputKeyStatus]): IdentifiedEdgeUpdate = {
+    IdOutputKeyUpdate(id, v)
+  }
+
+  protected def handleData(dataUpdate: DataValueUpdate): Set[EdgeUpdateQueue] = {
+    dataUpdate match {
+      case ap: Appended => {
+
+        ap.values.lastOption.map { last =>
+          //AppendOutputKeyCodec.
+        }
+
+        /*values.lastOption.map { last =>
+          fromTypeValue(last.value) match {
+            case Left(str) =>
+              logger.warn(s"Could not extract data value for $logId: $str")
+              Set.empty[EdgeUpdateQueue]
+            case Right(desc) =>
+              handleValue(desc)
+          }
+        }.getOrElse(Set())*/
+        ???
+      }
+      case _ =>
+        logger.warn(s"Wrong value update type for $logId: $dataUpdate")
+        Set()
+    }
+  }
+}
+
 trait GenAppendSubMgr extends GenEdgeTypeSubMgr with LazyLogging {
 
   def fromTypeValue(v: TypeValue): Either[String, Data]
@@ -154,9 +189,10 @@ trait GenAppendSubMgr extends GenEdgeTypeSubMgr with LazyLogging {
 
   protected def handleData(dataUpdate: DataValueUpdate): Set[EdgeUpdateQueue] = {
     dataUpdate match {
-      case Appended(values) => {
-        values.lastOption.map { last =>
-          fromTypeValue(last) match {
+      case ap: Appended => {
+        // TODO: this is only for latest key value!
+        ap.values.lastOption.map { last =>
+          fromTypeValue(last.value) match {
             case Left(str) =>
               logger.warn(s"Could not extract data value for $logId: $str")
               Set.empty[EdgeUpdateQueue]

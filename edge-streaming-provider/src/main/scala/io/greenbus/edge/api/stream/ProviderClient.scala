@@ -18,10 +18,12 @@
  */
 package io.greenbus.edge.api.stream
 
+import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.api._
+import io.greenbus.edge.channel.Receiver
 import io.greenbus.edge.colset._
 import io.greenbus.edge.colset.gateway._
-import io.greenbus.edge.flow.{ QueuedDistributor, Sink, Source }
+import io.greenbus.edge.flow.{ QueuedDistributor, Responder, Sink, Source }
 
 import scala.collection.mutable
 
@@ -39,9 +41,10 @@ class EndpointProviderBuilderImpl(endpointId: EndpointId) {
   private var indexes = Map.empty[Path, IndexableValue]
   private var metadata = Map.empty[Path, Value]
   private val data = mutable.Map.empty[Path, DataKeyDescriptor]
-  private val outputs = mutable.Map.empty[Path, OutputKeyDescriptor]
+  private val outputStatuses = mutable.Map.empty[Path, OutputKeyDescriptor]
 
   private val dataDescs = mutable.ArrayBuffer.empty[ProviderDataEntry]
+  private val outputEntries = mutable.ArrayBuffer.empty[ProviderOutputEntry]
 
   def setIndexes(paramIndexes: Map[Path, IndexableValue]): Unit = {
     indexes = paramIndexes
@@ -53,6 +56,7 @@ class EndpointProviderBuilderImpl(endpointId: EndpointId) {
   def seriesBool(key: Path, metadata: CommonMetadata = CommonMetadata()): BoolSeriesHandle = {
     val desc = TimeSeriesValueDescriptor(metadata.indexes, metadata.metadata)
     val handle = new BoolSeriesQueue
+    data += (key -> desc)
     dataDescs += ProviderDataEntry(key, desc, handle)
     handle
   }
@@ -60,6 +64,7 @@ class EndpointProviderBuilderImpl(endpointId: EndpointId) {
   def seriesLong(key: Path, metadata: CommonMetadata = CommonMetadata()): LongSeriesHandle = {
     val desc = TimeSeriesValueDescriptor(metadata.indexes, metadata.metadata)
     val handle = new LongSeriesQueue
+    data += (key -> desc)
     dataDescs += ProviderDataEntry(key, desc, handle)
     handle
   }
@@ -74,6 +79,7 @@ class EndpointProviderBuilderImpl(endpointId: EndpointId) {
   def latestKeyValue(key: Path, metadata: CommonMetadata = CommonMetadata()): LatestKeyValueHandle = {
     val desc = LatestKeyValueDescriptor(metadata.indexes, metadata.metadata)
     val handle = new LatestKeyValueQueue
+    data += (key -> desc)
     dataDescs += ProviderDataEntry(key, desc, handle)
     handle
   }
@@ -81,6 +87,7 @@ class EndpointProviderBuilderImpl(endpointId: EndpointId) {
   def topicEventValue(key: Path, metadata: CommonMetadata = CommonMetadata()): TopicEventHandle = {
     val desc = EventTopicValueDescriptor(metadata.indexes, metadata.metadata)
     val handle = new TopicEventQueue
+    data += (key -> desc)
     dataDescs += ProviderDataEntry(key, desc, handle)
     handle
   }
@@ -95,16 +102,33 @@ class EndpointProviderBuilderImpl(endpointId: EndpointId) {
   def outputStatus(key: Path, metadata: CommonMetadata = CommonMetadata()): OutputStatusHandle = {
     val desc = OutputKeyDescriptor(metadata.indexes, metadata.metadata)
     val handle = new OutputKeyStatusQueue
+    outputStatuses += (key -> desc)
     dataDescs += ProviderDataEntry(key, desc, handle)
     handle
   }
 
-  //def ouput() = ???
+  def outputRequests(key: Path, handler: Responder[OutputParams, OutputResult]): Unit = {
+    outputEntries += ProviderOutputEntry(key, handler)
+  }
+
+  def output() = ???
+  def sequencedOutput() = ???
+  def compareAndSetOutput() = ???
+  def sequencedCompareAndSetOutput() = ???
 
   def build(): EndpointProviderDesc = {
-    val desc = EndpointDescriptor(indexes, metadata, data.toMap, outputs.toMap)
-    EndpointProviderDesc(endpointId, desc, dataDescs.toVector)
+    val desc = EndpointDescriptor(indexes, metadata, data.toMap, outputStatuses.toMap)
+    EndpointProviderDesc(endpointId, desc, dataDescs.toVector, outputEntries.toVector)
   }
+}
+
+case class OutputRequest(vOpt: Option[Value], respond: OutputResult => Unit)
+
+trait OutputHandle {
+  def requests: Source[OutputRequest]
+}
+trait OutputStatusHandle {
+  def update(status: OutputKeyStatus): Unit
 }
 
 trait BoolSeriesHandle {
@@ -124,9 +148,6 @@ trait LatestKeyValueHandle {
 }
 trait ActiveSetHandle {
   def update(value: Map[IndexableValue, Value]): Unit
-}
-trait OutputStatusHandle {
-  def update(value: OutputKeyStatus): Unit
 }
 
 trait DataValueDistributor[A] {
@@ -159,11 +180,13 @@ class OutputKeyStatusQueue extends DataValueDistributor[OutputKeyStatus] with Da
 }
 
 case class ProviderDataEntry(path: Path, dataType: KeyDescriptor, distributor: DataValueQueue)
+case class ProviderOutputEntry(path: Path, responder: Responder[OutputParams, OutputResult])
 
 case class EndpointProviderDesc(
   endpointId: EndpointId,
   descriptor: EndpointDescriptor,
-  data: Seq[ProviderDataEntry])
+  data: Seq[ProviderDataEntry],
+  outputs: Seq[ProviderOutputEntry])
 
 trait ProviderUserBuffer {
   def enqueue(path: Path, data: TypeValue)
@@ -191,6 +214,7 @@ object StreamProviderFactory {
       case q: SampleValueQueue => q.source.bind(obj => sink.append(EdgeCodecCommon.writeSampleValueSeries(obj)))
       case q: LatestKeyValueQueue => q.source.bind(obj => sink.append(EdgeCodecCommon.writeValue(obj)))
       case q: TopicEventQueue => q.source.bind(obj => sink.append(EdgeCodecCommon.writeTopicEvent(obj)))
+      case q: OutputKeyStatusQueue => q.source.bind(obj => sink.append(EdgeCodecCommon.writeOutputKeyStatus(obj)))
       case _ => throw new IllegalArgumentException(s"Queue type did not match append stream type: $queue")
     }
   }
@@ -201,10 +225,9 @@ object StreamProviderFactory {
       case _ => throw new IllegalArgumentException(s"Queue type did not match keyed set stream type: $queue")
     }
   }
-
 }
 
-class StreamProviderFactory(routeSource: GatewayRouteSource) extends ProviderFactory {
+class StreamProviderFactory(routeSource: GatewayRouteSource) extends ProviderFactory with LazyLogging {
   import StreamProviderFactory._
 
   def bindEndpoint(provider: EndpointProviderDesc, seriesBuffersSize: Int, eventBuffersSize: Int): ProviderHandle = {
@@ -246,6 +269,29 @@ class StreamProviderFactory(routeSource: GatewayRouteSource) extends ProviderFac
       }
 
       (tableRow, sink)
+    }
+
+    val requestHandlers: Map[TableRow, Responder[OutputParams, OutputResult]] = {
+      provider.outputs.map { entry =>
+        val rowKey = EdgeCodecCommon.writePath(entry.path)
+        val tableRow = TableRow(EdgeTables.outputTable, rowKey)
+        (tableRow, entry.responder)
+      }.toMap
+    }
+
+    routeHandle.requests.bind { requests =>
+      logger.trace(s"Handling requests: $requests")
+      requests.foreach { req =>
+        EdgeCodecCommon.readOutputRequest(req.value) match {
+          case Left(err) => req.respond(TextVal(s"Expecting edge output request protobuf: " + err))
+          case Right(converted) =>
+            requestHandlers.get(req.row) match {
+              case None => req.respond(EdgeCodecCommon.writeOutputResult(OutputFailure(s"key not handled")))
+              case Some(rcv) =>
+                rcv.handle(converted, result => EdgeCodecCommon.writeOutputResult(result))
+            }
+        }
+      }
     }
 
     new ProviderHandleImpl(routeHandle)

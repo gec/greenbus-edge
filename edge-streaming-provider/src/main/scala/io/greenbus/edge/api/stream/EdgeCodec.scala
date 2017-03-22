@@ -20,7 +20,7 @@ package io.greenbus.edge.api.stream
 
 import io.greenbus.edge.OutputValueStatus
 import io.greenbus.edge.api._
-import io.greenbus.edge.api.proto.convert.{ Conversions, ValueConversions }
+import io.greenbus.edge.api.proto.convert.{ Conversions, OutputConversions, ValueConversions }
 import io.greenbus.edge.colset._
 import io.greenbus.edge.api.proto
 import io.greenbus.edge.colset.subscribe.KeyedSetUpdated
@@ -119,12 +119,35 @@ trait AppendDataKeyCodec extends EdgeDataKeyCodec {
   def fromTypeValue(v: TypeValue): Either[String, EdgeSequenceDataKeyValue]
 }
 
-/*object AppendOutputKeyCodec {
+object AppendOutputKeyCodec extends AppendOutputKeyCodec {
+
+  def dataKeyToRow(endpointPath: EndpointPath): RowId = {
+    EdgeCodecCommon.dataKeyRowId(endpointPath, EdgeTables.outputTable)
+  }
+
+  def fromAppendValue(session: PeerSessionId, v: AppendSetValue): Either[String, OutputValueStatus] = {
+
+    val longSeqEither = v.sequence match {
+      case Int64Val(seq) => Right(seq)
+      case _ => Left(s"Unrecognized sequence type for output status: " + v.sequence)
+    }
+
+    val edgeSession = EdgeCodecCommon.convertSession(session)
+
+    /*for {
+      seq <- longSeqEither
+      //v <-
+    }*/
+
+    // OutputValueStatus()
+
+    ???
+  }
 
 }
 trait AppendOutputKeyCodec extends EdgeDataKeyCodec {
-  def fromTypeValue(v: TypeValue): Either[String, OutputValueStatus]
-}*/
+  def fromAppendValue(session: PeerSessionId, v: AppendSetValue): Either[String, OutputValueStatus]
+}
 
 object KeyedSetDataKeyCodec {
 
@@ -234,6 +257,10 @@ object EdgeCodecCommon {
     TupleVal(path.parts.map(SymbolVal))
   }
 
+  def convertSession(session: PeerSessionId): SessionId = {
+    SessionId(session.persistenceId, session.instanceId)
+  }
+
   def writeEndpointId(id: EndpointId): TupleVal = {
     writePath(id.path)
   }
@@ -272,6 +299,45 @@ object EdgeCodecCommon {
 
   def writeTopicEvent(obj: (Path, Value, Long)): TypeValue = {
     TupleVal(Seq(writePath(obj._1), writeValue(obj._2), Int64Val(obj._3)))
+  }
+
+  def writeOutputKeyStatus(v: OutputKeyStatus): TypeValue = {
+    BytesVal(OutputConversions.toProto(v).toByteArray)
+  }
+  def readOutputKeyStatus(v: TypeValue): Either[String, OutputKeyStatus] = {
+    v match {
+      case b: BytesVal =>
+        parse(b.v, proto.OutputKeyStatus.parseFrom).flatMap { protoValue =>
+          OutputConversions.fromProto(protoValue)
+        }
+      case _ => Left(s"Wrong value type for edge output result: " + v)
+    }
+  }
+
+  def writeOutputResult(v: OutputResult): TypeValue = {
+    BytesVal(OutputConversions.toProto(v).toByteArray)
+  }
+  def readOutputResult(v: TypeValue): Either[String, OutputResult] = {
+    v match {
+      case b: BytesVal =>
+        parse(b.v, proto.OutputResult.parseFrom).flatMap { protoValue =>
+          OutputConversions.fromProto(protoValue)
+        }
+      case _ => Left(s"Wrong value type for edge output result: " + v)
+    }
+  }
+
+  def writeOutputRequest(v: OutputParams): TypeValue = {
+    BytesVal(OutputConversions.toProto(v).toByteArray)
+  }
+  def readOutputRequest(v: TypeValue): Either[String, OutputParams] = {
+    v match {
+      case b: BytesVal =>
+        parse(b.v, proto.OutputRequest.parseFrom).flatMap { protoValue =>
+          OutputConversions.fromProto(protoValue)
+        }
+      case _ => Left(s"Wrong value type for edge output result: " + v)
+    }
   }
 
   def writeMap(obj: Map[IndexableValue, Value]): Map[TypeValue, TypeValue] = {
