@@ -24,7 +24,7 @@ import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.amqp.colset.{ ChannelDescriberImpl, ClientResponseParser }
 import io.greenbus.edge.amqp.impl2.AmqpService
 import io.greenbus.edge.api.{ EndpointId, EndpointPath, Path, ValueString }
-import io.greenbus.edge.api.stream.{ EdgeSubscriptionManager, EndpointProviderBuilderImpl, StreamProviderFactory, SubscriptionBuilder }
+import io.greenbus.edge.api.stream.{ EdgeSubscriptionManager, EndpointProducerBuilderImpl, StreamProviderFactory, SubscriptionBuilder }
 import io.greenbus.edge.colset.{ SymbolVal, TextVal }
 import io.greenbus.edge.colset.client.{ ColsetClient, MultiChannelColsetClientImpl }
 import io.greenbus.edge.colset.gateway.GatewayRouteSource
@@ -89,7 +89,7 @@ object ProviderTest {
 
     val factory = new StreamProviderFactory(gatewaySource)
 
-    val builder = new EndpointProviderBuilderImpl(EndpointId(Path("my-endpoint")))
+    val builder = new EndpointProducerBuilderImpl(EndpointId(Path("my-endpoint")))
 
     val series1 = builder.seriesDouble(Path("series-double-1"))
     val kv1 = builder.latestKeyValue(Path("kv-1"))

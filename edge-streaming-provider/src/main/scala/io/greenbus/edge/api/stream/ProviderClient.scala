@@ -29,22 +29,22 @@ import scala.collection.mutable
 
 case class CommonMetadata(indexes: Map[Path, IndexableValue] = Map(), metadata: Map[Path, Value] = Map())
 
-trait EndpointProviderBuilder {
+trait EndpointProducerBuilder {
 
   def seriesBool(): BoolSeriesHandle
 
   def build()
 }
 
-class EndpointProviderBuilderImpl(endpointId: EndpointId) {
+class EndpointProducerBuilderImpl(endpointId: EndpointId) {
 
   private var indexes = Map.empty[Path, IndexableValue]
   private var metadata = Map.empty[Path, Value]
   private val data = mutable.Map.empty[Path, DataKeyDescriptor]
   private val outputStatuses = mutable.Map.empty[Path, OutputKeyDescriptor]
 
-  private val dataDescs = mutable.ArrayBuffer.empty[ProviderDataEntry]
-  private val outputEntries = mutable.ArrayBuffer.empty[ProviderOutputEntry]
+  private val dataDescs = mutable.ArrayBuffer.empty[ProducerDataEntry]
+  private val outputEntries = mutable.ArrayBuffer.empty[ProducerOutputEntry]
 
   def setIndexes(paramIndexes: Map[Path, IndexableValue]): Unit = {
     indexes = paramIndexes
@@ -57,7 +57,7 @@ class EndpointProviderBuilderImpl(endpointId: EndpointId) {
     val desc = TimeSeriesValueDescriptor(metadata.indexes, metadata.metadata)
     val handle = new BoolSeriesQueue
     data += (key -> desc)
-    dataDescs += ProviderDataEntry(key, desc, handle)
+    dataDescs += ProducerDataEntry(key, desc, handle)
     handle
   }
 
@@ -65,14 +65,14 @@ class EndpointProviderBuilderImpl(endpointId: EndpointId) {
     val desc = TimeSeriesValueDescriptor(metadata.indexes, metadata.metadata)
     val handle = new LongSeriesQueue
     data += (key -> desc)
-    dataDescs += ProviderDataEntry(key, desc, handle)
+    dataDescs += ProducerDataEntry(key, desc, handle)
     handle
   }
 
   def seriesDouble(key: Path, metadata: CommonMetadata = CommonMetadata()): DoubleSeriesHandle = {
     val desc = TimeSeriesValueDescriptor(metadata.indexes, metadata.metadata)
     val handle = new DoubleSeriesQueue
-    dataDescs += ProviderDataEntry(key, desc, handle)
+    dataDescs += ProducerDataEntry(key, desc, handle)
     handle
   }
 
@@ -80,7 +80,7 @@ class EndpointProviderBuilderImpl(endpointId: EndpointId) {
     val desc = LatestKeyValueDescriptor(metadata.indexes, metadata.metadata)
     val handle = new LatestKeyValueQueue
     data += (key -> desc)
-    dataDescs += ProviderDataEntry(key, desc, handle)
+    dataDescs += ProducerDataEntry(key, desc, handle)
     handle
   }
 
@@ -88,14 +88,14 @@ class EndpointProviderBuilderImpl(endpointId: EndpointId) {
     val desc = EventTopicValueDescriptor(metadata.indexes, metadata.metadata)
     val handle = new TopicEventQueue
     data += (key -> desc)
-    dataDescs += ProviderDataEntry(key, desc, handle)
+    dataDescs += ProducerDataEntry(key, desc, handle)
     handle
   }
 
   def activeSet(key: Path, metadata: CommonMetadata = CommonMetadata()): ActiveSetHandle = {
     val desc = ActiveSetValueDescriptor(metadata.indexes, metadata.metadata)
     val handle = new ActiveSetQueue
-    dataDescs += ProviderDataEntry(key, desc, handle)
+    dataDescs += ProducerDataEntry(key, desc, handle)
     handle
   }
 
@@ -103,12 +103,12 @@ class EndpointProviderBuilderImpl(endpointId: EndpointId) {
     val desc = OutputKeyDescriptor(metadata.indexes, metadata.metadata)
     val handle = new OutputKeyStatusQueue
     outputStatuses += (key -> desc)
-    dataDescs += ProviderDataEntry(key, desc, handle)
+    dataDescs += ProducerDataEntry(key, desc, handle)
     handle
   }
 
   def outputRequests(key: Path, handler: Responder[OutputParams, OutputResult]): Unit = {
-    outputEntries += ProviderOutputEntry(key, handler)
+    outputEntries += ProducerOutputEntry(key, handler)
   }
 
   def output() = ???
@@ -116,9 +116,9 @@ class EndpointProviderBuilderImpl(endpointId: EndpointId) {
   def compareAndSetOutput() = ???
   def sequencedCompareAndSetOutput() = ???
 
-  def build(): EndpointProviderDesc = {
+  def build(): EndpointProducerDesc = {
     val desc = EndpointDescriptor(indexes, metadata, data.toMap, outputStatuses.toMap)
-    EndpointProviderDesc(endpointId, desc, dataDescs.toVector, outputEntries.toVector)
+    EndpointProducerDesc(endpointId, desc, dataDescs.toVector, outputEntries.toVector)
   }
 }
 
@@ -179,23 +179,23 @@ class OutputKeyStatusQueue extends DataValueDistributor[OutputKeyStatus] with Da
   def update(value: OutputKeyStatus): Unit = queue.push(value)
 }
 
-case class ProviderDataEntry(path: Path, dataType: KeyDescriptor, distributor: DataValueQueue)
-case class ProviderOutputEntry(path: Path, responder: Responder[OutputParams, OutputResult])
+case class ProducerDataEntry(path: Path, dataType: KeyDescriptor, distributor: DataValueQueue)
+case class ProducerOutputEntry(path: Path, responder: Responder[OutputParams, OutputResult])
 
-case class EndpointProviderDesc(
+case class EndpointProducerDesc(
   endpointId: EndpointId,
   descriptor: EndpointDescriptor,
-  data: Seq[ProviderDataEntry],
-  outputs: Seq[ProviderOutputEntry])
+  data: Seq[ProducerDataEntry],
+  outputs: Seq[ProducerOutputEntry])
 
-trait ProviderUserBuffer {
+trait ProducerUserBuffer {
   def enqueue(path: Path, data: TypeValue)
 }
-trait ProviderHandle {
+trait ProducerHandle {
   def flush(): Unit
 }
 
-class ProviderHandleImpl(handle: RouteSourceHandle) extends ProviderHandle {
+class ProducerHandleImpl(handle: RouteSourceHandle) extends ProducerHandle {
 
   def flush(): Unit = {
     handle.flushEvents()
@@ -204,7 +204,7 @@ class ProviderHandleImpl(handle: RouteSourceHandle) extends ProviderHandle {
 
 trait ProviderFactory {
 
-  def bindEndpoint(provider: EndpointProviderDesc, seriesBuffersSize: Int, eventBuffersSize: Int): ProviderHandle
+  def bindEndpoint(provider: EndpointProducerDesc, seriesBuffersSize: Int, eventBuffersSize: Int): ProducerHandle
 }
 
 object StreamProviderFactory {
@@ -230,7 +230,7 @@ object StreamProviderFactory {
 class StreamProviderFactory(routeSource: GatewayRouteSource) extends ProviderFactory with LazyLogging {
   import StreamProviderFactory._
 
-  def bindEndpoint(provider: EndpointProviderDesc, seriesBuffersSize: Int, eventBuffersSize: Int): ProviderHandle = {
+  def bindEndpoint(provider: EndpointProducerDesc, seriesBuffersSize: Int, eventBuffersSize: Int): ProducerHandle = {
     val routeHandle = routeSource.route(EdgeCodecCommon.endpointIdToRoute(provider.endpointId))
 
     val endpointDescriptorRow = EdgeCodecCommon.endpointIdToEndpointDescriptorTableRow(provider.endpointId)
@@ -294,6 +294,6 @@ class StreamProviderFactory(routeSource: GatewayRouteSource) extends ProviderFac
       }
     }
 
-    new ProviderHandleImpl(routeHandle)
+    new ProducerHandleImpl(routeHandle)
   }
 }
