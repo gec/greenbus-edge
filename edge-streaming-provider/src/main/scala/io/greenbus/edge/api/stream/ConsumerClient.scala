@@ -21,7 +21,6 @@ package io.greenbus.edge.api.stream
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.api._
 import io.greenbus.edge.colset._
-import io.greenbus.edge.colset.gateway.MapDiff
 import io.greenbus.edge.colset.subscribe._
 import io.greenbus.edge.flow._
 import io.greenbus.edge.thread.CallMarshaller
@@ -57,8 +56,9 @@ case class TopicEventUpdate(topic: Path, value: Value, time: Long) extends EdgeS
 case class ActiveSetUpdate(value: Map[IndexableValue, Value], removes: Set[IndexableValue], added: Set[(IndexableValue, Value)], modified: Set[(IndexableValue, Value)]) extends EdgeDataKeyValue
 
 sealed trait IdentifiedEdgeUpdate
-case class IdEndpointUpdate(id: EndpointId, data: EdgeDataState[EndpointDescriptor]) extends IdentifiedEdgeUpdate
-case class IdDataKeyUpdate(id: EndpointPath, data: EdgeDataState[EdgeDataKeyValue]) extends IdentifiedEdgeUpdate
+case class IdEndpointUpdate(id: EndpointId, data: EdgeDataStatus[EndpointDescriptor]) extends IdentifiedEdgeUpdate
+case class IdDataKeyUpdate(id: EndpointPath, data: EdgeDataStatus[EdgeDataKeyValue]) extends IdentifiedEdgeUpdate
+case class IdOutputKeyUpdate(id: EndpointPath, data: EdgeDataStatus[OutputKeyStatus]) extends IdentifiedEdgeUpdate
 
 /*
 Pending
@@ -66,12 +66,12 @@ Unresolved
 ResolvedAbsent
 ResolvedValue
  */
-sealed trait EdgeDataState[+A]
-case object Pending extends EdgeDataState[Nothing]
-case object DataUnresolved extends EdgeDataState[Nothing]
-case object ResolvedAbsent extends EdgeDataState[Nothing]
-case class ResolvedValue[A](value: A) extends EdgeDataState[A]
-case object Disconnected extends EdgeDataState[Nothing]
+sealed trait EdgeDataStatus[+A]
+case object Pending extends EdgeDataStatus[Nothing]
+case object DataUnresolved extends EdgeDataStatus[Nothing]
+case object ResolvedAbsent extends EdgeDataStatus[Nothing]
+case class ResolvedValue[A](value: A) extends EdgeDataStatus[A]
+case object Disconnected extends EdgeDataStatus[Nothing]
 
 trait EdgeUpdateQueue {
   def enqueue(update: IdentifiedEdgeUpdate): Unit
@@ -83,7 +83,7 @@ trait EdgeUpdateSubjectImpl extends EdgeTypeSubMgr {
 
   private var observerSet = Set.empty[EdgeUpdateQueue]
 
-  protected def current(): EdgeDataState[Data]
+  protected def current(): EdgeDataStatus[Data]
 
   def observers: Set[EdgeUpdateQueue] = observerSet
   def addObserver(buffer: EdgeUpdateQueue): Unit = {
@@ -107,11 +107,11 @@ trait GenEdgeTypeSubMgr extends EdgeUpdateSubjectImpl with LazyLogging {
 
   protected type Data
 
-  protected var state: EdgeDataState[Data] = Pending
+  protected var state: EdgeDataStatus[Data] = Pending
 
-  protected def current(): EdgeDataState[Data] = state
+  protected def current(): EdgeDataStatus[Data] = state
 
-  protected def toUpdate(v: EdgeDataState[Data]): IdentifiedEdgeUpdate
+  protected def toUpdate(v: EdgeDataStatus[Data]): IdentifiedEdgeUpdate
 
   protected def handleData(dataUpdate: DataValueUpdate): Set[EdgeUpdateQueue]
 
@@ -178,7 +178,7 @@ class EndpointDescSubMgr(id: EndpointId) extends GenAppendSubMgr {
 
   protected def logId: String = id.toString
 
-  def toUpdate(v: EdgeDataState[EndpointDescriptor]): IdentifiedEdgeUpdate = IdEndpointUpdate(id, v)
+  def toUpdate(v: EdgeDataStatus[EndpointDescriptor]): IdentifiedEdgeUpdate = IdEndpointUpdate(id, v)
 
   def fromTypeValue(v: TypeValue): Either[String, EndpointDescriptor] = {
     EdgeCodecCommon.readEndpointDescriptor(v)
@@ -193,7 +193,7 @@ class AppendDataKeySubMgr(id: EndpointPath, codec: AppendDataKeyCodec) extends G
 
   protected def logId: String = id.toString
 
-  def toUpdate(v: EdgeDataState[EdgeSequenceDataKeyValue]): IdentifiedEdgeUpdate = {
+  def toUpdate(v: EdgeDataStatus[EdgeSequenceDataKeyValue]): IdentifiedEdgeUpdate = {
     IdDataKeyUpdate(id, v)
   }
 
@@ -208,7 +208,9 @@ class KeyedSetSubMgr(id: EndpointPath, codec: KeyedSetDataKeyCodec) extends GenE
 
   protected type Data = ActiveSetUpdate
 
-  protected def toUpdate(v: EdgeDataState[ActiveSetUpdate]): IdentifiedEdgeUpdate = ???
+  protected def toUpdate(v: EdgeDataStatus[ActiveSetUpdate]): IdentifiedEdgeUpdate = {
+    IdDataKeyUpdate(id, v)
+  }
 
   protected def handleData(dataUpdate: DataValueUpdate): Set[EdgeUpdateQueue] = {
     dataUpdate match {

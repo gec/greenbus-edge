@@ -92,7 +92,14 @@ class EndpointProviderBuilderImpl(endpointId: EndpointId) {
     handle
   }
 
-  def ouput() = ???
+  def outputStatus(key: Path, metadata: CommonMetadata = CommonMetadata()): OutputStatusHandle = {
+    val desc = OutputKeyDescriptor(metadata.indexes, metadata.metadata)
+    val handle = new OutputKeyStatusQueue
+    dataDescs += ProviderDataEntry(key, desc, handle)
+    handle
+  }
+
+  //def ouput() = ???
 
   def build(): EndpointProviderDesc = {
     val desc = EndpointDescriptor(indexes, metadata, data.toMap, outputs.toMap)
@@ -117,6 +124,9 @@ trait LatestKeyValueHandle {
 }
 trait ActiveSetHandle {
   def update(value: Map[IndexableValue, Value]): Unit
+}
+trait OutputStatusHandle {
+  def update(value: OutputKeyStatus): Unit
 }
 
 trait DataValueDistributor[A] {
@@ -144,8 +154,11 @@ class LatestKeyValueQueue extends DataValueDistributor[Value] with DataValueQueu
 class ActiveSetQueue extends DataValueDistributor[Map[IndexableValue, Value]] with DataValueQueue with ActiveSetHandle {
   def update(value: Map[IndexableValue, Value]): Unit = queue.push(value)
 }
+class OutputKeyStatusQueue extends DataValueDistributor[OutputKeyStatus] with DataValueQueue with OutputStatusHandle {
+  def update(value: OutputKeyStatus): Unit = queue.push(value)
+}
 
-case class ProviderDataEntry(path: Path, dataType: DataKeyDescriptor, distributor: DataValueQueue)
+case class ProviderDataEntry(path: Path, dataType: KeyDescriptor, distributor: DataValueQueue)
 
 case class EndpointProviderDesc(
   endpointId: EndpointId,
@@ -224,6 +237,11 @@ class StreamProviderFactory(routeSource: GatewayRouteSource) extends ProviderFac
           val tableRow = TableRow(EdgeTables.activeSetValueTable, rowKey)
           val sink = routeHandle.keyedSetRow(tableRow)
           bindKeyed(sink, entry.distributor)
+          (tableRow, sink)
+        case d: OutputKeyDescriptor =>
+          val tableRow = TableRow(EdgeTables.outputTable, rowKey)
+          val sink = routeHandle.appendSetRow(tableRow, 1)
+          bindAppend(sink, entry.distributor)
           (tableRow, sink)
       }
 

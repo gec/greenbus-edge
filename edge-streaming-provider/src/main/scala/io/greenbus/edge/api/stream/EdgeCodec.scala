@@ -18,6 +18,7 @@
  */
 package io.greenbus.edge.api.stream
 
+import io.greenbus.edge.OutputValueStatus
 import io.greenbus.edge.api._
 import io.greenbus.edge.api.proto.convert.{ Conversions, ValueConversions }
 import io.greenbus.edge.colset._
@@ -33,6 +34,8 @@ object EdgeTables {
   val timeSeriesValueTable = "edm.tsv"
   val eventTopicValueTable = "edm.events"
   val activeSetValueTable = "edm.set"
+
+  val outputTable = "edm.output"
 }
 
 trait EdgeDataKeyCodec {
@@ -115,6 +118,13 @@ object AppendDataKeyCodec {
 trait AppendDataKeyCodec extends EdgeDataKeyCodec {
   def fromTypeValue(v: TypeValue): Either[String, EdgeSequenceDataKeyValue]
 }
+
+/*object AppendOutputKeyCodec {
+
+}
+trait AppendOutputKeyCodec extends EdgeDataKeyCodec {
+  def fromTypeValue(v: TypeValue): Either[String, OutputValueStatus]
+}*/
 
 object KeyedSetDataKeyCodec {
 

@@ -18,10 +18,12 @@
  */
 package io.greenbus.edge.api
 
-trait DataKeyDescriptor {
+trait KeyDescriptor {
   def indexes: Map[Path, IndexableValue]
   def metadata: Map[Path, Value]
 }
+
+trait DataKeyDescriptor extends KeyDescriptor
 
 case class LatestKeyValueDescriptor(indexes: Map[Path, IndexableValue], metadata: Map[Path, Value]) extends DataKeyDescriptor
 case class TimeSeriesValueDescriptor(indexes: Map[Path, IndexableValue], metadata: Map[Path, Value]) extends DataKeyDescriptor
@@ -33,7 +35,7 @@ case class UnrecognizedValueDescriptor(indexes: Map[Path, IndexableValue], metad
 
 case class OutputKeyDescriptor(
   indexes: Map[Path, IndexableValue],
-  metadata: Map[Path, Value])
+  metadata: Map[Path, Value]) extends KeyDescriptor
 
 case class EndpointDescriptor(
   indexes: Map[Path, IndexableValue],
