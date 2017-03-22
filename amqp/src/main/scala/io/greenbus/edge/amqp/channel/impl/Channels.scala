@@ -144,7 +144,7 @@ abstract class BaseReceiverChannelImpl[A](
   parent: ResourceRemoveObserver)
     extends CloseableChannel(ioThread, startOpened, parent, s) with ReceiverChannel[A, Boolean] with LazyLogging {
 
-  private val rcvImpl = new QueueingReceiverImpl[A, Boolean](ioThread)
+  private val rcvImpl = new RemoteBoundQueueingReceiverImpl[A, Boolean](ioThread)
 
   def bind(responder: Responder[A, Boolean]): Unit = rcvImpl.bind(responder)
 

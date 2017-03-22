@@ -32,11 +32,11 @@ class SubscriberChannelProxyImpl(
   private val channels = Seq(subChannel, eventChannel, serviceRequestsChannel, serviceResponsesChannel)
   protected val closeableHolder = new CloseableHolder(channels)
 
-  private val subDist = ChannelHelpers.bindDistributor(subChannel, { msg: SubscriptionSetUpdate => msg.rows })
+  private val subDist = ChannelHelpers.wrapReceiver(subChannel, { msg: SubscriptionSetUpdate => msg.rows })
 
   private val eventSink = ChannelHelpers.bindSink(eventChannel, { seq: Seq[StreamEvent] => EventBatch(seq) })
 
-  private val requestDist = ChannelHelpers.bindDistributor(serviceRequestsChannel, { msg: ServiceRequestBatch => msg.requests })
+  private val requestDist = ChannelHelpers.wrapReceiver(serviceRequestsChannel, { msg: ServiceRequestBatch => msg.requests })
 
   private val responseSink = ChannelHelpers.bindSink(serviceResponsesChannel, { seq: Seq[ServiceResponse] => ServiceResponseBatch(seq) })
 

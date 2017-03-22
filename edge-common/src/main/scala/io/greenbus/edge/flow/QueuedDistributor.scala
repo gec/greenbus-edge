@@ -81,13 +81,13 @@ class RemoteBoundQueuedDistributor[A](eventThread: CallMarshaller) extends Sourc
   }
 }
 
-object QueueingReceiverImpl {
+object RemoteBoundQueueingReceiverImpl {
   sealed trait State[A, B]
   case class Unopened[A, B](queue: ArrayBuffer[(A, B => Unit)]) extends State[A, B]
   case class Opened[A, B](responder: Responder[A, B]) extends State[A, B]
 }
-class QueueingReceiverImpl[A, B](self: CallMarshaller) extends Receiver[A, B] with Responder[A, B] {
-  import QueueingReceiverImpl._
+class RemoteBoundQueueingReceiverImpl[A, B](self: CallMarshaller) extends Receiver[A, B] with Responder[A, B] with LazyLogging {
+  import RemoteBoundQueueingReceiverImpl._
 
   private var state: State[A, B] = Unopened(ArrayBuffer.empty[(A, B => Unit)])
 

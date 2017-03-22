@@ -99,7 +99,8 @@ class Gateway(localSession: PeerSessionId) extends LocalGateway with LazyLogging
     }
 
     val synthesizedEvents = synthesizer.handle(ctx.id, events)
-    logger.trace(s"Synthesized gateway events: $events")
+    logger.trace("Synthesized gateway before:" + StreamLogging.logEvents(events))
+    logger.trace("Synthesized gateway after:" + StreamLogging.logEvents(synthesizedEvents))
 
     eventDist.push(GatewayEvents(setUpdate, synthesizedEvents))
   }
@@ -243,6 +244,9 @@ class GatewaySynthesizer[Source](localSession: PeerSessionId) extends LazyLoggin
   }
 
   private def addRowSynthesizer(ev: RowAppendEvent, startSequence: SequencedTypeValue, source: Source, routeMap: mutable.Map[TableRow, (Source, GatewayRowSynthesizer)]): Seq[RowAppendEvent] = {
+
+    logger.trace(s"Adding gateway row synthesizer: " + StreamLogging.logEvent(ev) + ", startSequence: " + startSequence)
+
     val snapOpt = ev.appendEvent match {
       case sd: StreamDelta =>
         logger.warn("Tried to synthesize new row with stream delta: " + ev)

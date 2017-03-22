@@ -27,6 +27,7 @@ trait TypeDesc {
 }
 trait TypeValue {
   def typeDesc: TypeDesc
+  def simpleString(): String
 }
 
 trait FinalTypeDesc extends TypeDesc {
@@ -66,6 +67,8 @@ case class SymbolVal(v: String) extends TypeValueDecl(SymbolDesc) with OrderedTy
       case _ => None
     }
   }
+
+  def simpleString(): String = v
 }
 
 case object TextDesc extends FinalTypeDesc
@@ -78,6 +81,8 @@ case class TextVal(v: String) extends TypeValueDecl(TextDesc) with OrderedTypeVa
       case _ => None
     }
   }
+
+  def simpleString(): String = v
 }
 
 object ArrayCompare {
@@ -116,6 +121,8 @@ case class BytesVal(v: Array[Byte]) extends TypeValueDecl(BytesDesc) with Ordere
       case _ => None
     }
   }
+
+  def simpleString(): String = s"Bytes[${v.length}]"
 }
 
 case object UuidDesc extends FinalTypeDesc
@@ -128,6 +135,8 @@ case class UuidVal(v: UUID) extends TypeValueDecl(UuidDesc) with OrderedTypeValu
       case _ => None
     }
   }
+
+  def simpleString(): String = v.toString
 }
 
 case object BoolDesc extends FinalTypeDesc
@@ -140,6 +149,8 @@ case class BoolVal(v: Boolean) extends TypeValueDecl(BoolDesc) with OrderedTypeV
       case _ => None
     }
   }
+
+  def simpleString(): String = v.toString
 }
 
 case object DoubleDesc extends FinalTypeDesc
@@ -152,6 +163,8 @@ case class DoubleVal(v: Double) extends TypeValueDecl(DoubleDesc) with OrderedTy
       case _ => None
     }
   }
+
+  def simpleString(): String = v.toString
 }
 
 case object Int64Desc extends FinalTypeDesc
@@ -170,13 +183,21 @@ case class Int64Val(v: Long) extends TypeValueDecl(Int64Desc) with SequencedType
       case _ => None
     }
   }
+
+  def simpleString(): String = v.toString
 }
 
 case class TupleDesc(elementsDesc: Seq[TypeDesc]) extends FinalTypeDesc
-case class TupleVal(elements: Seq[TypeValue]) extends TypeValueDecl(TupleDesc(elements.map(_.typeDesc)))
+case class TupleVal(elements: Seq[TypeValue]) extends TypeValueDecl(TupleDesc(elements.map(_.typeDesc))) {
+
+  def simpleString(): String = elements.map(_.simpleString()).mkString("(", ", ", ")")
+}
 
 case class OptionDesc(elementDesc: TypeDesc) extends FinalTypeDesc
-case class OptionVal(element: Option[TypeValue]) extends TypeValueDecl(OptionDesc(element.map(_.typeDesc).getOrElse(NothingDesc)))
+case class OptionVal(element: Option[TypeValue]) extends TypeValueDecl(OptionDesc(element.map(_.typeDesc).getOrElse(NothingDesc))) {
+
+  def simpleString(): String = element.map(v => s"Some(${v.simpleString()})").getOrElse("None")
+}
 
 object TypeValueConversions {
 

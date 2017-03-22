@@ -18,6 +18,7 @@
  */
 package io.greenbus.edge.colset.channel
 
+import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.flow._
 
 import scala.util.Try
@@ -43,17 +44,19 @@ trait CloseableChannelAggregate extends Closeable with CloseObservable {
   def onClose: LatchSubscribable = closeableHolder.closeLatch
 }
 
-object ChannelHelpers {
+object ChannelHelpers extends LazyLogging {
 
-  def bindDistributor[Message, A](channel: ReceiverChannel[Message, Boolean], map: Message => A): QueuedDistributor[A] = {
-    val dist = new QueuedDistributor[A]
-    channel.bind(new Responder[Message, Boolean] {
-      def handle(msg: Message, respond: (Boolean) => Unit): Unit = {
-        dist.push(map(msg))
-        respond(true)
+  def wrapReceiver[Message, A](channel: ReceiverChannel[Message, Boolean], map: Message => A): Source[A] = {
+    new Source[A] {
+      def bind(handler: Handler[A]): Unit = {
+        channel.bind(new Responder[Message, Boolean] {
+          def handle(msg: Message, respond: (Boolean) => Unit): Unit = {
+            handler.handle(map(msg))
+            respond(true)
+          }
+        })
       }
-    })
-    dist
+    }
   }
 
   def bindSink[Message, A](channel: SenderChannel[Message, Boolean], map: A => Message): Sink[A] = {

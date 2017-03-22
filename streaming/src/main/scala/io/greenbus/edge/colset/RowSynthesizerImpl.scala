@@ -27,6 +27,9 @@ class SynthesizerTable[Source] extends LazyLogging {
   private var sourceToRow = BiMultiMap.empty[Source, RowId]
 
   def handleBatch(sourceLink: Source, events: Seq[StreamEvent]): Seq[StreamEvent] = {
+
+    logger.trace(StreamLogging.logEvents(events))
+
     events.flatMap {
       case ev: RowAppendEvent => {
         val tableRow = ev.rowId.tableRow

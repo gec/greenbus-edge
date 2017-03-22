@@ -271,12 +271,14 @@ class SourceMgr(eventThread: CallMarshaller) extends GatewayRouteSource with Laz
         var unsourced = ctx.unsourcedRoutes -- removedRoutes
 
         modifiedRoutes.foreach { route =>
-          byRoute.get(route).foreach { rowIds =>
-            val tableRows = rowIds.map(_.tableRow)
-            routes.get(route) match {
-              case None => unsourced += (route -> tableRows)
-              case Some(mgr) => mgr.subscriptionUpdate(tableRows)
+          val rowsForRoute = byRoute.getOrElse(route, Set()).map(_.tableRow)
+          routes.get(route) match {
+            case None => {
+              if (rowsForRoute.nonEmpty) {
+                unsourced += (route -> rowsForRoute)
+              }
             }
+            case Some(mgr) => mgr.subscriptionUpdate(rowsForRoute)
           }
         }
 

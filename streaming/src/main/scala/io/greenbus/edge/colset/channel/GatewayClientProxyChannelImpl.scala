@@ -32,11 +32,11 @@ class GatewayClientProxyChannelImpl(
 
   private val subSink = ChannelHelpers.bindSink(subChannel, { set: Set[RowId] => SubscriptionSetUpdate(set) })
 
-  private val eventDist = ChannelHelpers.bindDistributor(eventChannel, { msg: GatewayClientEvents => GatewayEvents(msg.routesUpdate, msg.events) })
+  private val eventDist = ChannelHelpers.wrapReceiver(eventChannel, { msg: GatewayClientEvents => GatewayEvents(msg.routesUpdate, msg.events) })
 
   private val requestSink = ChannelHelpers.bindSink(serviceRequestsChannel, { seq: Seq[ServiceRequest] => ServiceRequestBatch(seq) })
 
-  private val responseDist = ChannelHelpers.bindDistributor(serviceResponsesChannel, { msg: ServiceResponseBatch => msg.responses })
+  private val responseDist = ChannelHelpers.wrapReceiver(serviceResponsesChannel, { msg: ServiceResponseBatch => msg.responses })
 
   def subscriptions: Sink[Set[RowId]] = subSink
 

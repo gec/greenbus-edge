@@ -32,11 +32,38 @@ class PeerLinkProxyChannelImpl(
 
   private val subSink = ChannelHelpers.bindSink(subChannel, { set: Set[RowId] => SubscriptionSetUpdate(set) })
 
-  private val eventDist = ChannelHelpers.bindDistributor(eventChannel, { msg: EventBatch => msg.events })
+  private val eventDist = ChannelHelpers.wrapReceiver(eventChannel, { msg: EventBatch => msg.events })
 
   private val requestSink = ChannelHelpers.bindSink(serviceRequestsChannel, { seq: Seq[ServiceRequest] => ServiceRequestBatch(seq) })
 
-  private val responseDist = ChannelHelpers.bindDistributor(serviceResponsesChannel, { msg: ServiceResponseBatch => msg.responses })
+  private val responseDist = ChannelHelpers.wrapReceiver(serviceResponsesChannel, { msg: ServiceResponseBatch => msg.responses })
+
+  def subscriptions: Sink[Set[RowId]] = subSink
+
+  def events: Source[Seq[StreamEvent]] = eventDist
+
+  def requests: Sink[Seq[ServiceRequest]] = requestSink
+
+  def responses: Source[Seq[ServiceResponse]] = responseDist
+
+}
+
+class ClientPeerLinkProxyChannelImpl(
+    subChannel: SenderChannel[SubscriptionSetUpdate, Boolean],
+    eventChannel: ReceiverChannel[EventBatch, Boolean],
+    serviceRequestsChannel: SenderChannel[ServiceRequestBatch, Boolean],
+    serviceResponsesChannel: ReceiverChannel[ServiceResponseBatch, Boolean]) extends PeerLinkProxyChannel with CloseableChannelAggregate {
+
+  private val channels = Seq(subChannel, eventChannel, serviceRequestsChannel, serviceResponsesChannel)
+  protected val closeableHolder = new CloseableHolder(channels)
+
+  private val subSink = ChannelHelpers.bindSink(subChannel, { set: Set[RowId] => SubscriptionSetUpdate(set) })
+
+  private val eventDist = ChannelHelpers.wrapReceiver(eventChannel, { msg: EventBatch => msg.events })
+
+  private val requestSink = ChannelHelpers.bindSink(serviceRequestsChannel, { seq: Seq[ServiceRequest] => ServiceRequestBatch(seq) })
+
+  private val responseDist = ChannelHelpers.wrapReceiver(serviceResponsesChannel, { msg: ServiceResponseBatch => msg.responses })
 
   def subscriptions: Sink[Set[RowId]] = subSink
 

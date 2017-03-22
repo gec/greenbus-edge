@@ -278,7 +278,7 @@ trait EdgeSubscriptionClient {
   def subscribe(endpoints: Seq[EndpointId], keys: Seq[(EndpointPath, EdgeDataKeyCodec)]): EdgeSubscription
 }
 
-class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: StreamSubscriptionManager) extends EdgeSubscriptionClient {
+class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: StreamSubscriptionManager) extends EdgeSubscriptionClient with LazyLogging {
 
   private val rowMap = mutable.Map.empty[RowId, EdgeTypeSubMgr]
   subImpl.source.bind(batch => handleBatch(batch))
@@ -350,6 +350,8 @@ class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: StreamSubscr
   }
 
   private def handleBatch(updates: Seq[RowUpdate]): Unit = {
+    logger.trace(s"Handle batch: $updates")
+
     val dirty = Set.newBuilder[EdgeUpdateQueue]
 
     updates.foreach { update =>
@@ -358,16 +360,10 @@ class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: StreamSubscr
       }
     }
 
-    dirty.result().foreach(_.flush())
+    val dirtySet = dirty.result()
+    logger.trace(s"Dirty update queues: $dirtySet")
+    dirtySet.foreach(_.flush())
   }
-}
-
-trait EdgeEnumeration {
-
-}
-
-trait ValueSubscription[State, Update] {
-
 }
 
 trait SubscriptionParams {

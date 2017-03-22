@@ -32,7 +32,7 @@ class GatewayProxyChannelImpl(
   private val channels = Seq(subChannel, eventChannel, serviceRequestsChannel, serviceResponsesChannel)
   protected val closeableHolder = new CloseableHolder(channels)
 
-  private val subDist = ChannelHelpers.bindDistributor(subChannel, { msg: SubscriptionSetUpdate => msg.rows })
+  private val subDist = ChannelHelpers.wrapReceiver(subChannel, { msg: SubscriptionSetUpdate => msg.rows })
 
   private val eventSender = new Sender[GatewayEvents, Boolean] {
     def send(obj: GatewayEvents, handleResponse: (Try[Boolean]) => Unit): Unit = {
@@ -40,7 +40,7 @@ class GatewayProxyChannelImpl(
     }
   }
 
-  private val requestDist = ChannelHelpers.bindDistributor(serviceRequestsChannel, { msg: ServiceRequestBatch => msg.requests })
+  private val requestDist = ChannelHelpers.wrapReceiver(serviceRequestsChannel, { msg: ServiceRequestBatch => msg.requests })
 
   private val responseSink = ChannelHelpers.bindSink(serviceResponsesChannel, { obj: Seq[ServiceResponse] => ServiceResponseBatch(obj) })
 

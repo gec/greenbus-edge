@@ -38,23 +38,26 @@ case class KeyedSetUpdated(value: Map[TypeValue, TypeValue], removed: Set[TypeVa
 case class RowUpdate(row: RowId, update: ValueUpdate)
 
 object ConsumerSetFilter extends LazyLogging {
-  def build(snap: SetSnapshot, prev: Option[ConsumerSetFilter]): Option[ConsumerSetFilter] = {
+  def build(snap: SetSnapshot, prev: Option[ConsumerSetFilter]): Option[(ConsumerSetFilter, DataValueUpdate)] = {
     snap match {
       case s: ModifiedSetSnapshot =>
         val prevValueOpt = prev.flatMap {
           case f: ModifiedSetConsumerFilter => Some(f.latest)
           case _ => None
         }
-        Some(new ModifiedSetConsumerFilter(s, prevValueOpt))
+        val filter = new ModifiedSetConsumerFilter(s, prevValueOpt)
+        Some((filter, filter.first))
       case s: ModifiedKeyedSetSnapshot =>
         val prevValueOpt = prev.flatMap {
           case f: ModifiedKeyedSetConsumerFilter => Some(f.latest)
           case _ => None
         }
-        Some(new ModifiedKeyedSetConsumerFilter(s, prevValueOpt))
+        val filter = new ModifiedKeyedSetConsumerFilter(s, prevValueOpt)
+        Some((filter, filter.first))
       case s: AppendSetSequence =>
         if (s.appends.nonEmpty) {
-          Some(new AppendSetConsumerFilter(s))
+          val filter = new AppendSetConsumerFilter(s)
+          Some((filter, filter.first))
         } else {
           logger.warn(s"Append set filter tried to initialize with and empty sequence")
           None
@@ -67,12 +70,22 @@ trait ConsumerSetFilter {
   def snapshot(snapshot: SetSnapshot): Option[ValueUpdate]
 }
 
-class ModifiedSetConsumerFilter(start: ModifiedSetSnapshot, prev: Option[Set[TypeValue]]) extends ConsumerSetFilter with LazyLogging {
+class ModifiedSetConsumerFilter(start: ModifiedSetSnapshot, prevOpt: Option[Set[TypeValue]]) extends ConsumerSetFilter with LazyLogging {
 
   private var seq: SequencedTypeValue = start.sequence
-  private var current = prev.getOrElse(Set.empty[TypeValue])
+  private var current = start.snapshot
 
   def latest: Set[TypeValue] = current
+
+  def first: DataValueUpdate = {
+    prevOpt match {
+      case None => SetUpdated(start.snapshot, Set(), start.snapshot)
+      case Some(prev) =>
+        val removed = prev -- start.snapshot
+        val added = start.snapshot -- prev
+        SetUpdated(start.snapshot, removed, added)
+    }
+  }
 
   def delta(delta: SetDelta): Option[ValueUpdate] = {
     delta match {
@@ -122,9 +135,18 @@ class ModifiedSetConsumerFilter(start: ModifiedSetSnapshot, prev: Option[Set[Typ
 class ModifiedKeyedSetConsumerFilter(start: ModifiedKeyedSetSnapshot, prevOpt: Option[Map[TypeValue, TypeValue]]) extends ConsumerSetFilter with LazyLogging {
 
   private var seq: SequencedTypeValue = start.sequence
-  private var current = prevOpt.getOrElse(Map.empty[TypeValue, TypeValue])
+  private var current = start.snapshot
 
   def latest: Map[TypeValue, TypeValue] = current
+
+  def first: DataValueUpdate = {
+    prevOpt match {
+      case None => KeyedSetUpdated(start.snapshot, Set(), start.snapshot.toVector.toSet, Set())
+      case Some(prev) =>
+        val (removed, added, modified) = MapDiff.calculate(start.snapshot, prev)
+        KeyedSetUpdated(start.snapshot, removed, added, modified)
+    }
+  }
 
   def delta(delta: SetDelta): Option[ValueUpdate] = {
     delta match {
@@ -175,6 +197,10 @@ class AppendSetConsumerFilter(start: AppendSetSequence) extends ConsumerSetFilte
   private var seq: SequencedTypeValue = start.appends.last.sequence
 
   def sequence: SequencedTypeValue = seq
+
+  def first: DataValueUpdate = {
+    Appended(start.appends.map(_.value))
+  }
 
   private def handleSequence(d: AppendSetSequence): Option[ValueUpdate] = {
     if (d.appends.nonEmpty) {
@@ -230,9 +256,9 @@ class RowFilterImpl extends RowFilter with LazyLogging {
           case None =>
             logger.warn(s"Could not create consumer filter for: $ev")
             None
-          case Some(next) =>
+          case Some((next, update)) =>
             activeFilterOpt = Some(next)
-            next.snapshot(ev.snapshot)
+            Some(update)
         }
       }
     }
@@ -251,7 +277,7 @@ trait RowFilter {
   def handle(event: AppendEvent): Option[ValueUpdate]
 }
 
-class SubscriptionFilterMap(sink: Sink[Seq[RowUpdate]]) {
+class SubscriptionFilterMap(sink: Sink[Seq[RowUpdate]]) extends LazyLogging {
 
   private val map = mutable.Map.empty[TypeValue, mutable.Map[TableRow, RowFilter]]
 
@@ -260,6 +286,7 @@ class SubscriptionFilterMap(sink: Sink[Seq[RowUpdate]]) {
   }
 
   def handle(sevs: Seq[StreamEvent]): Unit = {
+    logger.debug(s"Filter map handling: " + sevs)
 
     val updates: Seq[RowUpdate] = sevs.flatMap {
       case ev: RowAppendEvent => {
@@ -284,7 +311,10 @@ class SubscriptionFilterMap(sink: Sink[Seq[RowUpdate]]) {
       }
     }
 
-    sink.push(updates)
+    logger.debug(s"Passed filter: " + updates)
+    if (updates.nonEmpty) {
+      sink.push(updates)
+    }
   }
 
   def removeRows(removes: Set[RowId]): Unit = {
@@ -323,7 +353,9 @@ class SubscriptionManager(eventThread: CallMarshaller) extends StreamSubscriptio
   def connected(proxy: PeerLinkProxyChannel): Unit = {
     eventThread.marshal {
       connectionOpt = Some(proxy)
-      proxy.subscriptions.push(subscriptionSet)
+      if (subscriptionSet.nonEmpty) {
+        proxy.subscriptions.push(subscriptionSet)
+      }
     }
     proxy.onClose.subscribe(() => eventThread.marshal { disconnected() })
     proxy.events.bind(events => eventThread.marshal { filters.handle(events) })
