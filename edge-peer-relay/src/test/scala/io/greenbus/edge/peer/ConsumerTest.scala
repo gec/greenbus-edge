@@ -19,6 +19,7 @@
 package io.greenbus.edge.peer
 
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{ Executors, ThreadFactory }
 
 import com.typesafe.scalalogging.LazyLogging
@@ -32,6 +33,7 @@ import io.greenbus.edge.colset.gateway.GatewayRouteSource
 import io.greenbus.edge.colset.proto.provider.ProtoSerializationProvider
 import io.greenbus.edge.colset.subscribe.{ StreamServiceClientImpl, SubscriptionManager }
 import io.greenbus.edge.flow
+import io.greenbus.edge.flow.Responder
 import io.greenbus.edge.thread.CallMarshaller
 
 import scala.concurrent.Await
@@ -113,7 +115,7 @@ object ProducerTest extends LazyLogging {
 
     val factory = new StreamProviderFactory(gatewaySource)
 
-    val builder = new EndpointProducerBuilderImpl(EndpointId(Path("my-endpoint")))
+    val builder = new EndpointProducerBuilderImpl(EndpointId(Path("my-endpoint")), exe)
 
     val series1 = builder.seriesDouble(Path("series-double-1"))
     val kv1 = builder.latestKeyValue(Path("kv-1"))
@@ -121,7 +123,7 @@ object ProducerTest extends LazyLogging {
 
     val out1 = builder.outputStatus(Path("out-1"))
 
-    val outHandler = new flow.Responder[OutputParams, OutputResult] {
+    /* val outHandler = new flow.Responder[OutputParams, OutputResult] {
       var i = 0
       def handle(obj: OutputParams, respond: (OutputResult) => Unit): Unit = {
         logger.info("Output params: " + obj)
@@ -132,9 +134,24 @@ object ProducerTest extends LazyLogging {
       }
     }
 
-    builder.outputRequests(Path("out-1"), outHandler)
+    builder.outputRequests(Path("out-1"), outHandler)*/
+
+    val out1Rcv = builder.registerOutput(Path("out-1"))
 
     val buffer = factory.bindEndpoint(builder.build(), seriesBuffersSize = 100, eventBuffersSize = 100)
+
+    val outputInc = new AtomicInteger(0)
+
+    out1Rcv.bind(new Responder[OutputParams, OutputResult] {
+      def handle(obj: OutputParams, respond: (OutputResult) => Unit): Unit = {
+        logger.info("Output params: " + obj)
+        val i = outputInc.incrementAndGet()
+        println(i)
+        out1.update(OutputKeyStatus(outSession, i, None))
+        respond(OutputSuccess(Some(ValueString("we did it"))))
+        buffer.flush()
+      }
+    })
 
     var i = 0
     while (true) {

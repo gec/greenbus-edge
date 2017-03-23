@@ -20,10 +20,10 @@ package io.greenbus.edge.api.stream
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.api._
-import io.greenbus.edge.channel.Receiver
 import io.greenbus.edge.colset._
 import io.greenbus.edge.colset.gateway._
-import io.greenbus.edge.flow.{ QueuedDistributor, Responder, Sink, Source }
+import io.greenbus.edge.flow.{ QueuedDistributor, RemoteBoundQueueingReceiverImpl, Responder, Receiver, Sink, Source }
+import io.greenbus.edge.thread.CallMarshaller
 
 import scala.collection.mutable
 
@@ -36,7 +36,7 @@ trait EndpointProducerBuilder {
   def build()
 }
 
-class EndpointProducerBuilderImpl(endpointId: EndpointId) {
+class EndpointProducerBuilderImpl(endpointId: EndpointId, outputHandlerThread: CallMarshaller) {
 
   private var indexes = Map.empty[Path, IndexableValue]
   private var metadata = Map.empty[Path, Value]
@@ -109,6 +109,12 @@ class EndpointProducerBuilderImpl(endpointId: EndpointId) {
 
   def outputRequests(key: Path, handler: Responder[OutputParams, OutputResult]): Unit = {
     outputEntries += ProducerOutputEntry(key, handler)
+  }
+
+  def registerOutput(key: Path): Receiver[OutputParams, OutputResult] = {
+    val rcvImpl = new RemoteBoundQueueingReceiverImpl[OutputParams, OutputResult](outputHandlerThread)
+    outputEntries += ProducerOutputEntry(key, rcvImpl)
+    rcvImpl
   }
 
   def output() = ???
