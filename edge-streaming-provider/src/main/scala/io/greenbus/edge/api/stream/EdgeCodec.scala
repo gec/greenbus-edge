@@ -18,7 +18,6 @@
  */
 package io.greenbus.edge.api.stream
 
-import io.greenbus.edge.OutputValueStatus
 import io.greenbus.edge.api._
 import io.greenbus.edge.api.proto.convert.{ Conversions, OutputConversions, ValueConversions }
 import io.greenbus.edge.colset._
@@ -54,7 +53,7 @@ object AppendDataKeyCodec {
   object SeriesCodec extends AppendDataKeyCodec {
 
     def dataKeyToRow(endpointPath: EndpointPath): RowId = {
-      EdgeCodecCommon.dataKeyRowId(endpointPath, EdgeTables.timeSeriesValueTable)
+      EdgeCodecCommon.keyRowId(endpointPath, EdgeTables.timeSeriesValueTable)
     }
 
     def fromTypeValue(value: TypeValue): Either[String, EdgeSequenceDataKeyValue] = {
@@ -80,7 +79,7 @@ object AppendDataKeyCodec {
   object KeyValueCodec extends AppendDataKeyCodec {
 
     def dataKeyToRow(endpointPath: EndpointPath): RowId = {
-      EdgeCodecCommon.dataKeyRowId(endpointPath, EdgeTables.latestKeyValueTable)
+      EdgeCodecCommon.keyRowId(endpointPath, EdgeTables.latestKeyValueTable)
     }
 
     def fromTypeValue(value: TypeValue): Either[String, EdgeSequenceDataKeyValue] = {
@@ -92,7 +91,7 @@ object AppendDataKeyCodec {
   object TopicEventCodec extends AppendDataKeyCodec {
 
     def dataKeyToRow(endpointPath: EndpointPath): RowId = {
-      EdgeCodecCommon.dataKeyRowId(endpointPath, EdgeTables.eventTopicValueTable)
+      EdgeCodecCommon.keyRowId(endpointPath, EdgeTables.eventTopicValueTable)
     }
 
     def fromTypeValue(value: TypeValue): Either[String, EdgeSequenceDataKeyValue] = {
@@ -122,31 +121,16 @@ trait AppendDataKeyCodec extends EdgeDataKeyCodec {
 object AppendOutputKeyCodec extends AppendOutputKeyCodec {
 
   def dataKeyToRow(endpointPath: EndpointPath): RowId = {
-    EdgeCodecCommon.dataKeyRowId(endpointPath, EdgeTables.outputTable)
+    EdgeCodecCommon.keyRowId(endpointPath, EdgeTables.outputTable)
   }
 
-  def fromAppendValue(session: PeerSessionId, v: AppendSetValue): Either[String, OutputValueStatus] = {
-
-    val longSeqEither = v.sequence match {
-      case Int64Val(seq) => Right(seq)
-      case _ => Left(s"Unrecognized sequence type for output status: " + v.sequence)
-    }
-
-    val edgeSession = EdgeCodecCommon.convertSession(session)
-
-    /*for {
-      seq <- longSeqEither
-      //v <-
-    }*/
-
-    // OutputValueStatus()
-
-    ???
+  def fromTypeValue(v: TypeValue): Either[String, OutputKeyStatus] = {
+    EdgeCodecCommon.readOutputKeyStatus(v)
   }
 
 }
 trait AppendOutputKeyCodec extends EdgeDataKeyCodec {
-  def fromAppendValue(session: PeerSessionId, v: AppendSetValue): Either[String, OutputValueStatus]
+  def fromTypeValue(v: TypeValue): Either[String, OutputKeyStatus]
 }
 
 object KeyedSetDataKeyCodec {
@@ -163,7 +147,7 @@ object KeyedSetDataKeyCodec {
     }
 
     def dataKeyToRow(endpointPath: EndpointPath): RowId = {
-      EdgeCodecCommon.dataKeyRowId(endpointPath, EdgeTables.activeSetValueTable)
+      EdgeCodecCommon.keyRowId(endpointPath, EdgeTables.activeSetValueTable)
     }
 
     def fromTypeValue(v: KeyedSetUpdated): Either[String, ActiveSetUpdate] = {
@@ -286,7 +270,7 @@ object EdgeCodecCommon {
     BytesVal(Conversions.toProto(desc).toByteArray)
   }
 
-  def dataKeyRowId(endpointPath: EndpointPath, table: String): RowId = {
+  def keyRowId(endpointPath: EndpointPath, table: String): RowId = {
     val route = endpointIdToRoute(endpointPath.endpoint)
     val key = writePath(endpointPath.key)
 

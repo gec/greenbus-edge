@@ -18,23 +18,26 @@
  */
 package io.greenbus.edge.peer
 
+import java.util.UUID
 import java.util.concurrent.{ Executors, ThreadFactory }
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.amqp.colset.{ ChannelDescriberImpl, ClientResponseParser }
 import io.greenbus.edge.amqp.impl2.AmqpService
-import io.greenbus.edge.api.{ EndpointId, EndpointPath, Path, ValueString }
-import io.greenbus.edge.api.stream.{ EdgeSubscriptionManager, EndpointProducerBuilderImpl, StreamProviderFactory, SubscriptionBuilder }
+import io.greenbus.edge.api._
+import io.greenbus.edge.api.stream._
 import io.greenbus.edge.colset.{ SymbolVal, TextVal }
 import io.greenbus.edge.colset.client.{ ColsetClient, MultiChannelColsetClientImpl }
 import io.greenbus.edge.colset.gateway.GatewayRouteSource
 import io.greenbus.edge.colset.proto.provider.ProtoSerializationProvider
-import io.greenbus.edge.colset.subscribe.SubscriptionManager
+import io.greenbus.edge.colset.subscribe.{ StreamServiceClientImpl, SubscriptionManager }
+import io.greenbus.edge.flow
 import io.greenbus.edge.thread.CallMarshaller
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.util.Try
 
 object ConsumerTest extends LazyLogging {
 
@@ -54,10 +57,13 @@ object ConsumerTest extends LazyLogging {
 
     val edgeSubMgr = new EdgeSubscriptionManager(exe, streamingSubMgr)
 
+    val outputKey = EndpointPath(EndpointId(Path("my-endpoint")), Path("out-1"))
+
     val sub = SubscriptionBuilder.newBuilder
       .series(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1")))
       .keyValue(EndpointPath(EndpointId(Path("my-endpoint")), Path("kv-1")))
       .topicEvent(EndpointPath(EndpointId(Path("my-endpoint")), Path("event-1")))
+      .outputStatus(outputKey)
       .build()
 
     logger.debug("Subscribing...")
@@ -68,13 +74,31 @@ object ConsumerTest extends LazyLogging {
       batch.foreach(up => logger.info("\t" + up))
     }
 
+    val streamServices = new StreamServiceClientImpl(channel, exe)
+    val edgeServices = new ServiceClientImpl(streamServices)
+
+    var i = 0
+    while (true) {
+
+      def handleResponse(result: Try[OutputResult]): Unit = {
+        println("result: " + result)
+      }
+
+      edgeServices.send(OutputRequest(outputKey, OutputParams(outputValueOpt = Some(ValueString("an output string " + i)))), handleResponse)
+
+      i += 1
+      Thread.sleep(2000)
+    }
+
     System.in.read()
   }
 }
 
-object ProviderTest {
+object ProviderTest extends LazyLogging {
 
   def main(args: Array[String]): Unit = {
+
+    val outSession = UUID.randomUUID()
 
     val service = AmqpService.build(Some("gateway"))
 
@@ -94,6 +118,21 @@ object ProviderTest {
     val series1 = builder.seriesDouble(Path("series-double-1"))
     val kv1 = builder.latestKeyValue(Path("kv-1"))
     val event1 = builder.topicEventValue(Path("event-1"))
+
+    val out1 = builder.outputStatus(Path("out-1"))
+
+    val outHandler = new flow.Responder[OutputParams, OutputResult] {
+      var i = 0
+      def handle(obj: OutputParams, respond: (OutputResult) => Unit): Unit = {
+        logger.info("Output params: " + obj)
+        i += 1
+        println(i)
+        out1.update(OutputKeyStatus(outSession, i, None))
+        respond(OutputSuccess(Some(ValueString("we did it"))))
+      }
+    }
+
+    builder.outputRequests(Path("out-1"), outHandler)
 
     val buffer = factory.bindEndpoint(builder.build(), seriesBuffersSize = 100, eventBuffersSize = 100)
 

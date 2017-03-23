@@ -122,11 +122,9 @@ class EndpointProducerBuilderImpl(endpointId: EndpointId) {
   }
 }
 
-case class OutputRequest(vOpt: Option[Value], respond: OutputResult => Unit)
-
-trait OutputHandle {
+/*trait OutputHandle {
   def requests: Source[OutputRequest]
-}
+}*/
 trait OutputStatusHandle {
   def update(status: OutputKeyStatus): Unit
 }

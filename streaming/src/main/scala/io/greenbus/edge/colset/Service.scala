@@ -18,10 +18,6 @@
  */
 package io.greenbus.edge.colset
 
-import com.typesafe.scalalogging.LazyLogging
-
-import scala.collection.mutable
-
 case class ServiceRequest(row: RowId, value: TypeValue, correlation: TypeValue)
 case class ServiceResponse(row: RowId, value: TypeValue, correlation: TypeValue)
 

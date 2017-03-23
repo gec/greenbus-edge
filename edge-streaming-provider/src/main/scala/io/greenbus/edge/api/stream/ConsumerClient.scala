@@ -26,6 +26,7 @@ import io.greenbus.edge.flow._
 import io.greenbus.edge.thread.CallMarshaller
 
 import scala.collection.mutable
+import scala.util.{ Failure, Success, Try }
 
 /*
 
@@ -128,41 +129,6 @@ trait GenEdgeTypeSubMgr extends EdgeUpdateSubjectImpl with LazyLogging {
         observers.foreach(_.enqueue(toUpdate(Disconnected)))
         observers
       case _ => Set()
-    }
-  }
-}
-
-class OutputStatusSubMgr(id: EndpointPath) extends GenEdgeTypeSubMgr {
-  protected type Data = OutputKeyStatus
-
-  protected def logId: String = id.toString
-
-  protected def toUpdate(v: EdgeDataStatus[OutputKeyStatus]): IdentifiedEdgeUpdate = {
-    IdOutputKeyUpdate(id, v)
-  }
-
-  protected def handleData(dataUpdate: DataValueUpdate): Set[EdgeUpdateQueue] = {
-    dataUpdate match {
-      case ap: Appended => {
-
-        ap.values.lastOption.map { last =>
-          //AppendOutputKeyCodec.
-        }
-
-        /*values.lastOption.map { last =>
-          fromTypeValue(last.value) match {
-            case Left(str) =>
-              logger.warn(s"Could not extract data value for $logId: $str")
-              Set.empty[EdgeUpdateQueue]
-            case Right(desc) =>
-              handleValue(desc)
-          }
-        }.getOrElse(Set())*/
-        ???
-      }
-      case _ =>
-        logger.warn(s"Wrong value update type for $logId: $dataUpdate")
-        Set()
     }
   }
 }
@@ -279,6 +245,21 @@ class KeyedSetSubMgr(id: EndpointPath, codec: KeyedSetDataKeyCodec) extends GenE
   }
 }
 
+class OutputStatusSubMgr(id: EndpointPath) extends GenAppendSubMgr {
+
+  protected type Data = OutputKeyStatus
+
+  protected def logId: String = id.toString
+
+  def toUpdate(v: EdgeDataStatus[OutputKeyStatus]): IdentifiedEdgeUpdate = {
+    IdOutputKeyUpdate(id, v)
+  }
+
+  def fromTypeValue(v: TypeValue): Either[String, OutputKeyStatus] = {
+    AppendOutputKeyCodec.fromTypeValue(v)
+  }
+}
+
 class BatchedSink[A](batchSink: Sink[Seq[A]]) {
   private val buffer = mutable.ArrayBuffer.empty[A]
 
@@ -313,7 +294,8 @@ trait EdgeSubscription {
 }
 
 trait EdgeSubscriptionClient {
-  def subscribe(endpoints: Seq[EndpointId], keys: Seq[(EndpointPath, EdgeDataKeyCodec)]): EdgeSubscription
+  def subscribe(params: SubscriptionParams): EdgeSubscription
+  def subscribe(endpoints: Seq[EndpointId], keys: Seq[(EndpointPath, EdgeDataKeyCodec)], outputKeys: Seq[EndpointPath]): EdgeSubscription
 }
 
 class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: StreamSubscriptionManager) extends EdgeSubscriptionClient with LazyLogging {
@@ -322,10 +304,10 @@ class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: StreamSubscr
   subImpl.source.bind(batch => handleBatch(batch))
 
   def subscribe(params: SubscriptionParams): EdgeSubscription = {
-    subscribe(params.descriptors, params.keys)
+    subscribe(params.descriptors, params.keys, params.outputKeys)
   }
 
-  def subscribe(endpoints: Seq[EndpointId], keys: Seq[(EndpointPath, EdgeDataKeyCodec)]): EdgeSubscription = {
+  def subscribe(endpoints: Seq[EndpointId], dataKeys: Seq[(EndpointPath, EdgeDataKeyCodec)], outputKeys: Seq[EndpointPath]): EdgeSubscription = {
 
     val batchQueue = new RemoteBoundQueuedDistributor[Seq[IdentifiedEdgeUpdate]](eventThread)
     val updateQueue = new EdgeUpdateQueueImpl(batchQueue)
@@ -342,7 +324,7 @@ class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: StreamSubscr
           mgr.addObserver(updateQueue)
       }
 
-      val dataKeyAndRows = keys.map {
+      val dataKeyAndRows = dataKeys.map {
         case (endPath, codec) => (endPath, codec, codec.dataKeyToRow(endPath))
       }
 
@@ -407,15 +389,17 @@ class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: StreamSubscr
 trait SubscriptionParams {
   def descriptors: Seq[EndpointId]
   def keys: Seq[(EndpointPath, EdgeDataKeyCodec)]
+  def outputKeys: Seq[EndpointPath]
 }
 
 object SubscriptionBuilder {
 
-  case class SubParams(descriptors: Seq[EndpointId], keys: Seq[(EndpointPath, EdgeDataKeyCodec)]) extends SubscriptionParams
+  case class SubParams(descriptors: Seq[EndpointId], keys: Seq[(EndpointPath, EdgeDataKeyCodec)], outputKeys: Seq[EndpointPath]) extends SubscriptionParams
 
   class SubscriptionBuilderImpl extends SubscriptionBuilder {
     private val endpointBuffer = mutable.ArrayBuffer.empty[EndpointId]
     private val keys = mutable.ArrayBuffer.empty[(EndpointPath, EdgeDataKeyCodec)]
+    private val outputKeys = mutable.ArrayBuffer.empty[EndpointPath]
 
     def endpointDescriptor(endpointId: EndpointId): SubscriptionBuilder = {
       endpointBuffer += endpointId
@@ -437,9 +421,13 @@ object SubscriptionBuilder {
       keys += ((path, KeyedSetDataKeyCodec.ActiveSetCodec))
       this
     }
+    def outputStatus(path: EndpointPath): SubscriptionBuilder = {
+      outputKeys += path
+      this
+    }
 
     def build(): SubscriptionParams = {
-      SubParams(endpointBuffer.toVector, keys.toVector)
+      SubParams(endpointBuffer.toVector, keys.toVector, outputKeys.toVector)
     }
   }
 
@@ -454,7 +442,34 @@ trait SubscriptionBuilder {
   def keyValue(path: EndpointPath): SubscriptionBuilder
   def topicEvent(path: EndpointPath): SubscriptionBuilder
   def activeSet(path: EndpointPath): SubscriptionBuilder
+  def outputStatus(path: EndpointPath): SubscriptionBuilder
 
   def build(): SubscriptionParams
+}
+
+trait ServiceClient extends Sender[OutputRequest, OutputResult]
+class ServiceClientImpl(client: StreamServiceClient) extends ServiceClient with CloseObservable {
+
+  def send(obj: OutputRequest, handleResponse: (Try[OutputResult]) => Unit): Unit = {
+    val row = EdgeCodecCommon.keyRowId(obj.key, EdgeTables.outputTable)
+    val value = EdgeCodecCommon.writeOutputRequest(obj.value)
+
+    def handle(resp: Try[UserServiceResponse]): Unit = {
+      resp.map { userResp =>
+        val converted = resp.flatMap { resp =>
+          EdgeCodecCommon.readOutputResult(resp.value) match {
+            case Right(result) => Success(result)
+            case Left(err) => Failure(new Exception(err))
+          }
+        }
+
+        handleResponse(converted)
+      }
+    }
+
+    client.send(UserServiceRequest(row, value), handle)
+  }
+
+  def onClose: LatchSubscribable = client.onClose
 }
 
