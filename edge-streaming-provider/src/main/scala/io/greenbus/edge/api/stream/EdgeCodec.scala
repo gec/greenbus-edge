@@ -248,7 +248,11 @@ object EdgeCodecCommon {
   def writeEndpointId(id: EndpointId): TupleVal = {
     writePath(id.path)
   }
+  def readEndpointId(v: TypeValue): Either[String, EndpointId] = {
+    readPath(v).map(p => EndpointId(p))
+  }
   def endpointIdToRoute(id: EndpointId): TypeValue = writeEndpointId(id)
+  def routeToEndpointId(v: TypeValue): Either[String, EndpointId] = readEndpointId(v)
 
   def endpointIdToEndpointDescriptorTableRow(id: EndpointId): TableRow = {
     TableRow(EdgeTables.endpointDescTable, writeEndpointId(id))

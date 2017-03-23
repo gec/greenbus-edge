@@ -21,7 +21,7 @@ package io.greenbus.edge.colset.subscribe
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.colset._
 import io.greenbus.edge.colset.gateway.MapDiff
-import io.greenbus.edge.flow.{ QueuedDistributor, Sink, Source }
+import io.greenbus.edge.flow._
 import io.greenbus.edge.thread.CallMarshaller
 
 import scala.collection.mutable
@@ -317,6 +317,22 @@ class SubscriptionFilterMap(sink: Sink[Seq[RowUpdate]]) extends LazyLogging {
     }
   }
 
+  def notifyActiveRowSet(set: Set[RowId]): Unit = {
+    val perRoute = set.groupBy(_.routingKey)
+
+    val removedRoutes = map.keySet -- perRoute.keySet
+    removedRoutes.foreach(map.remove)
+
+    perRoute.foreach {
+      case (route, rowIds) =>
+        map.get(route).foreach { tableRowMap =>
+          val trSet = rowIds.map(_.tableRow)
+          val trRemoves = tableRowMap.keySet -- trSet
+          trRemoves.foreach(tableRowMap.remove)
+        }
+    }
+  }
+
   def removeRows(removes: Set[RowId]): Unit = {
     removes.groupBy(_.routingKey).foreach {
       case (route, rows) =>
@@ -381,3 +397,158 @@ trait StreamSubscriptionManager {
   def source: Source[Seq[RowUpdate]]
 }
 
+trait StreamDynamicSubscriptionManager {
+  def update(set: Set[SubscriptionKey]): Unit
+  def source: Source[Seq[KeyedUpdate]]
+}
+
+class DynamicSubscriptionManager(eventThread: CallMarshaller) {
+
+  private val dist = new RemoteBoundQueuedDistributor[Seq[RowUpdate]](eventThread)
+  private val filters = new SubscriptionFilterMap(dist)
+  private var registeredKeys = Set.empty[SubscriptionKey]
+  private var subscribedRows = Set.empty[RowId]
+
+  private var keyRowMap = KeyRowMapping.empty
+
+  private var connectionOpt = Option.empty[(PeerSessionId, PeerLinkProxy)]
+
+  def connected(peerSessionId: PeerSessionId, proxy: PeerLinkProxyChannel): Unit = {
+    eventThread.marshal {
+      connectionOpt = Some((peerSessionId, proxy))
+      computeAndUpdateSub(peerSessionId, proxy)
+    }
+    proxy.onClose.subscribe(() => eventThread.marshal { disconnected() })
+    proxy.events.bind(events => eventThread.marshal { filters.handle(events) })
+  }
+
+  private def disconnected(): Unit = {
+    connectionOpt = None
+    filters.handleDisconnected()
+    subscribedRows = Set()
+  }
+
+  private def computeAndUpdateSub(session: PeerSessionId, proxy: PeerLinkProxy): Unit = {
+    if (registeredKeys != keyRowMap.keys) {
+      keyRowMap = KeyRowMapping.build(rowMappings(session, registeredKeys).toVector)
+    }
+
+    val activeRows = keyRowMap.rows
+    filters.notifyActiveRowSet(keyRowMap.rows)
+
+    if (subscribedRows != activeRows) {
+      proxy.subscriptions.push(activeRows)
+      subscribedRows = activeRows
+    }
+  }
+
+  def update(set: Set[SubscriptionKey]): Unit = {
+    eventThread.marshal {
+      registeredKeys = set
+      connectionOpt.foreach {
+        case (sess, proxy) => computeAndUpdateSub(sess, proxy)
+      }
+    }
+  }
+
+  private def computeRowSet(session: PeerSessionId, set: Set[SubscriptionKey]): Set[RowId] = {
+    set.map {
+      case RowSubKey(row) => row
+      case PeerBasedSubKey(f) => f(session)
+    }
+  }
+
+  private def rowMappings(session: PeerSessionId, set: Set[SubscriptionKey]): Map[SubscriptionKey, RowId] = {
+    set.map {
+      case k @ RowSubKey(row) => k -> row
+      case k @ PeerBasedSubKey(f) => k -> f(session)
+    }.toMap
+  }
+
+  def source: Source[Seq[KeyedUpdate]] = new Source[Seq[KeyedUpdate]] {
+    def bind(handler: Handler[Seq[KeyedUpdate]]) = {
+      dist.bind(new Handler[Seq[RowUpdate]] {
+        def handle(obj: Seq[RowUpdate]): Unit = {
+          obj.flatMap { rowUpdate =>
+            keyRowMap.rowToKeys(rowUpdate.row).map { key =>
+              KeyedUpdate(key, rowUpdate.update)
+            }
+          }
+        }
+      })
+    }
+  }
+}
+
+object KeyRowMapping {
+  def build(mappings: Seq[(SubscriptionKey, RowId)]) = {
+    val keyToRow = mutable.Map.empty[SubscriptionKey, RowId]
+    val rowToKeys = mutable.Map.empty[RowId, mutable.Set[SubscriptionKey]]
+
+    mappings.foreach {
+      case (key, row) =>
+        keyToRow += ((key, row))
+        val set = rowToKeys.getOrElseUpdate(row, mutable.Set.empty[SubscriptionKey])
+        set += key
+    }
+
+    KeyRowMapping(keyToRow.toMap, rowToKeys.mapValues(_.toVector).toMap)
+  }
+
+  def empty: KeyRowMapping = {
+    KeyRowMapping(Map(), Map())
+  }
+}
+case class KeyRowMapping(keyToRow: Map[SubscriptionKey, RowId], rowToKeys: Map[RowId, Seq[SubscriptionKey]]) {
+  def rows: Set[RowId] = rowToKeys.keySet.toSet
+  def keys: Set[SubscriptionKey] = keyToRow.keySet.toSet
+}
+
+/*class KeyRowMapping {
+  private val keyToRow = mutable.Map.empty[SubscriptionKey, RowId]
+  private val rowToKeys = mutable.Map.empty[RowId, mutable.Set[SubscriptionKey]]
+
+  def rowToKeys(row: RowId): Seq[SubscriptionKey] = {
+    rowToKeys.get(row).map(_.toVector).getOrElse(Seq())
+  }
+
+  def rows: Set[RowId] = rowToKeys.keySet.toSet
+  def keys: Set[SubscriptionKey] = keyToRow.keySet.toSet
+
+  def setKeyMapping(key: SubscriptionKey, row: RowId): Unit = {
+    val prevOpt = keyToRow.get(key)
+    keyToRow.update(key, row)
+    prevOpt.foreach { prevRow =>
+      if (row != prevRow) {
+        rowToKeys.get(prevRow).foreach { set =>
+          set -= key
+          if (set.isEmpty) {
+            rowToKeys -= prevRow
+          }
+        }
+      }
+    }
+
+    val set = rowToKeys.getOrElseUpdate(row, mutable.Set.empty[SubscriptionKey])
+    set += key
+  }
+
+  def removeKey(key: SubscriptionKey): Unit = {
+    val prevOpt = keyToRow.get(key)
+    keyToRow -= key
+    prevOpt.foreach { prevRow =>
+      rowToKeys.get(prevRow).foreach { set =>
+        set -= key
+        if (set.isEmpty) {
+          rowToKeys -= prevRow
+        }
+      }
+    }
+  }
+}*/
+
+sealed trait SubscriptionKey
+case class RowSubKey(row: RowId) extends SubscriptionKey
+case class PeerBasedSubKey(rowFun: PeerSessionId => RowId) extends SubscriptionKey
+
+case class KeyedUpdate(key: SubscriptionKey, value: ValueUpdate)

@@ -76,6 +76,31 @@ trait RouteSourceHandle {
 
  */
 
+trait BindableTableMgr {
+  def bind(sender: Sender[RowAppendEvent, Boolean]): Unit
+  def setUpdate(keys: Set[TypeValue]): Unit
+  def unbind(): Unit
+}
+
+trait DynamicTableSource {
+  def added(row: TypeValue): BindableRowMgr
+}
+
+class DynamicBindableTableMgr extends BindableTableMgr {
+
+  def bind(sender: Sender[RowAppendEvent, Boolean]): Unit = {
+
+  }
+
+  def setUpdate(keys: Set[TypeValue]): Unit = {
+
+  }
+
+  def unbind(): Unit = {
+
+  }
+}
+
 trait BindableRowMgr {
   def bind(snapshot: Sender[SetSnapshot, Boolean], deltas: Sender[SetDelta, Boolean]): Unit
   def unbind(): Unit
@@ -340,6 +365,15 @@ class EventBuffer(proxy: GatewayProxy) extends LazyLogging {
     new Sender[SetDelta, Boolean] {
       def send(obj: SetDelta, handleResponse: (Try[Boolean]) => Unit): Unit = {
         events += RowAppendEvent(row, StreamDelta(obj))
+        callbacks += handleResponse
+      }
+    }
+  }
+
+  def rowSender(): Sender[RowAppendEvent, Boolean] = {
+    new Sender[RowAppendEvent, Boolean] {
+      def send(obj: RowAppendEvent, handleResponse: (Try[Boolean]) => Unit): Unit = {
+        events += obj
         callbacks += handleResponse
       }
     }
