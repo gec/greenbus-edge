@@ -94,7 +94,7 @@ object ConsumerTest extends LazyLogging {
   }
 }
 
-object ProviderTest extends LazyLogging {
+object ProducerTest extends LazyLogging {
 
   def main(args: Array[String]): Unit = {
 

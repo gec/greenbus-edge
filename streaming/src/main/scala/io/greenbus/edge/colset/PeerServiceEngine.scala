@@ -27,6 +27,7 @@ class PeerServiceEngine(logId: String, routing: RoutingManager) extends ServiceI
   private val correlator = new KeyedCorrelator[(ServiceIssuer, TypeValue), ServiceIssuer]
 
   def requestsIssued(issuer: ServiceIssuer, requests: Seq[ServiceRequest]): Unit = {
+    logger.trace(s"Requests issued: $requests")
     requests.groupBy(_.row.routingKey).foreach {
       case (route, routeRequests) =>
         routing.routeToSourcing.get(route) match {
@@ -50,6 +51,7 @@ class PeerServiceEngine(logId: String, routing: RoutingManager) extends ServiceI
   }
 
   def handleResponses(responses: Seq[ServiceResponse]): Unit = {
+    logger.trace(s"Responses received: $responses")
     val correlated = responses.flatMap { resp =>
       resp.correlation match {
         case Int64Val(ourCorrelation) => {

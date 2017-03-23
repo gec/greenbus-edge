@@ -270,6 +270,10 @@ object EdgeCodecCommon {
     BytesVal(Conversions.toProto(desc).toByteArray)
   }
 
+  def outputKeyRowId(endpointPath: EndpointPath): RowId = {
+    keyRowId(endpointPath, EdgeTables.outputTable)
+  }
+
   def keyRowId(endpointPath: EndpointPath, table: String): RowId = {
     val route = endpointIdToRoute(endpointPath.endpoint)
     val key = writePath(endpointPath.key)

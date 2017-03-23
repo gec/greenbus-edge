@@ -286,7 +286,7 @@ class StreamProviderFactory(routeSource: GatewayRouteSource) extends ProviderFac
             requestHandlers.get(req.row) match {
               case None => req.respond(EdgeCodecCommon.writeOutputResult(OutputFailure(s"key not handled")))
               case Some(rcv) =>
-                rcv.handle(converted, result => EdgeCodecCommon.writeOutputResult(result))
+                rcv.handle(converted, result => req.respond(EdgeCodecCommon.writeOutputResult(result)))
             }
         }
       }

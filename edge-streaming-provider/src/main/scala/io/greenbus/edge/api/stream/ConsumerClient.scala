@@ -339,6 +339,16 @@ class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: StreamSubscr
           mgr.addObserver(updateQueue)
       }
 
+      val outputKeysAndRows = outputKeys.map {
+        case endPath => (endPath, EdgeCodecCommon.outputKeyRowId(endPath))
+      }
+
+      outputKeysAndRows.foreach {
+        case (id, row) =>
+          val mgr = rowMap.getOrElseUpdate(row, new OutputStatusSubMgr(id))
+          mgr.addObserver(updateQueue)
+      }
+
       if (rowMap.keySet != prevRowSet) {
         subImpl.update(rowMap.keySet.toSet)
       }
