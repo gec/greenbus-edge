@@ -38,11 +38,8 @@ class IndexingSubscriptionManager(eventThread: CallMarshaller, observer: Descrip
 
   private var observedRoutes = Set.empty[TypeValue]
   private var endpointRouteSet = Map.empty[TypeValue, EndpointId]
-  //private var endpointSet = Set.empty[EndpointId]
 
   private var descSubscriptionSet = Map.empty[RowId, EndpointEntry]
-
-  //private val descDb = new DescriptorObserver
 
   subMgr.update(Set(peerManifestKey))
   subMgr.source.bind(handleEvents)
@@ -93,11 +90,11 @@ class IndexingSubscriptionManager(eventThread: CallMarshaller, observer: Descrip
                 case ValueAbsent => observer.removed(entry.id)
                 case ValueUnresolved => observer.removed(entry.id)
                 case ValueDisconnected => observer.removed(entry.id)
-                case _ => logger.warn(s"Manifest data update was unexpected type: " + update)
+                case _ => logger.warn(s"Descriptor data update was unexpected type: " + update)
               }
             }
           }
-          case _ => logger.warn(s"Manifest sub key was unexpected type: " + update)
+          case _ => logger.warn(s"Descriptor sub key was unexpected type: " + update)
         }
 
       }
@@ -128,6 +125,7 @@ class IndexingSubscriptionManager(eventThread: CallMarshaller, observer: Descrip
   }
 
   private def onEndpointSetUpdate(): Unit = {
+    logger.debug(s"Updating endpoint subscription set")
 
     val descriptorRowMap: Map[RowId, EndpointId] = endpointRouteSet.map {
       case (route, id) =>
@@ -136,9 +134,6 @@ class IndexingSubscriptionManager(eventThread: CallMarshaller, observer: Descrip
     }.toMap
 
     val descriptorRowSet = descriptorRowMap.keySet
-
-    /*val removedRows = descSubscriptionSet.keySet -- descriptorRowSet
-    removedRows.foreach(row => )*/
 
     val (alive, removed) = descSubscriptionSet.partition(tup => descriptorRowSet.contains(tup._1))
 

@@ -44,11 +44,6 @@ case class EndpointDescSub(endpointId: EndpointId)
 
 class EndpointSubscription(endpointId: EndpointId, descOpt: Option[EndpointDescSub], dataKeys: Set[Path], outputKeys: Path)
 
-/*sealed trait SeriesValue
-case class BoolValue(value: Boolean) extends SeriesValue
-case class LongValue(value: Long) extends SeriesValue
-case class DoubleValue(value: Double) extends SeriesValue*/
-
 sealed trait EdgeDataKeyValue
 sealed trait EdgeSequenceDataKeyValue extends EdgeDataKeyValue
 case class KeyValueUpdate(value: Value) extends EdgeSequenceDataKeyValue
@@ -56,10 +51,18 @@ case class SeriesUpdate(value: SampleValue, time: Long) extends EdgeSequenceData
 case class TopicEventUpdate(topic: Path, value: Value, time: Long) extends EdgeSequenceDataKeyValue
 case class ActiveSetUpdate(value: Map[IndexableValue, Value], removes: Set[IndexableValue], added: Set[(IndexableValue, Value)], modified: Set[(IndexableValue, Value)]) extends EdgeDataKeyValue
 
+case class EndpointSetUpdate(set: Set[EndpointId], removes: Set[EndpointId], adds: Set[EndpointId])
+case class KeySetUpdate(set: Set[EndpointPath], removes: Set[EndpointPath], adds: Set[EndpointPath])
+
 sealed trait IdentifiedEdgeUpdate
 case class IdEndpointUpdate(id: EndpointId, data: EdgeDataStatus[EndpointDescriptor]) extends IdentifiedEdgeUpdate
 case class IdDataKeyUpdate(id: EndpointPath, data: EdgeDataStatus[EdgeDataKeyValue]) extends IdentifiedEdgeUpdate
 case class IdOutputKeyUpdate(id: EndpointPath, data: EdgeDataStatus[OutputKeyStatus]) extends IdentifiedEdgeUpdate
+
+case class IdEndpointPrefixUpdate(prefix: Path, data: EdgeDataStatus[EndpointSetUpdate]) extends IdentifiedEdgeUpdate
+case class IdEndpointIndexUpdate(specifier: IndexSpecifier, data: EdgeDataStatus[EndpointSetUpdate]) extends IdentifiedEdgeUpdate
+case class IdDataKeyIndexUpdate(specifier: IndexSpecifier, data: EdgeDataStatus[KeySetUpdate]) extends IdentifiedEdgeUpdate
+case class IdOutputKeyIndexUpdate(specifier: IndexSpecifier, data: EdgeDataStatus[KeySetUpdate]) extends IdentifiedEdgeUpdate
 
 /*
 Pending
@@ -288,6 +291,111 @@ class OutputStatusSubMgr(id: EndpointPath) extends GenAppendSubMgr {
   }
 }
 
+trait EndpointSetUpdateSubMgr extends GenEdgeTypeSubMgr {
+
+  protected type Data = EndpointSetUpdate
+
+  private val codec = SetCodec.EndpointIdSetCodec
+
+  protected def handleData(dataUpdate: DataValueUpdate): Set[EdgeUpdateQueue] = {
+    dataUpdate match {
+      case up: SetUpdated => {
+        codec.fromTypeValue(up) match {
+          case Left(str) =>
+            logger.warn(s"Could not extract data update for $logId: $str")
+            Set.empty[EdgeUpdateQueue]
+          case Right(data) =>
+            val updateOpt = if (data.removes.nonEmpty || data.adds.nonEmpty) {
+              state = ResolvedValue(data)
+              Some(ResolvedValue(data))
+            } else {
+              None
+            }
+
+            updateOpt match {
+              case None => Set()
+              case Some(update) =>
+                val identified = toUpdate(update)
+                observers.foreach(_.enqueue(identified))
+                observers
+            }
+        }
+      }
+      case _ =>
+        logger.warn(s"Wrong value update type for $logId: $dataUpdate")
+        Set()
+    }
+  }
+}
+
+class EndpointPrefixSubMgr(prefix: Path) extends EndpointSetUpdateSubMgr {
+  protected def logId: String = prefix.toString
+
+  protected def toUpdate(v: EdgeDataStatus[EndpointSetUpdate]): IdentifiedEdgeUpdate = {
+    IdEndpointPrefixUpdate(prefix, v)
+  }
+}
+
+class EndpointIndexSubMgr(specifier: IndexSpecifier) extends EndpointSetUpdateSubMgr {
+  protected def logId: String = specifier.toString
+
+  protected def toUpdate(v: EdgeDataStatus[EndpointSetUpdate]): IdentifiedEdgeUpdate = {
+    IdEndpointIndexUpdate(specifier, v)
+  }
+}
+
+trait KeySetUpdateSubMgr extends GenEdgeTypeSubMgr {
+
+  protected type Data = KeySetUpdate
+
+  private val codec = SetCodec.EndpointPathSetCodec
+
+  protected def handleData(dataUpdate: DataValueUpdate): Set[EdgeUpdateQueue] = {
+    dataUpdate match {
+      case up: SetUpdated => {
+        codec.fromTypeValue(up) match {
+          case Left(str) =>
+            logger.warn(s"Could not extract data update for $logId: $str")
+            Set.empty[EdgeUpdateQueue]
+          case Right(data) =>
+            val updateOpt = if (data.removes.nonEmpty || data.adds.nonEmpty) {
+              state = ResolvedValue(data)
+              Some(ResolvedValue(data))
+            } else {
+              None
+            }
+
+            updateOpt match {
+              case None => Set()
+              case Some(update) =>
+                val identified = toUpdate(update)
+                observers.foreach(_.enqueue(identified))
+                observers
+            }
+        }
+      }
+      case _ =>
+        logger.warn(s"Wrong value update type for $logId: $dataUpdate")
+        Set()
+    }
+  }
+}
+
+class DataKeyIndexSubMgr(specifier: IndexSpecifier) extends KeySetUpdateSubMgr {
+  protected def logId: String = specifier.toString
+
+  protected def toUpdate(v: EdgeDataStatus[KeySetUpdate]): IdentifiedEdgeUpdate = {
+    IdDataKeyIndexUpdate(specifier, v)
+  }
+}
+class OutputKeyIndexSubMgr(specifier: IndexSpecifier) extends KeySetUpdateSubMgr {
+  protected def logId: String = specifier.toString
+
+  protected def toUpdate(v: EdgeDataStatus[KeySetUpdate]): IdentifiedEdgeUpdate = {
+    IdOutputKeyIndexUpdate(specifier, v)
+  }
+}
+
 class BatchedSink[A](batchSink: Sink[Seq[A]]) {
   private val buffer = mutable.ArrayBuffer.empty[A]
 
@@ -323,121 +431,143 @@ trait EdgeSubscription {
 
 trait EdgeSubscriptionClient {
   def subscribe(params: SubscriptionParams): EdgeSubscription
-  def subscribe(endpoints: Seq[EndpointId], keys: Seq[(EndpointPath, EdgeDataKeyCodec)], outputKeys: Seq[EndpointPath]): EdgeSubscription
+  def subscribe(endpoints: Seq[EndpointId],
+    keys: Seq[(EndpointPath, EdgeDataKeyCodec)],
+    outputKeys: Seq[EndpointPath],
+    indexing: IndexSubscriptionParams): EdgeSubscription
 }
 
-class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: StreamSubscriptionManager) extends EdgeSubscriptionClient with LazyLogging {
+class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: StreamDynamicSubscriptionManager) extends EdgeSubscriptionClient with LazyLogging {
 
-  private val rowMap = mutable.Map.empty[RowId, EdgeTypeSubMgr]
+  private val keyMap = mutable.Map.empty[SubscriptionKey, EdgeTypeSubMgr]
   subImpl.source.bind(batch => handleBatch(batch))
 
   def subscribe(params: SubscriptionParams): EdgeSubscription = {
-    subscribe(params.descriptors, params.keys, params.outputKeys)
+    subscribe(params.descriptors, params.keys, params.outputKeys, params.indexing)
   }
 
-  def subscribe(endpoints: Seq[EndpointId], dataKeys: Seq[(EndpointPath, EdgeDataKeyCodec)], outputKeys: Seq[EndpointPath]): EdgeSubscription = {
+  def subscribe(
+    endpoints: Seq[EndpointId],
+    dataKeys: Seq[(EndpointPath, EdgeDataKeyCodec)],
+    outputKeys: Seq[EndpointPath],
+    indexing: IndexSubscriptionParams): EdgeSubscription = {
 
     val batchQueue = new RemoteBoundQueuedDistributor[Seq[IdentifiedEdgeUpdate]](eventThread)
     val updateQueue = new EdgeUpdateQueueImpl(batchQueue)
     val closeLatch = new RemotelyAppliedLatchSource(eventThread)
 
     eventThread.marshal {
-      val prevRowSet = rowMap.keySet.toSet
+      val prevRowSet = keyMap.keySet.toSet
 
-      val endpointIdToRows = endpoints.map(id => (id, EdgeCodecCommon.endpointIdToEndpointDescriptorRow(id)))
-
-      endpointIdToRows.foreach {
-        case (id, row) =>
-          val mgr = rowMap.getOrElseUpdate(row, new EndpointDescSubMgr(id))
-          mgr.addObserver(updateQueue)
+      val endpointDescKeys = endpoints.map { id =>
+        val row = EdgeCodecCommon.endpointIdToEndpointDescriptorRow(id)
+        val key = RowSubKey(row)
+        val mgr = keyMap.getOrElseUpdate(key, new EndpointDescSubMgr(id))
+        mgr.addObserver(updateQueue)
+        key
       }
 
-      val dataKeyAndRows = dataKeys.map {
-        case (endPath, codec) => (endPath, codec, codec.dataKeyToRow(endPath))
-      }
-
-      dataKeyAndRows.foreach {
-        case (id, codec, row) =>
-          val mgr = rowMap.getOrElseUpdate(row, {
+      val dataKeyKeys = dataKeys.map {
+        case (id, codec) =>
+          val row = codec.dataKeyToRow(id)
+          val key = RowSubKey(row)
+          val mgr = keyMap.getOrElseUpdate(key, {
             codec match {
               case c: AppendDataKeyCodec => new AppendDataKeySubMgr(id, c)
               case c: KeyedSetDataKeyCodec => new KeyedSetSubMgr(id, c)
             }
           })
           mgr.addObserver(updateQueue)
+          key
       }
 
-      val outputKeysAndRows = outputKeys.map {
-        case endPath => (endPath, EdgeCodecCommon.outputKeyRowId(endPath))
+      val outputKeyKeys = outputKeys.map { id =>
+        val row = EdgeCodecCommon.outputKeyRowId(id)
+        val key = RowSubKey(row)
+        val mgr = keyMap.getOrElseUpdate(key, new OutputStatusSubMgr(id))
+        mgr.addObserver(updateQueue)
+        key
       }
 
-      outputKeysAndRows.foreach {
-        case (id, row) =>
-          val mgr = rowMap.getOrElseUpdate(row, new OutputStatusSubMgr(id))
-          mgr.addObserver(updateQueue)
+      val dataIndexKeys = indexing.dataKeyIndexes.map { spec =>
+        val key = EdgeCodecCommon.dataKeyIndexSpecToSubKey(spec)
+        val mgr = keyMap.getOrElseUpdate(key, new DataKeyIndexSubMgr(spec))
+        mgr.addObserver(updateQueue)
+        key
       }
 
-      if (rowMap.keySet != prevRowSet) {
-        subImpl.update(rowMap.keySet.toSet)
+      if (keyMap.keySet != prevRowSet) {
+        subImpl.update(keyMap.keySet.toSet)
       }
 
-      val allRows = (endpointIdToRows.map(_._2) ++ dataKeyAndRows.map(_._3)).toSet
-      closeLatch.bind(() => eventThread.marshal { unsubscribed(updateQueue, allRows) })
+      val allKeys = endpointDescKeys ++ dataKeyKeys ++ outputKeyKeys
+
+      closeLatch.bind(() => eventThread.marshal { unsubscribed(updateQueue, allKeys.toSet) })
     }
 
     // TODO: pending for all rows?
     EdgeSubscription(batchQueue, () => closeLatch())
   }
 
-  private def unsubscribed(queue: EdgeUpdateQueue, rows: Set[RowId]): Unit = {
+  private def unsubscribed(queue: EdgeUpdateQueue, rows: Set[SubscriptionKey]): Unit = {
 
-    val prevRowSet = rowMap.keySet.toSet
+    val prevRowSet = keyMap.keySet.toSet
 
     rows.foreach { row =>
-      rowMap.get(row).foreach { mgr =>
+      keyMap.get(row).foreach { mgr =>
         mgr.removeObserver(queue)
         if (mgr.observers.isEmpty) {
-          rowMap -= row
+          keyMap -= row
         }
       }
     }
 
-    if (rowMap.keySet != prevRowSet) {
-      subImpl.update(rowMap.keySet.toSet)
+    if (keyMap.keySet != prevRowSet) {
+      subImpl.update(keyMap.keySet.toSet)
     }
   }
 
-  private def handleBatch(updates: Seq[RowUpdate]): Unit = {
+  private def handleBatch(updates: Seq[KeyedUpdate]): Unit = {
     logger.trace(s"Handle batch: $updates")
 
     val dirty = Set.newBuilder[EdgeUpdateQueue]
 
     updates.foreach { update =>
-      rowMap.get(update.row).foreach { row =>
-        dirty ++= row.handle(update.update)
+      keyMap.get(update.key).foreach { row =>
+        dirty ++= row.handle(update.value)
       }
     }
 
     val dirtySet = dirty.result()
-    logger.trace(s"Dirty update queues: $dirtySet")
     dirtySet.foreach(_.flush())
   }
 }
 
+case class IndexSubscriptionParams(
+  endpointPrefixes: Seq[Path] = Seq(),
+  endpointIndexes: Seq[IndexSpecifier] = Seq(),
+  dataKeyIndexes: Seq[IndexSpecifier] = Seq(),
+  outputKeyIndexes: Seq[IndexSpecifier] = Seq())
 trait SubscriptionParams {
   def descriptors: Seq[EndpointId]
   def keys: Seq[(EndpointPath, EdgeDataKeyCodec)]
   def outputKeys: Seq[EndpointPath]
+  def indexing: IndexSubscriptionParams
 }
 
 object SubscriptionBuilder {
 
-  case class SubParams(descriptors: Seq[EndpointId], keys: Seq[(EndpointPath, EdgeDataKeyCodec)], outputKeys: Seq[EndpointPath]) extends SubscriptionParams
+  case class SubParams(descriptors: Seq[EndpointId], keys: Seq[(EndpointPath, EdgeDataKeyCodec)], outputKeys: Seq[EndpointPath], indexing: IndexSubscriptionParams) extends SubscriptionParams
 
   class SubscriptionBuilderImpl extends SubscriptionBuilder {
     private val endpointBuffer = mutable.ArrayBuffer.empty[EndpointId]
     private val keys = mutable.ArrayBuffer.empty[(EndpointPath, EdgeDataKeyCodec)]
     private val outputKeys = mutable.ArrayBuffer.empty[EndpointPath]
+
+    private val endpointPrefixes = mutable.ArrayBuffer.empty[Path]
+    private val endpointIndexes = mutable.ArrayBuffer.empty[IndexSpecifier]
+    private val dataKeyIndexes = mutable.ArrayBuffer.empty[IndexSpecifier]
+    private val outputKeyIndexes = mutable.ArrayBuffer.empty[IndexSpecifier]
 
     def endpointDescriptor(endpointId: EndpointId): SubscriptionBuilder = {
       endpointBuffer += endpointId
@@ -464,8 +594,30 @@ object SubscriptionBuilder {
       this
     }
 
+    def endpointSet(prefix: Path): SubscriptionBuilder = {
+      endpointPrefixes += prefix
+      this
+    }
+    def endpointIndex(specifier: IndexSpecifier): SubscriptionBuilder = {
+      endpointIndexes += specifier
+      this
+    }
+    def dataKeyIndex(specifier: IndexSpecifier): SubscriptionBuilder = {
+      dataKeyIndexes += specifier
+      this
+    }
+    def outputKeyIndex(specifier: IndexSpecifier): SubscriptionBuilder = {
+      outputKeyIndexes += specifier
+      this
+    }
+
     def build(): SubscriptionParams = {
-      SubParams(endpointBuffer.toVector, keys.toVector, outputKeys.toVector)
+      val indexing = IndexSubscriptionParams(
+        endpointPrefixes.toVector,
+        endpointIndexes.toVector,
+        dataKeyIndexes.toVector,
+        outputKeyIndexes.toVector)
+      SubParams(endpointBuffer.toVector, keys.toVector, outputKeys.toVector, indexing)
     }
   }
 
@@ -482,6 +634,11 @@ trait SubscriptionBuilder {
   def activeSet(path: EndpointPath): SubscriptionBuilder
   def outputStatus(path: EndpointPath): SubscriptionBuilder
 
+  def endpointSet(prefix: Path): SubscriptionBuilder
+  def endpointIndex(specifier: IndexSpecifier): SubscriptionBuilder
+  def dataKeyIndex(specifier: IndexSpecifier): SubscriptionBuilder
+  def outputKeyIndex(specifier: IndexSpecifier): SubscriptionBuilder
+
   def build(): SubscriptionParams
 }
 
@@ -490,7 +647,7 @@ class ServiceClientImpl(client: StreamServiceClient) extends ServiceClient with 
 
   def send(obj: OutputRequest, handleResponse: (Try[OutputResult]) => Unit): Unit = {
     val row = EdgeCodecCommon.keyRowId(obj.key, EdgeTables.outputTable)
-    val value = EdgeCodecCommon.writeOutputRequest(obj.value)
+    val value = EdgeCodecCommon.writeIndexSpecifier(obj.value)
 
     def handle(resp: Try[UserServiceResponse]): Unit = {
       resp.map { userResp =>

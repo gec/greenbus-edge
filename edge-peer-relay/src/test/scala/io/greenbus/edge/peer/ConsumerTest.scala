@@ -32,7 +32,7 @@ import io.greenbus.edge.colset.{ SymbolVal, TextVal }
 import io.greenbus.edge.colset.client.{ ColsetClient, MultiChannelColsetClientImpl }
 import io.greenbus.edge.colset.gateway.GatewayRouteSource
 import io.greenbus.edge.colset.proto.provider.ProtoSerializationProvider
-import io.greenbus.edge.colset.subscribe.{ StreamServiceClientImpl, SubscriptionManager }
+import io.greenbus.edge.colset.subscribe.{ DynamicSubscriptionManager, StreamServiceClientImpl, SubscriptionManager }
 import io.greenbus.edge.flow
 import io.greenbus.edge.flow.Responder
 import io.greenbus.edge.thread.CallMarshaller
@@ -54,9 +54,9 @@ object ConsumerTest extends LazyLogging {
 
     val exe = new Common.ExecutorEventThread("event")
 
-    val streamingSubMgr = new SubscriptionManager(exe)
+    val streamingSubMgr = new DynamicSubscriptionManager(exe)
 
-    streamingSubMgr.connected(channel)
+    streamingSubMgr.connected(session, channel)
 
     val edgeSubMgr = new EdgeSubscriptionManager(exe, streamingSubMgr)
 
@@ -67,6 +67,7 @@ object ConsumerTest extends LazyLogging {
       .keyValue(EndpointPath(EndpointId(Path("my-endpoint")), Path("kv-1")))
       .topicEvent(EndpointPath(EndpointId(Path("my-endpoint")), Path("event-1")))
       .outputStatus(outputKey)
+      .dataKeyIndex(IndexSpecifier(Path("index1"), None))
       .build()
 
     logger.debug("Subscribing...")

@@ -22,7 +22,7 @@ import io.greenbus.edge.api._
 import io.greenbus.edge.api.proto.convert.{ Conversions, OutputConversions, ValueConversions }
 import io.greenbus.edge.colset._
 import io.greenbus.edge.api.proto
-import io.greenbus.edge.colset.subscribe.KeyedSetUpdated
+import io.greenbus.edge.colset.subscribe.{ KeyedSetUpdated, PeerBasedSubKey, SetUpdated, SubscriptionKey }
 import io.greenbus.edge.util.EitherUtil
 
 object EdgeTables {
@@ -142,6 +142,37 @@ object AppendOutputKeyCodec extends AppendOutputKeyCodec {
 }
 trait AppendOutputKeyCodec extends EdgeDataKeyCodec {
   def fromTypeValue(v: TypeValue): Either[String, OutputKeyStatus]
+}
+
+object SetCodec {
+
+  object EndpointIdSetCodec extends SetCodec[EndpointSetUpdate] {
+    def fromTypeValue(v: SetUpdated): Either[String, EndpointSetUpdate] = {
+      for {
+        set <- EitherUtil.rightSequence(v.value.map(EdgeCodecCommon.readEndpointId).toVector)
+        removes <- EitherUtil.rightSequence(v.removed.map(EdgeCodecCommon.readEndpointId).toVector)
+        adds <- EitherUtil.rightSequence(v.added.map(EdgeCodecCommon.readEndpointId).toVector)
+      } yield {
+        EndpointSetUpdate(set.toSet, removes.toSet, adds.toSet)
+      }
+    }
+  }
+
+  object EndpointPathSetCodec extends SetCodec[KeySetUpdate] {
+    def fromTypeValue(v: SetUpdated): Either[String, KeySetUpdate] = {
+      for {
+        set <- EitherUtil.rightSequence(v.value.map(EdgeCodecCommon.readEndpointPath).toVector)
+        removes <- EitherUtil.rightSequence(v.removed.map(EdgeCodecCommon.readEndpointPath).toVector)
+        adds <- EitherUtil.rightSequence(v.added.map(EdgeCodecCommon.readEndpointPath).toVector)
+      } yield {
+        KeySetUpdate(set.toSet, removes.toSet, adds.toSet)
+      }
+    }
+  }
+
+}
+trait SetCodec[A] {
+  def fromTypeValue(v: SetUpdated): Either[String, A]
 }
 
 object KeyedSetDataKeyCodec {
@@ -330,7 +361,7 @@ object EdgeCodecCommon {
     }
   }
 
-  def writeOutputRequest(v: OutputParams): TypeValue = {
+  def writeIndexSpecifier(v: OutputParams): TypeValue = {
     BytesVal(OutputConversions.toProto(v).toByteArray)
   }
   def readOutputRequest(v: TypeValue): Either[String, OutputParams] = {
@@ -350,7 +381,7 @@ object EdgeCodecCommon {
     }
   }
 
-  def writeOutputRequest(v: IndexSpecifier): TypeValue = {
+  def writeIndexSpecifier(v: IndexSpecifier): TypeValue = {
     BytesVal(Conversions.toProto(v).toByteArray)
   }
   def readIndexSpecifier(v: TypeValue): Either[String, IndexSpecifier] = {
@@ -374,5 +405,13 @@ object EdgeCodecCommon {
         }
       case _ => Left(s"Wrong value type for edge output result: " + v)
     }
+  }
+
+  private def indexSubKey(spec: IndexSpecifier, table: String): SubscriptionKey = {
+    PeerBasedSubKey(sess => RowId(TypeValueConversions.toTypeValue(sess), table, writeIndexSpecifier(spec)))
+  }
+
+  def dataKeyIndexSpecToSubKey(spec: IndexSpecifier): SubscriptionKey = {
+    indexSubKey(spec, EdgeTables.dataKeyIndexTable)
   }
 }

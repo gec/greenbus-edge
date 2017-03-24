@@ -402,7 +402,7 @@ trait StreamDynamicSubscriptionManager {
   def source: Source[Seq[KeyedUpdate]]
 }
 
-class DynamicSubscriptionManager(eventThread: CallMarshaller) {
+class DynamicSubscriptionManager(eventThread: CallMarshaller) extends StreamDynamicSubscriptionManager {
 
   private val dist = new RemoteBoundQueuedDistributor[Seq[RowUpdate]](eventThread)
   private val filters = new SubscriptionFilterMap(dist)
@@ -469,11 +469,12 @@ class DynamicSubscriptionManager(eventThread: CallMarshaller) {
     def bind(handler: Handler[Seq[KeyedUpdate]]) = {
       dist.bind(new Handler[Seq[RowUpdate]] {
         def handle(obj: Seq[RowUpdate]): Unit = {
-          obj.flatMap { rowUpdate =>
+          val updates = obj.flatMap { rowUpdate =>
             keyRowMap.rowToKeys(rowUpdate.row).map { key =>
               KeyedUpdate(key, rowUpdate.update)
             }
           }
+          handler.handle(updates)
         }
       })
     }
@@ -503,49 +504,6 @@ case class KeyRowMapping(keyToRow: Map[SubscriptionKey, RowId], rowToKeys: Map[R
   def rows: Set[RowId] = rowToKeys.keySet.toSet
   def keys: Set[SubscriptionKey] = keyToRow.keySet.toSet
 }
-
-/*class KeyRowMapping {
-  private val keyToRow = mutable.Map.empty[SubscriptionKey, RowId]
-  private val rowToKeys = mutable.Map.empty[RowId, mutable.Set[SubscriptionKey]]
-
-  def rowToKeys(row: RowId): Seq[SubscriptionKey] = {
-    rowToKeys.get(row).map(_.toVector).getOrElse(Seq())
-  }
-
-  def rows: Set[RowId] = rowToKeys.keySet.toSet
-  def keys: Set[SubscriptionKey] = keyToRow.keySet.toSet
-
-  def setKeyMapping(key: SubscriptionKey, row: RowId): Unit = {
-    val prevOpt = keyToRow.get(key)
-    keyToRow.update(key, row)
-    prevOpt.foreach { prevRow =>
-      if (row != prevRow) {
-        rowToKeys.get(prevRow).foreach { set =>
-          set -= key
-          if (set.isEmpty) {
-            rowToKeys -= prevRow
-          }
-        }
-      }
-    }
-
-    val set = rowToKeys.getOrElseUpdate(row, mutable.Set.empty[SubscriptionKey])
-    set += key
-  }
-
-  def removeKey(key: SubscriptionKey): Unit = {
-    val prevOpt = keyToRow.get(key)
-    keyToRow -= key
-    prevOpt.foreach { prevRow =>
-      rowToKeys.get(prevRow).foreach { set =>
-        set -= key
-        if (set.isEmpty) {
-          rowToKeys -= prevRow
-        }
-      }
-    }
-  }
-}*/
 
 sealed trait SubscriptionKey
 case class RowSubKey(row: RowId) extends SubscriptionKey
