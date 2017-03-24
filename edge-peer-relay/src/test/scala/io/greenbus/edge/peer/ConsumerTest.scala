@@ -63,10 +63,10 @@ object ConsumerTest extends LazyLogging {
     val outputKey = EndpointPath(EndpointId(Path("my-endpoint")), Path("out-1"))
 
     val sub = SubscriptionBuilder.newBuilder
-      .series(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1")))
+      /*.series(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1")))
       .keyValue(EndpointPath(EndpointId(Path("my-endpoint")), Path("kv-1")))
       .topicEvent(EndpointPath(EndpointId(Path("my-endpoint")), Path("event-1")))
-      .outputStatus(outputKey)
+      .outputStatus(outputKey)*/
       .dataKeyIndex(IndexSpecifier(Path("index1"), None))
       .build()
 

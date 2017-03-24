@@ -48,11 +48,9 @@ class IndexingSubscriptionManager(eventThread: CallMarshaller, observer: Descrip
     subMgr.connected(sess, peer)
   }
 
-  private def onDisconnected(): Unit = {
-
-  }
-
   private def handleEvents(events: Seq[KeyedUpdate]): Unit = {
+    logger.debug(s"HANDLING EVENTS: " + events)
+
     events.foreach { update =>
       if (update.key == peerManifestKey) {
         update.value match {
@@ -156,7 +154,15 @@ class IndexingSubscriptionManager(eventThread: CallMarshaller, observer: Descrip
   }
 }
 
-class DescriptorObserver extends DescriptorCache {
+trait DescriptorCache {
+  def descriptors: Map[EndpointId, EndpointDescriptor]
+}
+trait DescriptorObserver {
+  def observed(id: EndpointId, desc: EndpointDescriptor): Unit
+  def removed(id: EndpointId): Unit
+}
+
+class NotifyingDescriptorCache(notify: (EndpointId, EndpointDescriptor) => Unit) extends DescriptorCache with DescriptorObserver {
 
   private var descMap = Map.empty[EndpointId, EndpointDescriptor]
 
@@ -166,6 +172,7 @@ class DescriptorObserver extends DescriptorCache {
 
   def observed(id: EndpointId, desc: EndpointDescriptor): Unit = {
     descMap += (id -> desc)
+    notify(id, desc)
   }
 
   def removed(id: EndpointId): Unit = {
@@ -173,7 +180,7 @@ class DescriptorObserver extends DescriptorCache {
   }
 }
 
-class DataKeyIndexSource(cache: DescriptorCache, indexer: DataKeyIndexDb[TypeValue]) extends DynamicTableSource with LazyLogging {
+class DataKeyIndexSource(cache: DescriptorCache, indexer: DataKeyIndexDb[TypeValue]) extends DynamicTableSource with DescriptorObserver with LazyLogging {
 
   private var rowMap = Map.empty[TypeValue, SetSink]
 
@@ -199,6 +206,26 @@ class DataKeyIndexSource(cache: DescriptorCache, indexer: DataKeyIndexDb[TypeVal
     sink
   }
 
+  def observed(id: EndpointId, desc: EndpointDescriptor): Unit = {
+    val updates = indexer.observe(id, desc)
+
+    updates.foreach { up =>
+      val sinks = up.targets.flatMap(rowMap.get)
+      if (sinks.nonEmpty) {
+        val serialized = up.state.map(EdgeCodecCommon.writeEndpointPath)
+        sinks.foreach { sink =>
+          sink.update(serialized)
+        }
+      }
+    }
+
+  }
+
+  def removed(id: EndpointId): Unit = {
+    // TODO: shrink??
+    //val row = EdgeCodecCommon.writeEndpointDescriptor()
+  }
+
   def removed(row: TypeValue): Unit = {
     indexer.removeTarget(row)
     rowMap -= row
@@ -213,7 +240,7 @@ object IndexProducer {
 }
 class IndexProducer(eventThread: CallMarshaller, routeSource: GatewayRouteSource) {
 
-  private val observer = new DescriptorObserver
+  private val observer = new NotifyingDescriptorCache(handleUpdate)
 
   private val dataKeyIndexDb = new DataKeyIndexDb[TypeValue](observer)
   private val dataKeyIndexSource = new DataKeyIndexSource(observer, dataKeyIndexDb)
@@ -221,6 +248,11 @@ class IndexProducer(eventThread: CallMarshaller, routeSource: GatewayRouteSource
   private val indexer = new IndexingSubscriptionManager(eventThread, observer)
 
   private var sourceOpt = Option.empty[RouteSourceHandle]
+
+  private def handleUpdate(id: EndpointId, desc: EndpointDescriptor): Unit = {
+    dataKeyIndexSource.observed(id, desc)
+    sourceOpt.foreach(_.flushEvents())
+  }
 
   def connected(sess: PeerSessionId, peer: PeerLinkProxyChannel): Unit = {
     if (sourceOpt.isEmpty) {

@@ -18,16 +18,14 @@
  */
 package io.greenbus.edge.api.stream.index
 
+import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.api._
 import io.greenbus.edge.collection.MapSetBuilder
 
-case class IndexUpdate[A, Key](specifier: IndexSpecifier, added: Set[A], removed: Set[A], targets: Set[Key])
+case class IndexUpdate[A, Key](specifier: IndexSpecifier, state: Set[A], added: Set[A], removed: Set[A], targets: Set[Key])
 
-trait DescriptorCache {
-  def descriptors: Map[EndpointId, EndpointDescriptor]
-}
 
-abstract class TypedIndexDb[A, Key](cache: DescriptorCache) {
+abstract class TypedIndexDb[A, Key](cache: DescriptorCache) extends LazyLogging {
   private var activeSets = Map.empty[IndexSpecifier, Set[A]]
   private var elemMap = Map.empty[A, Set[IndexSpecifier]]
   private var queryToTarget = Map.empty[IndexSpecifier, Set[Key]]
@@ -140,7 +138,9 @@ abstract class TypedIndexDb[A, Key](cache: DescriptorCache) {
 
   def observe(id: EndpointId, desc: EndpointDescriptor): Seq[IndexUpdate[A, Key]] = {
 
-    val elemAndIndexMaps = identifyIndexSet(id, desc)
+    logger.debug(s"Observed $id : $desc")
+
+    val elemAndIndexMaps: Seq[(A, Map[Path, IndexableValue])] = identifyIndexSet(id, desc)
 
     val matchBuilder = Vector.newBuilder[(A, IndexSpecifier)]
 
@@ -206,8 +206,9 @@ abstract class TypedIndexDb[A, Key](cache: DescriptorCache) {
     specSet.map { spec =>
       val adds = specAdds.getOrElse(spec, Set())
       val removes = specRemoves.getOrElse(spec, Set())
+      val current = activeSets.getOrElse(spec, Set())
 
-      IndexUpdate(spec, adds, removes, targetsFor(spec))
+      IndexUpdate(spec, current, adds, removes, targetsFor(spec))
     }
   }
 }
