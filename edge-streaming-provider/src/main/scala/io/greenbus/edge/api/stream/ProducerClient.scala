@@ -72,6 +72,7 @@ class EndpointProducerBuilderImpl(endpointId: EndpointId, outputHandlerThread: C
   def seriesDouble(key: Path, metadata: CommonMetadata = CommonMetadata()): DoubleSeriesHandle = {
     val desc = TimeSeriesValueDescriptor(metadata.indexes, metadata.metadata)
     val handle = new DoubleSeriesQueue
+    data += (key -> desc)
     dataDescs += ProducerDataEntry(key, desc, handle)
     handle
   }
@@ -95,6 +96,7 @@ class EndpointProducerBuilderImpl(endpointId: EndpointId, outputHandlerThread: C
   def activeSet(key: Path, metadata: CommonMetadata = CommonMetadata()): ActiveSetHandle = {
     val desc = ActiveSetValueDescriptor(metadata.indexes, metadata.metadata)
     val handle = new ActiveSetQueue
+    data += (key -> desc)
     dataDescs += ProducerDataEntry(key, desc, handle)
     handle
   }
@@ -128,9 +130,6 @@ class EndpointProducerBuilderImpl(endpointId: EndpointId, outputHandlerThread: C
   }
 }
 
-/*trait OutputHandle {
-  def requests: Source[OutputRequest]
-}*/
 trait OutputStatusHandle {
   def update(status: OutputKeyStatus): Unit
 }

@@ -18,6 +18,7 @@
  */
 package io.greenbus.edge.api
 
+import java.util
 import java.util.UUID
 
 /*sealed trait EndpointId
@@ -118,12 +119,37 @@ case class ValueBool(v: Boolean) extends NumericConvertible with SampleValue {
   def toBoolean: Boolean = v
 }
 case class ValueString(v: String) extends IndexableValue
-case class ValueBytes(v: Array[Byte]) extends IndexableValue
 case class ValueUuid(v: UUID) extends IndexableValue
 case class ValuePath(v: Path) extends Value
 case class ValueEndpointPath(v: EndpointPath) extends Value
 case class ValueText(v: String, mimeType: Option[String] = None) extends Value
-case class ValueAnnotatedBytes(v: Array[Byte], mimeType: Option[String] = None, isText: Option[Boolean] = None) extends Value
 
 case class ValueArray(seq: IndexedSeq[Value]) extends Value
 case class ValueObject(map: Map[String, Value]) extends Value
+
+case class ValueBytes(v: Array[Byte]) extends IndexableValue {
+
+  override def equals(r: Any): Boolean = {
+    r match {
+      case rv: ValueBytes => util.Arrays.equals(v, rv.v)
+      case _ => false
+    }
+  }
+
+  override def hashCode(): Int = {
+    util.Arrays.hashCode(v)
+  }
+}
+case class ValueAnnotatedBytes(v: Array[Byte], mimeType: Option[String] = None, isText: Option[Boolean] = None) extends Value {
+
+  override def equals(r: Any): Boolean = {
+    r match {
+      case rv: ValueAnnotatedBytes => util.Arrays.equals(v, rv.v) && rv.mimeType == mimeType && rv.isText == isText
+      case _ => false
+    }
+  }
+
+  override def hashCode(): Int = {
+    util.Arrays.hashCode(v) * mimeType.hashCode() * isText.hashCode()
+  }
+}

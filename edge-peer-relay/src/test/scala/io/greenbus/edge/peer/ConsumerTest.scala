@@ -63,10 +63,10 @@ object ConsumerTest extends LazyLogging {
     val outputKey = EndpointPath(EndpointId(Path("my-endpoint")), Path("out-1"))
 
     val sub = SubscriptionBuilder.newBuilder
-      .series(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1")))
+      /*.series(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1")))
       .keyValue(EndpointPath(EndpointId(Path("my-endpoint")), Path("kv-1")))
       .topicEvent(EndpointPath(EndpointId(Path("my-endpoint")), Path("event-1")))
-      .outputStatus(outputKey)
+      .outputStatus(outputKey)*/
       .dataKeyIndex(IndexSpecifier(Path("index1"), None))
       .build()
 
@@ -82,7 +82,7 @@ object ConsumerTest extends LazyLogging {
     val edgeServices = new ServiceClientImpl(streamServices)
 
     var i = 0
-    while (true) {
+    /*while (true) {
 
       def handleResponse(result: Try[OutputResult]): Unit = {
         println("result: " + result)
@@ -92,7 +92,7 @@ object ConsumerTest extends LazyLogging {
 
       i += 1
       Thread.sleep(2000)
-    }
+    }*/
 
     System.in.read()
   }
