@@ -35,6 +35,10 @@ object EdgeTables {
   val activeSetValueTable = "edm.set"
 
   val outputTable = "edm.output"
+
+  val endpointIndexTable = "edm.index.endpoint"
+  val dataKeyIndexTable = "edm.index.datakey"
+  val outputKeyIndexTable = "edm.index.outputkey"
 }
 
 trait EdgeDataKeyCodec {
@@ -336,6 +340,32 @@ object EdgeCodecCommon {
     obj.map {
       case (key, value) =>
         (BytesVal(ValueConversions.toProto(key).toByteArray), BytesVal(ValueConversions.toProto(value).toByteArray))
+    }
+  }
+
+  def writeOutputRequest(v: IndexSpecifier): TypeValue = {
+    BytesVal(Conversions.toProto(v).toByteArray)
+  }
+  def readIndexSpecifier(v: TypeValue): Either[String, IndexSpecifier] = {
+    v match {
+      case b: BytesVal =>
+        parse(b.v, proto.IndexSpecifier.parseFrom).flatMap { protoValue =>
+          Conversions.fromProto(protoValue)
+        }
+      case _ => Left(s"Wrong value type for edge output result: " + v)
+    }
+  }
+
+  def writeEndpointPath(id: EndpointPath): TypeValue = {
+    BytesVal(ValueConversions.toProto(id).toByteArray)
+  }
+  def readEndpointPath(v: TypeValue): Either[String, EndpointPath] = {
+    v match {
+      case b: BytesVal =>
+        parse(b.v, proto.EndpointPath.parseFrom).flatMap { protoValue =>
+          ValueConversions.fromProto(protoValue)
+        }
+      case _ => Left(s"Wrong value type for edge output result: " + v)
     }
   }
 }

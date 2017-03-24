@@ -20,28 +20,17 @@ package io.greenbus.edge.api.stream.index
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.api.{ EndpointDescriptor, EndpointId }
-import io.greenbus.edge.api.stream.EdgeCodecCommon
+import io.greenbus.edge.api.stream.{ EdgeCodecCommon, EdgeTables }
 import io.greenbus.edge.colset.subscribe._
 import io.greenbus.edge.colset._
-import io.greenbus.edge.colset.gateway.GatewayRouteSource
+import io.greenbus.edge.colset.gateway._
 import io.greenbus.edge.thread.CallMarshaller
 
-/*
-sealed trait ValueUpdate
-case object ValueAbsent extends ValueUpdate
-case object ValueUnresolved extends ValueUpdate
-case object ValueDisconnected extends ValueUpdate
-sealed trait DataValueUpdate extends ValueUpdate
-case class Appended(session: PeerSessionId, values: Seq[AppendSetValue]) extends DataValueUpdate
-case class SetUpdated(session: PeerSessionId, sequence: SequencedTypeValue, value: Set[TypeValue], removed: Set[TypeValue], added: Set[TypeValue]) extends DataValueUpdate
-case class KeyedSetUpdated(session: PeerSessionId, sequence: SequencedTypeValue, value: Map[TypeValue, TypeValue], removed: Set[TypeValue], added: Set[(TypeValue, TypeValue)], modified: Set[(TypeValue, TypeValue)]) extends DataValueUpdate
-
- */
-object Indexer {
+object IndexingSubscriptionManager {
   case class EndpointEntry(id: EndpointId, desc: Option[EndpointDescriptor])
 }
-class Indexer(eventThread: CallMarshaller) extends LazyLogging {
-  import Indexer._
+class IndexingSubscriptionManager(eventThread: CallMarshaller, observer: DescriptorObserver) extends LazyLogging {
+  import IndexingSubscriptionManager._
 
   private val subMgr = new DynamicSubscriptionManager(eventThread)
 
@@ -53,13 +42,17 @@ class Indexer(eventThread: CallMarshaller) extends LazyLogging {
 
   private var descSubscriptionSet = Map.empty[RowId, EndpointEntry]
 
-  private val descDb = new DescriptorDb
+  //private val descDb = new DescriptorObserver
 
   subMgr.update(Set(peerManifestKey))
   subMgr.source.bind(handleEvents)
 
   def connected(sess: PeerSessionId, peer: PeerLinkProxyChannel): Unit = {
     subMgr.connected(sess, peer)
+  }
+
+  private def onDisconnected(): Unit = {
+
   }
 
   private def handleEvents(events: Seq[KeyedUpdate]): Unit = {
@@ -87,19 +80,19 @@ class Indexer(eventThread: CallMarshaller) extends LazyLogging {
 
                   (entry.desc, descOpt) match {
                     case (None, None) =>
-                    case (Some(l), None) => descDb.removed(entry.id)
-                    case (None, Some(r)) => descDb.observed(entry.id, r)
+                    case (Some(l), None) => observer.removed(entry.id)
+                    case (None, Some(r)) => observer.observed(entry.id, r)
                     case (Some(l), Some(r)) =>
                       if (l != r) {
-                        descDb.observed(entry.id, r)
+                        observer.observed(entry.id, r)
                       }
                   }
 
                   descSubscriptionSet += (row -> entry.copy(desc = descOpt))
                 }
-                case ValueAbsent => descDb.removed(entry.id)
-                case ValueUnresolved => descDb.removed(entry.id)
-                case ValueDisconnected => descDb.removed(entry.id)
+                case ValueAbsent => observer.removed(entry.id)
+                case ValueUnresolved => observer.removed(entry.id)
+                case ValueDisconnected => observer.removed(entry.id)
                 case _ => logger.warn(s"Manifest data update was unexpected type: " + update)
               }
             }
@@ -150,7 +143,7 @@ class Indexer(eventThread: CallMarshaller) extends LazyLogging {
     val (alive, removed) = descSubscriptionSet.partition(tup => descriptorRowSet.contains(tup._1))
 
     removed.foreach {
-      case (_, entry) => descDb.removed(entry.id)
+      case (_, entry) => observer.removed(entry.id)
     }
 
     descSubscriptionSet = alive
@@ -166,26 +159,79 @@ class Indexer(eventThread: CallMarshaller) extends LazyLogging {
     val manifestKeySet: Set[SubscriptionKey] = Set(peerManifestKey)
     subMgr.update(manifestKeySet ++ keys)
   }
-
-  private def onDisconnected(): Unit = {
-
-  }
 }
 
-class DescriptorDb {
+class DescriptorObserver extends DescriptorCache {
+
+  private var descMap = Map.empty[EndpointId, EndpointDescriptor]
+
+  def descriptors: Map[EndpointId, EndpointDescriptor] = {
+    descMap
+  }
+
   def observed(id: EndpointId, desc: EndpointDescriptor): Unit = {
-
+    descMap += (id -> desc)
   }
-  def removed(id: EndpointId): Unit = {
 
+  def removed(id: EndpointId): Unit = {
+    descMap -= id
   }
 }
 
-class IndexProducer(routeSource: GatewayRouteSource) {
+class DataKeyIndexSource(cache: DescriptorCache, indexer: DataKeyIndexDb[TypeValue]) extends DynamicTableSource with LazyLogging {
 
-  val handle = routeSource.route(SymbolVal("indexer"))
+  private var rowMap = Map.empty[TypeValue, SetSink]
 
-  //handle.
+  def added(row: TypeValue): BindableRowMgr = {
 
+    val sink = rowMap.getOrElse(row, {
+      val built = new SetSink
+      rowMap += (row -> built)
+      built
+    })
+
+    EdgeCodecCommon.readIndexSpecifier(row) match {
+      case Left(err) => {
+        logger.warn(s"Endpoint index row could not be parsed: $row: $err")
+        sink.update(Set())
+      }
+      case Right(spec) => {
+        val orig = indexer.addSubscription(spec, row)
+        sink.update(orig.map(endPath => EdgeCodecCommon.writeEndpointPath(endPath)))
+      }
+    }
+
+    sink
+  }
+
+  def removed(row: TypeValue): Unit = {
+    indexer.removeTarget(row)
+    rowMap -= row
+  }
+}
+
+class IndexProducer(eventThread: CallMarshaller, routeSource: GatewayRouteSource) {
+
+  private val observer = new DescriptorObserver
+
+  private val dataKeyIndexDb = new DataKeyIndexDb[TypeValue](observer)
+  private val dataKeyIndexSource = new DataKeyIndexSource(observer, dataKeyIndexDb)
+
+  private val indexer = new IndexingSubscriptionManager(eventThread, observer)
+
+  private var sourceOpt = Option.empty[RouteSourceHandle]
+
+  def connected(sess: PeerSessionId, peer: PeerLinkProxyChannel): Unit = {
+    if (sourceOpt.isEmpty) {
+      register(sess, peer)
+    }
+    indexer.connected(sess, peer)
+  }
+
+  private def register(sess: PeerSessionId, peer: PeerLinkProxyChannel): Unit = {
+    val handle = routeSource.route(TypeValueConversions.toTypeValue(sess))
+    handle.dynamicTable(EdgeTables.dataKeyIndexTable, dataKeyIndexSource)
+    sourceOpt = Some(handle)
+  }
 }
 

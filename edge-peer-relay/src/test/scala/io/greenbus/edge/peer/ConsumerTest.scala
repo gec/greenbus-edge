@@ -27,6 +27,7 @@ import io.greenbus.edge.amqp.colset.{ ChannelDescriberImpl, ClientResponseParser
 import io.greenbus.edge.amqp.impl2.AmqpService
 import io.greenbus.edge.api._
 import io.greenbus.edge.api.stream._
+import io.greenbus.edge.api.stream.index.IndexProducer
 import io.greenbus.edge.colset.{ SymbolVal, TextVal }
 import io.greenbus.edge.colset.client.{ ColsetClient, MultiChannelColsetClientImpl }
 import io.greenbus.edge.colset.gateway.GatewayRouteSource
@@ -117,8 +118,8 @@ object ProducerTest extends LazyLogging {
 
     val builder = new EndpointProducerBuilderImpl(EndpointId(Path("my-endpoint")), exe)
 
-    val series1 = builder.seriesDouble(Path("series-double-1"))
-    val kv1 = builder.latestKeyValue(Path("kv-1"))
+    val series1 = builder.seriesDouble(Path("series-double-1"), CommonMetadata(indexes = Map(Path("index1") -> ValueString("value 1"))))
+    val kv1 = builder.latestKeyValue(Path("kv-1"), CommonMetadata(indexes = Map(Path("index1") -> ValueString("value 2"))))
     val event1 = builder.topicEventValue(Path("event-1"))
 
     val out1 = builder.outputStatus(Path("out-1"))
@@ -164,6 +165,31 @@ object ProducerTest extends LazyLogging {
       Thread.sleep(2000)
       i += 1
     }
+  }
+}
+
+object IndexerTest extends LazyLogging {
+
+  def main(args: Array[String]): Unit = {
+
+    val service = AmqpService.build(Some("indexer"))
+
+    val client = Common.client(service, "127.0.0.1", 50001)
+
+    val channel = Await.result(client.openGatewayChannel(), 5000.milliseconds)
+
+    val exe = new Common.ExecutorEventThread("event")
+    val gatewaySource = GatewayRouteSource.build(exe)
+
+    gatewaySource.connect(channel)
+
+    val (session, subChannel) = Await.result(client.openPeerLinkClient(), 5000.milliseconds)
+
+    val producer = new IndexProducer(exe, gatewaySource)
+
+    producer.connected(session, subChannel)
+
+    System.in.read()
   }
 }
 

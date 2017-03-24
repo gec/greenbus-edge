@@ -60,6 +60,7 @@ trait RouteSourceHandle {
   def setRow(id: TableRow): SetEventSink
   def keyedSetRow(id: TableRow): KeyedSetEventSink
   def appendSetRow(id: TableRow, maxBuffered: Int): AppendEventSink
+  def dynamicTable(table: String, source: DynamicTableSource): Unit
 
   def requests: Source[Seq[RouteServiceRequest]]
 
@@ -84,21 +85,62 @@ trait BindableTableMgr {
 
 trait DynamicTableSource {
   def added(row: TypeValue): BindableRowMgr
+  def removed(row: TypeValue): Unit
 }
 
-class DynamicBindableTableMgr extends BindableTableMgr {
+object DynamicBindableTableMgr {
+
+  def sendPair(row: RowId, sender: Sender[RowAppendEvent, Boolean]): (Sender[SetSnapshot, Boolean], Sender[SetDelta, Boolean]) = {
+    val snap = new Sender[SetSnapshot, Boolean] {
+      def send(obj: SetSnapshot, handleResponse: (Try[Boolean]) => Unit): Unit = {
+        sender.send(RowAppendEvent(row, ResyncSnapshot(obj)), handleResponse)
+      }
+    }
+    val delt = new Sender[SetDelta, Boolean] {
+      def send(obj: SetDelta, handleResponse: (Try[Boolean]) => Unit): Unit = {
+        sender.send(RowAppendEvent(row, StreamDelta(obj)), handleResponse)
+      }
+    }
+    (snap, delt)
+  }
+}
+class DynamicBindableTableMgr(route: TypeValue, table: String, source: DynamicTableSource) extends BindableTableMgr {
+
+  private var rows = Map.empty[TypeValue, BindableRowMgr]
+  private var bindingOpt = Option.empty[Sender[RowAppendEvent, Boolean]]
 
   def bind(sender: Sender[RowAppendEvent, Boolean]): Unit = {
-
+    bindingOpt = Some(sender)
   }
 
   def setUpdate(keys: Set[TypeValue]): Unit = {
 
+    val added = keys -- rows.keySet
+    val removed = rows.keySet -- keys
+
+    added.foreach { key =>
+      val rowMgr = source.added(key)
+
+      bindingOpt.foreach { sender =>
+        val (snap, delt) = DynamicBindableTableMgr.sendPair(RowId(route, table, key), sender)
+        rowMgr.bind(snap, delt)
+      }
+
+      // Bind
+      rows += (key -> rowMgr)
+    }
+
+    removed.foreach { row =>
+      rows.get(row).foreach(_.unbind())
+      source.removed(row)
+    }
   }
 
   def unbind(): Unit = {
-
+    rows.foreach(_._2.unbind())
+    rows.keys.foreach(r => source.removed(r))
   }
+
 }
 
 trait BindableRowMgr {
@@ -106,7 +148,7 @@ trait BindableRowMgr {
   def unbind(): Unit
 }
 
-class RouteHandleImpl(eventThread: CallMarshaller, mgr: RouteMgr, reqSrc: Source[Seq[RouteServiceRequest]]) extends RouteSourceHandle {
+class RouteHandleImpl(eventThread: CallMarshaller, route: TypeValue, mgr: RouteMgr, reqSrc: Source[Seq[RouteServiceRequest]]) extends RouteSourceHandle {
   def setRow(id: TableRow): SetEventSink = {
     val bindable = new SetSink
     eventThread.marshal {
@@ -131,6 +173,13 @@ class RouteHandleImpl(eventThread: CallMarshaller, mgr: RouteMgr, reqSrc: Source
     bindable
   }
 
+  def dynamicTable(table: String, source: DynamicTableSource): Unit = {
+    val b = new DynamicBindableTableMgr(route, table, source)
+    eventThread.marshal {
+      mgr.addDynamicTable(table, b)
+    }
+  }
+
   def requests: Source[Seq[RouteServiceRequest]] = reqSrc
 
   def flushEvents(): Unit = {
@@ -144,6 +193,7 @@ object RouteMgr {
 class RouteMgr(route: TypeValue, mgr: SourceMgr, requestSink: Sink[Seq[RouteServiceRequest]]) extends LazyLogging {
   import RouteMgr._
 
+  private var dynamicTables = Map.empty[String, BindableTableMgr]
   private var rows = Map.empty[TableRow, BindableRowMgr]
   private var bindingOpt = Option.empty[Binding]
 
@@ -162,6 +212,20 @@ class RouteMgr(route: TypeValue, mgr: SourceMgr, requestSink: Sink[Seq[RouteServ
     }
   }
 
+  def addDynamicTable(table: String, mgr: BindableTableMgr): Unit = {
+    logger.debug(s"Route $route saw dynamic bindable added for table: $table")
+    if (dynamicTables.contains(table)) {
+      throw new IllegalArgumentException(s"Cannot double bind a table: $table for route $route")
+    }
+
+    dynamicTables += (table -> mgr)
+    bindingOpt.foreach { binding =>
+      val rows = binding.subscribed.filter(_.table == table).map(_.rowKey)
+      mgr.bind(binding.buffer.rowSender())
+      mgr.setUpdate(rows)
+    }
+  }
+
   def subscriptionUpdate(subbed: Set[TableRow]): Unit = {
     logger.debug(s"Route $route subscription update: $subbed")
     bindingOpt.foreach { binding =>
@@ -172,12 +236,30 @@ class RouteMgr(route: TypeValue, mgr: SourceMgr, requestSink: Sink[Seq[RouteServ
 
       logger.trace(s"added: $added")
       logger.trace(s"removed: $removed")
-      removed.flatMap(rows.get).foreach(_.unbind())
-      added.foreach { row =>
+
+      val (removeDynamic, removeStatic) = removed.partition(tr => dynamicTables.contains(tr.table))
+
+      removeStatic.flatMap(rows.get).foreach(_.unbind())
+      val dynTablesWithRemoves = removeDynamic.map(_.table)
+
+      val (addedDynamic, addedStatic) = added.partition(tr => dynamicTables.contains(tr.table))
+
+      addedStatic.foreach { row =>
         val rowId = row.toRowId(route)
         rows.get(row).foreach { mgr =>
           mgr.bind(binding.buffer.snapshotSender(rowId), binding.buffer.deltaSender(rowId))
         }
+      }
+
+      val dynTablesWithAdds = addedDynamic.map(_.table)
+
+      val dynTablesChanged = dynTablesWithRemoves ++ dynTablesWithAdds
+
+      val subbedDynChanged = subbed.filter(tr => dynTablesChanged.contains(tr.table))
+      val dynChangedByTable = subbedDynChanged.groupBy(_.table)
+      dynChangedByTable.foreach {
+        case (table, trs) =>
+          dynamicTables.get(table).foreach(mgr => mgr.setUpdate(trs.map(_.rowKey)))
       }
 
       bindingOpt = Some(binding.copy(subscribed = subbed))
@@ -201,6 +283,7 @@ class RouteMgr(route: TypeValue, mgr: SourceMgr, requestSink: Sink[Seq[RouteServ
     logger.debug(s"Route $route unbound")
     bindingOpt = None
     rows.values.foreach(_.unbind())
+    dynamicTables.foreach(_._2.unbind())
   }
 
 }
@@ -230,7 +313,7 @@ class SourceMgr(eventThread: CallMarshaller) extends GatewayRouteSource with Laz
     eventThread.marshal {
       onRouteSourced(route, mgr)
     }
-    new RouteHandleImpl(eventThread, mgr, requestDist)
+    new RouteHandleImpl(eventThread, route, mgr, requestDist)
   }
 
   private def onRouteSourced(route: TypeValue, mgr: RouteMgr): Unit = {

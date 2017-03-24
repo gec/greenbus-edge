@@ -192,3 +192,8 @@ message OutputResult {
         OutputFailure failure = 2;
     }
 }
+
+message IndexSpecifier {
+    Path key = 1;
+    IndexableValue value = 2;
+}
