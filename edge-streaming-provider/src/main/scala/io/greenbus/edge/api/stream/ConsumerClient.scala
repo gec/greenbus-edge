@@ -135,6 +135,8 @@ trait GenEdgeTypeSubMgr extends EdgeUpdateSubjectImpl with LazyLogging {
 
 trait GenAppendSubMgr extends GenEdgeTypeSubMgr with LazyLogging {
 
+  def latest: Boolean
+
   def fromTypeValue(v: TypeValue): Either[String, Data]
 
   private def handleValue(v: Data): Set[EdgeUpdateQueue] = {
@@ -156,16 +158,36 @@ trait GenAppendSubMgr extends GenEdgeTypeSubMgr with LazyLogging {
   protected def handleData(dataUpdate: DataValueUpdate): Set[EdgeUpdateQueue] = {
     dataUpdate match {
       case ap: Appended => {
-        // TODO: this is only for latest key value!
-        ap.values.lastOption.map { last =>
-          fromTypeValue(last.value) match {
-            case Left(str) =>
-              logger.warn(s"Could not extract data value for $logId: $str")
-              Set.empty[EdgeUpdateQueue]
-            case Right(desc) =>
-              handleValue(desc)
+        // TODO: don't pass dirtiness awareness onto handleValue() when it can be called multiple times
+        if (latest) {
+          ap.values.lastOption.map { last =>
+            fromTypeValue(last.value) match {
+              case Left(str) =>
+                logger.warn(s"Could not extract data value for $logId: $str")
+                Set.empty[EdgeUpdateQueue]
+              case Right(desc) =>
+                handleValue(desc)
+            }
+          }.getOrElse(Set())
+        } else {
+
+          var dirty = false
+          ap.values.foreach { append =>
+            fromTypeValue(append.value) match {
+              case Left(str) =>
+                logger.warn(s"Could not extract data value for $logId: $str")
+              case Right(desc) =>
+                handleValue(desc)
+                dirty = true
+            }
           }
-        }.getOrElse(Set())
+
+          if (dirty) {
+            observers
+          } else {
+            Set()
+          }
+        }
       }
       case _ =>
         logger.warn(s"Wrong value update type for $logId: $dataUpdate")
@@ -179,6 +201,8 @@ class EndpointDescSubMgr(id: EndpointId) extends GenAppendSubMgr {
   protected type Data = EndpointDescriptor
 
   protected def logId: String = id.toString
+
+  def latest: Boolean = true
 
   def toUpdate(v: EdgeDataStatus[EndpointDescriptor]): IdentifiedEdgeUpdate = IdEndpointUpdate(id, v)
 
@@ -194,6 +218,8 @@ class AppendDataKeySubMgr(id: EndpointPath, codec: AppendDataKeyCodec) extends G
   protected type Data = EdgeSequenceDataKeyValue
 
   protected def logId: String = id.toString
+
+  def latest: Boolean = codec.latest
 
   def toUpdate(v: EdgeDataStatus[EdgeSequenceDataKeyValue]): IdentifiedEdgeUpdate = {
     IdDataKeyUpdate(id, v)
@@ -250,6 +276,8 @@ class OutputStatusSubMgr(id: EndpointPath) extends GenAppendSubMgr {
   protected type Data = OutputKeyStatus
 
   protected def logId: String = id.toString
+
+  def latest: Boolean = true
 
   def toUpdate(v: EdgeDataStatus[OutputKeyStatus]): IdentifiedEdgeUpdate = {
     IdOutputKeyUpdate(id, v)
@@ -420,7 +448,7 @@ object SubscriptionBuilder {
       this
     }
     def keyValue(path: EndpointPath): SubscriptionBuilder = {
-      keys += ((path, AppendDataKeyCodec.KeyValueCodec))
+      keys += ((path, AppendDataKeyCodec.LatestKeyValueCodec))
       this
     }
     def topicEvent(path: EndpointPath): SubscriptionBuilder = {

@@ -56,6 +56,8 @@ object AppendDataKeyCodec {
 
   object SeriesCodec extends AppendDataKeyCodec {
 
+    def latest: Boolean = false
+
     def dataKeyToRow(endpointPath: EndpointPath): RowId = {
       EdgeCodecCommon.keyRowId(endpointPath, EdgeTables.timeSeriesValueTable)
     }
@@ -80,7 +82,9 @@ object AppendDataKeyCodec {
     }
   }
 
-  object KeyValueCodec extends AppendDataKeyCodec {
+  object LatestKeyValueCodec extends AppendDataKeyCodec {
+
+    def latest: Boolean = true
 
     def dataKeyToRow(endpointPath: EndpointPath): RowId = {
       EdgeCodecCommon.keyRowId(endpointPath, EdgeTables.latestKeyValueTable)
@@ -93,6 +97,8 @@ object AppendDataKeyCodec {
   }
 
   object TopicEventCodec extends AppendDataKeyCodec {
+
+    def latest: Boolean = false
 
     def dataKeyToRow(endpointPath: EndpointPath): RowId = {
       EdgeCodecCommon.keyRowId(endpointPath, EdgeTables.eventTopicValueTable)
@@ -120,6 +126,7 @@ object AppendDataKeyCodec {
 }
 trait AppendDataKeyCodec extends EdgeDataKeyCodec {
   def fromTypeValue(v: TypeValue): Either[String, EdgeSequenceDataKeyValue]
+  def latest: Boolean
 }
 
 object AppendOutputKeyCodec extends AppendOutputKeyCodec {
