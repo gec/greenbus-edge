@@ -205,6 +205,12 @@ class DataKeyIndexSource(cache: DescriptorCache, indexer: DataKeyIndexDb[TypeVal
   }
 }
 
+object IndexProducer {
+
+  def routeForSession(sess: PeerSessionId): TypeValue = {
+    TupleVal(Seq(TypeValueConversions.toTypeValue(sess), SymbolVal("edm.indexer")))
+  }
+}
 class IndexProducer(eventThread: CallMarshaller, routeSource: GatewayRouteSource) {
 
   private val observer = new DescriptorObserver
@@ -224,7 +230,7 @@ class IndexProducer(eventThread: CallMarshaller, routeSource: GatewayRouteSource
   }
 
   private def register(sess: PeerSessionId, peer: PeerLinkProxyChannel): Unit = {
-    val handle = routeSource.route(TypeValueConversions.toTypeValue(sess))
+    val handle = routeSource.route(IndexProducer.routeForSession(sess))
     handle.dynamicTable(EdgeTables.dataKeyIndexTable, dataKeyIndexSource)
     sourceOpt = Some(handle)
   }

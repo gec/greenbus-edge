@@ -123,6 +123,17 @@ case class BytesVal(v: Array[Byte]) extends TypeValueDecl(BytesDesc) with Ordere
   }
 
   def simpleString(): String = s"Bytes[${v.length}]"
+
+  override def equals(r: Any): Boolean = {
+    r match {
+      case rv: BytesVal => util.Arrays.equals(v, rv.v)
+      case _ => false
+    }
+  }
+
+  override def hashCode(): Int = {
+    util.Arrays.hashCode(v)
+  }
 }
 
 case object UuidDesc extends FinalTypeDesc

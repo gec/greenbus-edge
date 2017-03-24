@@ -22,6 +22,7 @@ import io.greenbus.edge.api._
 import io.greenbus.edge.api.proto.convert.{ Conversions, OutputConversions, ValueConversions }
 import io.greenbus.edge.colset._
 import io.greenbus.edge.api.proto
+import io.greenbus.edge.api.stream.index.IndexProducer
 import io.greenbus.edge.colset.subscribe.{ KeyedSetUpdated, PeerBasedSubKey, SetUpdated, SubscriptionKey }
 import io.greenbus.edge.util.EitherUtil
 
@@ -408,7 +409,7 @@ object EdgeCodecCommon {
   }
 
   private def indexSubKey(spec: IndexSpecifier, table: String): SubscriptionKey = {
-    PeerBasedSubKey(sess => RowId(TypeValueConversions.toTypeValue(sess), table, writeIndexSpecifier(spec)))
+    PeerBasedSubKey(sess => RowId(IndexProducer.routeForSession(sess), table, writeIndexSpecifier(spec)))
   }
 
   def dataKeyIndexSpecToSubKey(spec: IndexSpecifier): SubscriptionKey = {
