@@ -37,6 +37,7 @@ object EdgeTables {
 
   val outputTable = "edm.output"
 
+  val endpointPrefixTable = "edm.prefix.endpoint"
   val endpointIndexTable = "edm.index.endpoint"
   val dataKeyIndexTable = "edm.index.datakey"
   val outputKeyIndexTable = "edm.index.outputkey"
@@ -371,7 +372,7 @@ object EdgeCodecCommon {
         parse(b.v, proto.OutputRequest.parseFrom).flatMap { protoValue =>
           OutputConversions.fromProto(protoValue)
         }
-      case _ => Left(s"Wrong value type for edge output result: " + v)
+      case _ => Left(s"Wrong value type for edge output request: " + v)
     }
   }
 
@@ -391,7 +392,7 @@ object EdgeCodecCommon {
         parse(b.v, proto.IndexSpecifier.parseFrom).flatMap { protoValue =>
           Conversions.fromProto(protoValue)
         }
-      case _ => Left(s"Wrong value type for edge output result: " + v)
+      case _ => Left(s"Wrong value type for index specifier: " + v)
     }
   }
 
@@ -404,7 +405,20 @@ object EdgeCodecCommon {
         parse(b.v, proto.EndpointPath.parseFrom).flatMap { protoValue =>
           ValueConversions.fromProto(protoValue)
         }
-      case _ => Left(s"Wrong value type for edge output result: " + v)
+      case _ => Left(s"Wrong value type for EndpointPath: " + v)
+    }
+  }
+
+  def writeEndpointIdProto(id: EndpointId): TypeValue = {
+    BytesVal(ValueConversions.toProto(id).toByteArray)
+  }
+  def readEndpointIdProto(v: TypeValue): Either[String, EndpointId] = {
+    v match {
+      case b: BytesVal =>
+        parse(b.v, proto.EndpointId.parseFrom).flatMap { protoValue =>
+          ValueConversions.fromProto(protoValue)
+        }
+      case _ => Left(s"Wrong value type for EndpointId: " + v)
     }
   }
 
@@ -412,6 +426,9 @@ object EdgeCodecCommon {
     PeerBasedSubKey(sess => RowId(IndexProducer.routeForSession(sess), table, writeIndexSpecifier(spec)))
   }
 
+  def endpointPrefixToSubKey(path: Path): SubscriptionKey = {
+    PeerBasedSubKey(sess => RowId(IndexProducer.routeForSession(sess), EdgeTables.endpointPrefixTable, writePath(path)))
+  }
   def endpointIndexSpecToSubKey(spec: IndexSpecifier): SubscriptionKey = {
     indexSubKey(spec, EdgeTables.endpointIndexTable)
   }

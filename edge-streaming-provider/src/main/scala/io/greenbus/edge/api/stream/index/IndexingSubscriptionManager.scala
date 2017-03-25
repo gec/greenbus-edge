@@ -232,6 +232,55 @@ class IndexSource[A](cache: DescriptorCache, indexer: TypedIndexDb[A, TypeValue]
   }
 }
 
+class EndpointSetSource extends DynamicTableSource with DescriptorObserver with LazyLogging {
+
+  private var endpointSet = Map.empty[EndpointId, TypeValue]
+  private var renderedSet = Set.empty[TypeValue]
+  private var subMap = Map.empty[TypeValue, SetSink]
+  private var sinkSet = Set.empty[SetSink]
+
+  def added(row: TypeValue): BindableRowMgr = {
+
+    val sink = subMap.getOrElse(row, {
+      val built = new SetSink
+      subMap += (row -> built)
+      built
+    })
+    sinkSet += sink
+
+    sink.update(renderedSet)
+    sink
+  }
+
+  def removed(row: TypeValue): Unit = {
+    subMap.get(row).foreach { sink =>
+      sinkSet -= sink
+    }
+    subMap -= row
+  }
+
+  def observed(id: EndpointId, desc: EndpointDescriptor): Unit = {
+    if (!endpointSet.contains(id)) {
+      val rendered = EdgeCodecCommon.writeEndpointId(id)
+      endpointSet += (id -> rendered)
+      renderedSet += rendered
+
+      sinkSet.foreach(_.update(renderedSet))
+    }
+  }
+
+  def removed(id: EndpointId): Unit = {
+    if (endpointSet.contains(id)) {
+      endpointSet.get(id).foreach { rendered =>
+        renderedSet -= rendered
+      }
+      endpointSet -= id
+
+      sinkSet.foreach(_.update(renderedSet))
+    }
+  }
+}
+
 object IndexProducer {
 
   def routeForSession(sess: PeerSessionId): TypeValue = {
@@ -241,6 +290,8 @@ object IndexProducer {
 class IndexProducer(eventThread: CallMarshaller, routeSource: GatewayRouteSource) {
 
   private val observer = new NotifyingDescriptorCache(handleUpdate)
+
+  private val endpointSetSource = new EndpointSetSource
 
   private val endpointIndexDb = new EndpointIndexDb[TypeValue](observer)
   private val endpointIndexSource = new IndexSource[EndpointId](observer, endpointIndexDb, EdgeCodecCommon.writeEndpointId)
@@ -256,6 +307,7 @@ class IndexProducer(eventThread: CallMarshaller, routeSource: GatewayRouteSource
   private var sourceOpt = Option.empty[RouteSourceHandle]
 
   private def handleUpdate(id: EndpointId, desc: EndpointDescriptor): Unit = {
+    endpointSetSource.observed(id, desc)
     endpointIndexSource.observed(id, desc)
     dataKeyIndexSource.observed(id, desc)
     outputKeyIndexSource.observed(id, desc)
@@ -271,6 +323,7 @@ class IndexProducer(eventThread: CallMarshaller, routeSource: GatewayRouteSource
 
   private def register(sess: PeerSessionId, peer: PeerLinkProxyChannel): Unit = {
     val handle = routeSource.route(IndexProducer.routeForSession(sess))
+    handle.dynamicTable(EdgeTables.endpointPrefixTable, endpointSetSource)
     handle.dynamicTable(EdgeTables.endpointIndexTable, endpointIndexSource)
     handle.dynamicTable(EdgeTables.dataKeyIndexTable, dataKeyIndexSource)
     handle.dynamicTable(EdgeTables.outputKeyIndexTable, outputKeyIndexSource)
