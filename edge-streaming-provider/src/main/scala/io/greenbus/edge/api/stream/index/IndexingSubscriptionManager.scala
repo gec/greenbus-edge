@@ -187,7 +187,7 @@ class IndexSource[A](cache: DescriptorCache, indexer: TypedIndexDb[A, TypeValue]
   def added(row: TypeValue): BindableRowMgr = {
 
     val sink = rowMap.getOrElse(row, {
-      val built = new SetSink
+      val built = new SetSink(SequenceCtx.empty)
       rowMap += (row -> built)
       built
     })
@@ -242,7 +242,7 @@ class EndpointSetSource extends DynamicTableSource with DescriptorObserver with 
   def added(row: TypeValue): BindableRowMgr = {
 
     val sink = subMap.getOrElse(row, {
-      val built = new SetSink
+      val built = new SetSink(SequenceCtx.empty)
       subMap += (row -> built)
       built
     })

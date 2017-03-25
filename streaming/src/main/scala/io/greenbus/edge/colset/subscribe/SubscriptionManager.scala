@@ -20,7 +20,7 @@ package io.greenbus.edge.colset.subscribe
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.colset._
-import io.greenbus.edge.colset.gateway.MapDiff
+import io.greenbus.edge.colset.gateway.MapDiffCalc
 import io.greenbus.edge.flow._
 import io.greenbus.edge.thread.CallMarshaller
 
@@ -31,235 +31,198 @@ case object ValueAbsent extends ValueUpdate
 case object ValueUnresolved extends ValueUpdate
 case object ValueDisconnected extends ValueUpdate
 sealed trait DataValueUpdate extends ValueUpdate
-case class Appended(session: PeerSessionId, values: Seq[AppendSetValue]) extends DataValueUpdate
-case class SetUpdated(session: PeerSessionId, sequence: SequencedTypeValue, value: Set[TypeValue], removed: Set[TypeValue], added: Set[TypeValue]) extends DataValueUpdate
-case class KeyedSetUpdated(session: PeerSessionId, sequence: SequencedTypeValue, value: Map[TypeValue, TypeValue], removed: Set[TypeValue], added: Set[(TypeValue, TypeValue)], modified: Set[(TypeValue, TypeValue)]) extends DataValueUpdate
+case class Appended(values: Seq[AppendValue]) extends DataValueUpdate
+case class SetUpdated(value: Set[TypeValue], removed: Set[TypeValue], added: Set[TypeValue]) extends DataValueUpdate
+case class KeyedSetUpdated(value: Map[TypeValue, TypeValue], removed: Set[TypeValue], added: Set[(TypeValue, TypeValue)], modified: Set[(TypeValue, TypeValue)]) extends DataValueUpdate
 
 case class RowUpdate(row: RowId, update: ValueUpdate)
 
-object ConsumerSetFilter extends LazyLogging {
-  def build(session: PeerSessionId, snap: SetSnapshot, prev: Option[ConsumerSetFilter]): Option[(ConsumerSetFilter, DataValueUpdate)] = {
-    snap match {
-      case s: ModifiedSetSnapshot =>
-        val prevValueOpt = prev.flatMap {
-          case f: ModifiedSetConsumerFilter => Some(f.latest)
-          case _ => None
-        }
-        val filter = new ModifiedSetConsumerFilter(session, s, prevValueOpt)
-        Some((filter, filter.first))
-      case s: ModifiedKeyedSetSnapshot =>
-        val prevValueOpt = prev.flatMap {
-          case f: ModifiedKeyedSetConsumerFilter => Some(f.latest)
-          case _ => None
-        }
-        val filter = new ModifiedKeyedSetConsumerFilter(session, s, prevValueOpt)
-        Some((filter, filter.first))
-      case s: AppendSetSequence =>
-        if (s.appends.nonEmpty) {
-          val filter = new AppendSetConsumerFilter(session, s)
-          Some((filter, filter.first))
-        } else {
-          logger.warn(s"Append set filter tried to initialize with and empty sequence")
-          None
-        }
-    }
-  }
-}
-trait ConsumerSetFilter {
-  def delta(delta: SetDelta): Option[ValueUpdate]
-  def snapshot(snapshot: SetSnapshot): Option[ValueUpdate]
+trait UpdateSynthesizer {
+  def delta(delta: Delta): Option[ValueUpdate]
+  def resync(resync: Resync): Option[ValueUpdate]
 }
 
-class ModifiedSetConsumerFilter(session: PeerSessionId, start: ModifiedSetSnapshot, prevOpt: Option[Set[TypeValue]]) extends ConsumerSetFilter with LazyLogging {
+class SetUpdateSynthesizer(orig: Set[TypeValue]) extends UpdateSynthesizer with LazyLogging {
 
-  private var seq: SequencedTypeValue = start.sequence
-  private var current = start.snapshot
+  private var current: Set[TypeValue] = orig
 
-  def latest: Set[TypeValue] = current
+  def delta(delta: Delta): Option[ValueUpdate] = {
 
-  def first: DataValueUpdate = {
-    prevOpt match {
-      case None => SetUpdated(session, start.sequence, start.snapshot, Set(), start.snapshot)
-      case Some(prev) =>
-        val removed = prev -- start.snapshot
-        val added = start.snapshot -- prev
-        SetUpdated(session, start.sequence, start.snapshot, removed, added)
-    }
-  }
+    val start = current
 
-  def delta(delta: SetDelta): Option[ValueUpdate] = {
-    delta match {
-      case d: ModifiedSetDelta => {
-        if (seq.precedes(d.sequence)) {
+    delta.diffs.foreach { seqDiff =>
+      seqDiff.diff match {
+        case d: SetDiff =>
           val updated = (current -- d.removes) ++ d.adds
           current = updated
-          seq = d.sequence
-          Some(SetUpdated(session, d.sequence, updated, d.removes, d.adds))
-        } else {
+        case _ =>
+          logger.warn(s"Incorrect diff type in consumer filter: " + seqDiff.diff)
           None
-        }
       }
-      case _ =>
-        logger.warn(s"Incorrect delta type in consumer filter: " + delta)
-        None
     }
-  }
 
-  def snapshot(snapshot: SetSnapshot): Option[ValueUpdate] = {
-    snapshot match {
-      case d: ModifiedSetSnapshot => {
-        if (seq.isLessThan(d.sequence).contains(true)) {
-
-          val added = d.snapshot -- current
-          val removed = current -- d.snapshot
-
-          current = d.snapshot
-          seq = d.sequence
-
-          if (added.nonEmpty || removed.nonEmpty) {
-            Some(SetUpdated(session, d.sequence, d.snapshot, removed, added))
-          } else {
-            None
-          }
-        } else {
-          None
-        }
-      }
-      case _ =>
-        logger.warn(s"Incorrect snapshot type in consumer filter: " + snapshot)
-        None
-    }
-  }
-}
-
-class ModifiedKeyedSetConsumerFilter(session: PeerSessionId, start: ModifiedKeyedSetSnapshot, prevOpt: Option[Map[TypeValue, TypeValue]]) extends ConsumerSetFilter with LazyLogging {
-
-  private var seq: SequencedTypeValue = start.sequence
-  private var current = start.snapshot
-
-  def latest: Map[TypeValue, TypeValue] = current
-
-  def first: DataValueUpdate = {
-    prevOpt match {
-      case None => KeyedSetUpdated(session, start.sequence, start.snapshot, Set(), start.snapshot.toVector.toSet, Set())
-      case Some(prev) =>
-        val (removed, added, modified) = MapDiff.calculate(start.snapshot, prev)
-        KeyedSetUpdated(session, start.sequence, start.snapshot, removed, added, modified)
-    }
-  }
-
-  def delta(delta: SetDelta): Option[ValueUpdate] = {
-    delta match {
-      case d: ModifiedKeyedSetDelta => {
-        if (seq.precedes(d.sequence)) {
-          val updated = (current -- d.removes) ++ d.adds ++ d.modifies
-          current = updated
-          seq = d.sequence
-          Some(KeyedSetUpdated(session, d.sequence, updated, d.removes, d.adds, d.modifies))
-        } else {
-          None
-        }
-      }
-      case _ =>
-        logger.warn(s"Incorrect delta type in consumer filter: " + delta)
-        None
-    }
-  }
-
-  def snapshot(snapshot: SetSnapshot): Option[ValueUpdate] = {
-    snapshot match {
-      case d: ModifiedKeyedSetSnapshot => {
-        if (seq.isLessThan(d.sequence).contains(true)) {
-
-          val (removed, added, modified) = MapDiff.calculate(d.snapshot, current)
-
-          current = d.snapshot
-          seq = d.sequence
-
-          if (added.nonEmpty || removed.nonEmpty || modified.nonEmpty) {
-            Some(KeyedSetUpdated(session, d.sequence, d.snapshot, removed, added, modified))
-          } else {
-            None
-          }
-        } else {
-          None
-        }
-      }
-      case _ =>
-        logger.warn(s"Incorrect snapshot type in consumer filter: " + snapshot)
-        None
-    }
-  }
-}
-
-class AppendSetConsumerFilter(session: PeerSessionId, start: AppendSetSequence) extends ConsumerSetFilter with LazyLogging {
-
-  private var seq: SequencedTypeValue = start.appends.last.sequence
-
-  def sequence: SequencedTypeValue = seq
-
-  def first: DataValueUpdate = {
-    Appended(session, start.appends)
-  }
-
-  private def handleSequence(d: AppendSetSequence): Option[ValueUpdate] = {
-    if (d.appends.nonEmpty) {
-
-      val b = Vector.newBuilder[AppendSetValue]
-      d.appends.foreach { app =>
-        if (seq.precedes(app.sequence)) {
-          b += app
-          seq = app.sequence
-        }
-      }
-      val filtered = b.result()
-      if (filtered.nonEmpty) {
-        Some(Appended(session, filtered))
-      } else {
-        None
-      }
+    val adds = current -- start
+    val removes = start -- current
+    if (removes.nonEmpty || adds.nonEmpty) {
+      Some(SetUpdated(current, removes, adds))
     } else {
       None
     }
   }
 
-  def delta(delta: SetDelta): Option[ValueUpdate] = {
-    delta match {
-      case d: AppendSetSequence => handleSequence(d)
+  def resync(resync: Resync): Option[ValueUpdate] = {
+    resync.snapshot match {
+      case d: SetSnapshot => {
+        val added = d.snapshot -- current
+        val removed = current -- d.snapshot
+        current = d.snapshot
+
+        if (added.nonEmpty || removed.nonEmpty) {
+          Some(SetUpdated(d.snapshot, removed, added))
+        } else {
+          None
+        }
+      }
       case _ =>
-        logger.warn(s"Incorrect delta type in consumer filter: " + delta)
+        logger.warn(s"Incorrect snapshot type in consumer filter: " + resync)
         None
     }
   }
+}
+class MapUpdateSynthesizer(orig: Map[TypeValue, TypeValue]) extends UpdateSynthesizer with LazyLogging {
 
-  def snapshot(snapshot: SetSnapshot): Option[ValueUpdate] = {
-    snapshot match {
-      case d: AppendSetSequence => handleSequence(d)
+  private var current: Map[TypeValue, TypeValue] = orig
+
+  def delta(delta: Delta): Option[ValueUpdate] = {
+
+    val start = current
+
+    delta.diffs.foreach { seqDiff =>
+      seqDiff.diff match {
+        case d: MapDiff =>
+          val updated = (current -- d.removes) ++ d.adds ++ d.modifies
+          current = updated
+        case _ =>
+          logger.warn(s"Incorrect diff type in consumer filter: " + seqDiff.diff)
+          None
+      }
+    }
+
+    val (removed, added, modified) = MapDiffCalc.calculate(start, current)
+
+    if (removed.nonEmpty || added.nonEmpty || modified.nonEmpty) {
+      Some(KeyedSetUpdated(current, removed, added, modified))
+    } else {
+      None
+    }
+  }
+
+  def resync(resync: Resync): Option[ValueUpdate] = {
+    resync.snapshot match {
+      case d: MapSnapshot => {
+        val (removed, added, modified) = MapDiffCalc.calculate(current, d.snapshot)
+        current = d.snapshot
+
+        if (removed.nonEmpty || added.nonEmpty || modified.nonEmpty) {
+          Some(KeyedSetUpdated(current, removed, added, modified))
+        } else {
+          None
+        }
+      }
       case _ =>
-        logger.warn(s"Incorrect snapshot type in consumer filter: " + snapshot)
+        logger.warn(s"Incorrect snapshot type in consumer filter: " + resync)
         None
+    }
+  }
+}
+
+object AppendUpdateSynthesizer {
+
+  def diffToAppend(v: SequenceTypeDiff): Option[AppendValue] = {
+    v match {
+      case v: AppendValue => Some(v)
+      case _ => None
+    }
+  }
+
+  def snapToAppends(v: AppendSnapshot): Seq[AppendValue] = {
+    val prevs = v.previous.flatMap { seqDiff =>
+      diffToAppend(seqDiff.diff)
+    }
+
+    prevs ++ diffToAppend(v.current.diff).map(Seq(_)).getOrElse(Seq())
+  }
+}
+class AppendUpdateSynthesizer extends UpdateSynthesizer with LazyLogging {
+  import AppendUpdateSynthesizer._
+
+  def delta(delta: Delta): Option[ValueUpdate] = {
+
+    val values = delta.diffs.flatMap { seqDiff =>
+      diffToAppend(seqDiff.diff)
+    }
+
+    if (values.nonEmpty) {
+      Some(Appended(values))
+    } else {
+      None
+    }
+  }
+
+  def resync(resync: Resync): Option[ValueUpdate] = {
+    resync.snapshot match {
+      case v: AppendSnapshot =>
+
+        val all = snapToAppends(v)
+
+        if (all.nonEmpty) {
+          Some(Appended(all))
+        } else {
+          None
+        }
+
+      case _ =>
+        logger.warn(s"Incorrect snapshot type in consumer filter: " + resync)
+        None
+    }
+  }
+}
+
+class ConsumerUpdateFilter(cid: String, resync: ResyncSession, updates: UpdateSynthesizer) {
+
+  private val filter = new GenInitializedStreamFilter(cid, resync)
+
+  def handle(event: AppendEvent): Option[ValueUpdate] = {
+    filter.handle(event).flatMap {
+      case sd: StreamDelta => updates.delta(sd.update)
+      case rs: ResyncSnapshot => updates.resync(rs.resync)
+      case rss: ResyncSession => updates.resync(rss.resync)
     }
   }
 }
 
 class RowFilterImpl extends RowFilter with LazyLogging {
 
-  private var activeFilterOpt = Option.empty[ConsumerSetFilter]
+  private var activeFilterOpt = Option.empty[ConsumerUpdateFilter]
 
   def handle(event: AppendEvent): Option[ValueUpdate] = {
     event match {
-      case ev: StreamDelta => activeFilterOpt.flatMap(_.delta(ev.update))
-      case ev: ResyncSnapshot => activeFilterOpt.flatMap(_.snapshot(ev.snapshot))
+      case ev: StreamDelta => activeFilterOpt.flatMap(_.handle(ev))
+      case ev: ResyncSnapshot => activeFilterOpt.flatMap(_.handle(ev))
       case ev: ResyncSession => {
-        val nextOpt = ConsumerSetFilter.build(ev.sessionId, ev.snapshot, activeFilterOpt)
-        nextOpt match {
-          case None =>
-            logger.warn(s"Could not create consumer filter for: $ev")
-            None
-          case Some((next, update)) =>
-            activeFilterOpt = Some(next)
-            Some(update)
+
+        val (update, updateFilter) = ev.resync.snapshot match {
+          case s: SetSnapshot => (SetUpdated(s.snapshot, Set(), Set()), new SetUpdateSynthesizer(s.snapshot))
+          case s: MapSnapshot => (KeyedSetUpdated(s.snapshot, Set(), Set(), Set()), new MapUpdateSynthesizer(s.snapshot))
+          case s: AppendSnapshot =>
+            val all = AppendUpdateSynthesizer.snapToAppends(s)
+            (Appended(all), new AppendUpdateSynthesizer)
         }
+
+        val filter = new ConsumerUpdateFilter("", ev, updateFilter)
+        activeFilterOpt = Some(filter)
+
+        Some(update)
       }
     }
   }

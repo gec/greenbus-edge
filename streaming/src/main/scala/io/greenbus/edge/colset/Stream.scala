@@ -18,49 +18,64 @@
  */
 package io.greenbus.edge.colset
 
-import java.util.UUID
+sealed trait SequenceTypeDiff
 
-import io.greenbus.edge.collection.MapSetBuilder
+case class SetDiff(removes: Set[TypeValue], adds: Set[TypeValue]) extends SequenceTypeDiff
+case class MapDiff(removes: Set[TypeValue], adds: Set[(TypeValue, TypeValue)], modifies: Set[(TypeValue, TypeValue)]) extends SequenceTypeDiff
+case class AppendValue(value: TypeValue) extends SequenceTypeDiff
 
-case class PeerSessionId(persistenceId: UUID, instanceId: Long)
+sealed trait SequenceSnapshot
 
-trait SetDelta
-trait SetSnapshot
+case class SetSnapshot(snapshot: Set[TypeValue]) extends SequenceSnapshot
+case class MapSnapshot(snapshot: Map[TypeValue, TypeValue]) extends SequenceSnapshot
 
-case class ModifiedSetDelta(sequence: SequencedTypeValue, removes: Set[TypeValue], adds: Set[TypeValue]) extends SetDelta
-case class ModifiedSetSnapshot(sequence: SequencedTypeValue, snapshot: Set[TypeValue]) extends SetSnapshot
-case class ModifiedKeyedSetDelta(sequence: SequencedTypeValue, removes: Set[TypeValue], adds: Set[(TypeValue, TypeValue)], modifies: Set[(TypeValue, TypeValue)]) extends SetDelta
-case class ModifiedKeyedSetSnapshot(sequence: SequencedTypeValue, snapshot: Map[TypeValue, TypeValue]) extends SetSnapshot
-case class AppendSetValue(sequence: SequencedTypeValue, value: TypeValue)
-case class AppendSetSequence(appends: Seq[AppendSetValue]) extends SetDelta with SetSnapshot
+case class AppendSetValue(sequence: SequencedTypeValue, value: AppendValue)
+case class AppendSnapshot(current: SequencedDiff, previous: Seq[SequencedDiff]) extends SequenceSnapshot
 
+case class SequencedDiff(sequence: SequencedTypeValue, diff: SequenceTypeDiff)
+
+sealed trait SequenceEvent
+case class Delta(diffs: Seq[SequencedDiff]) extends SequenceEvent
+case class Resync(sequence: SequencedTypeValue, snapshot: SequenceSnapshot) extends SequenceEvent
+
+case class StreamParams()
+
+object SequenceCtx {
+  def empty: SequenceCtx = SequenceCtx(None, None)
+}
+case class SequenceCtx(params: Option[StreamParams], userMetadata: Option[TypeValue])
+
+/*
+CONTROL STREAM VS VALUE SEQUENCE
+
+SequenceEvent(Delta or Resync)
+ControlCtxChangeEvent(session, ctx, resync)
+
+Event(controlOpt, sequenceEvent)
+
+Control:
+
+ResyncControl (full)
+ResyncContext
+
+ */
 sealed trait AppendEvent
-case class StreamDelta(update: SetDelta) extends AppendEvent
-case class ResyncSnapshot(snapshot: SetSnapshot) extends AppendEvent
-case class ResyncSession(sessionId: PeerSessionId, snapshot: SetSnapshot) extends AppendEvent
+case class StreamDelta(update: Delta) extends AppendEvent
+case class ResyncSnapshot(resync: Resync) extends AppendEvent
+case class ResyncSession(sessionId: PeerSessionId, context: SequenceCtx, resync: Resync) extends AppendEvent
 
-object RowId {
-  def setToRouteMap(rows: Set[RowId]): Map[TypeValue, Set[TableRow]] = {
-    val b = MapSetBuilder.newBuilder[TypeValue, TableRow]
-    rows.foreach { row => b += (row.routingKey -> row.tableRow) }
-    b.result()
-  }
-}
-case class RowId(routingKey: TypeValue, table: String, rowKey: TypeValue) {
-  def tableRow: TableRow = TableRow(table, rowKey)
-}
-case class TableRow(table: String, rowKey: TypeValue) {
-  def toRowId(routingKey: TypeValue): RowId = RowId(routingKey, table, rowKey)
-}
-
+// This is "peer event", append event above is stream event
 sealed trait StreamEvent {
-  def routingKey: TypeValue
+  def routingKey: TypeValue // TODO: change to route?
+}
+sealed trait RowEvent extends StreamEvent {
+  def rowId: RowId
+}
+case class RowAppendEvent(rowId: RowId, appendEvent: AppendEvent) extends RowEvent {
+  def routingKey: TypeValue = rowId.routingKey
 }
 
-case class RowAppendEvent(rowId: RowId, appendEvent: AppendEvent) extends StreamEvent {
-  def routingKey = rowId.routingKey
-}
-
-// TODO: rowunavailable event?
+/*case class RowResolvedAbsent(rowId: RowId) extends RowEvent {
+  def routingKey: TypeValue = rowId.routingKey
+}*/
 case class RouteUnresolved(routingKey: TypeValue) extends StreamEvent
-

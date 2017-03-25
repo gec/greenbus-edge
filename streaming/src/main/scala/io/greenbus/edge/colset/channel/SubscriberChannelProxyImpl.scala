@@ -21,8 +21,6 @@ package io.greenbus.edge.colset.channel
 import io.greenbus.edge.colset._
 import io.greenbus.edge.flow._
 
-import scala.util.Try
-
 class SubscriberChannelProxyImpl(
     subChannel: ReceiverChannel[SubscriptionSetUpdate, Boolean],
     eventChannel: SenderChannel[EventBatch, Boolean],

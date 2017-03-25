@@ -19,13 +19,11 @@ message RowId {
     TypeValue row_key = 3;
 }
 
-message ModifiedSetDelta {
-    SequencedTypeValue sequence = 1;
-    repeated TypeValue removes = 2;
-    repeated TypeValue adds = 3;
+message SetDiff {
+    repeated TypeValue removes = 1;
+    repeated TypeValue adds = 2;
 }
-message ModifiedSetSnapshot {
-    SequencedTypeValue sequence = 1;
+message SetSnapshot {
     repeated TypeValue elements = 2;
 }
 
@@ -34,17 +32,16 @@ message TypeValueKeyPair {
     TypeValue value = 2;
 }
 
-message ModifiedKeyedSetDelta {
-    SequencedTypeValue sequence = 1;
-    repeated TypeValue removes = 2;
-    repeated TypeValueKeyPair adds = 3;
-    repeated TypeValueKeyPair modifies = 4;
+message MapDiff {
+    repeated TypeValue removes = 1;
+    repeated TypeValueKeyPair adds = 2;
+    repeated TypeValueKeyPair modifies = 3;
 }
-message ModifiedKeyedSetSnapshot {
-    SequencedTypeValue sequence = 1;
-    repeated TypeValueKeyPair elements = 2;
+message MapSnapshot {
+    repeated TypeValueKeyPair elements = 1;
 }
 
+/*
 message AppendSetValue {
     SequencedTypeValue sequence = 1;
     TypeValue value = 2;
@@ -53,32 +50,61 @@ message AppendSetValue {
 message AppendSetSequence {
     repeated AppendSetValue values = 1;
 }
+*/
 
-message SetDelta {
+message SequencedDiff {
+    SequencedTypeValue sequence = 1;
+    SeqDiff diff = 2;
+    /*oneof set_types {
+        SetDiff set_diff = 2;
+        MapDiff map_diff = 3;
+        TypeValue append_diff = 4;
+    }*/
+}
+
+message AppendSnapshot {
+    SequencedDiff current = 1;
+    repeated SequencedDiff previous = 2;
+}
+
+
+message SeqDiff {
     oneof set_types {
-        ModifiedSetDelta modified_set_delta = 1;
-        ModifiedKeyedSetDelta modified_keyed_set_delta = 2;
-        AppendSetSequence append_set_sequence = 3;
+        SetDiff set_diff = 1;
+        MapDiff map_diff = 2;
+        TypeValue append_diff = 3;
     }
 }
-message SetSnapshot {
+message SeqSnapshot {
     oneof set_types {
-        ModifiedSetSnapshot modified_set_snapshot = 1;
-        ModifiedKeyedSetSnapshot modified_keyed_set_snapshot = 2;
-        AppendSetSequence append_set_sequence = 3;
+        SetSnapshot set_snapshot = 1;
+        MapSnapshot map_snapshot = 2;
+        AppendSnapshot append_set_sequence = 3;
     }
 }
 
 message StreamDelta {
-    SetDelta update = 1;
+    repeated SequencedDiff updates = 1;
 }
 
 message ResyncSnapshot {
-    SetSnapshot snapshot = 1;
+    SequencedTypeValue sequence = 1;
+    SeqSnapshot snapshot = 2;
 }
 message ResyncSession {
     PeerSessionId session_id = 1;
-    SetSnapshot snapshot = 2;
+    SequenceContext context = 2;
+    SequencedTypeValue sequence = 3;
+    SeqSnapshot snapshot = 4;
+}
+
+message StreamParams {
+    bool placeholder = 1;
+}
+
+message SequenceContext {
+    StreamParams stream_params = 1;
+    TypeValue user_metadata = 2;
 }
 
 message AppendEvent {

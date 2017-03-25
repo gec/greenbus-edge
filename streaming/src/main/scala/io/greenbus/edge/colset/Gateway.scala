@@ -98,8 +98,8 @@ class Gateway(localSession: PeerSessionId) extends LocalGateway with LazyLogging
       }
     }
 
-    val synthesizedEvents = synthesizer.handle(ctx.id, events)
     logger.trace("Synthesized gateway before:" + StreamLogging.logEvents(events))
+    val synthesizedEvents = synthesizer.handle(ctx.id, events)
     logger.trace("Synthesized gateway after:" + StreamLogging.logEvents(synthesizedEvents))
 
     eventDist.push(GatewayEvents(setUpdate, synthesizedEvents))
@@ -130,114 +130,111 @@ class Gateway(localSession: PeerSessionId) extends LocalGateway with LazyLogging
 
 trait GatewayRowSynthesizer {
   def append(event: AppendEvent): Seq[AppendEvent]
-  def current: SequencedTypeValue
+  def currentNextSequence: SequencedTypeValue
 }
 
 object GatewayRowSynthesizerImpl {
 
-  def resequenceAppendEvent(appendEvent: AppendEvent, localSession: PeerSessionId, start: SequencedTypeValue): (AppendEvent, SequencedTypeValue) = {
+  def resequenceAppendEvent(appendEvent: AppendEvent, localSession: PeerSessionId, nextSeqStart: SequencedTypeValue): (AppendEvent, SequencedTypeValue) = {
     appendEvent match {
       case sd: StreamDelta => {
-        val (delta, endSeq) = resequenceDelta(sd.update, start)
-        (StreamDelta(delta), endSeq)
+        val (delta, nextSeq) = resequenceDelta(sd.update, nextSeqStart)
+        (StreamDelta(delta), nextSeq)
       }
       case rs: ResyncSnapshot => {
-        val (snap, endSeq) = resequenceSnapshot(rs.snapshot, start)
-        (ResyncSnapshot(snap), endSeq)
+        val (snap, nextSeq) = resequenceSnapshot(rs.resync, nextSeqStart)
+        (ResyncSnapshot(snap), nextSeq)
       }
       case rss: ResyncSession => {
-        val (snap, endSeq) = resequenceSnapshot(rss.snapshot, start)
-        (ResyncSession(localSession, snap), endSeq)
+        val (snap, nextSeq) = resequenceSnapshot(rss.resync, nextSeqStart)
+        (ResyncSession(localSession, rss.context, snap), nextSeq)
       }
     }
 
   }
 
-  private def resequenceAppendSeq(original: AppendSetSequence, startSequence: SequencedTypeValue): (AppendSetSequence, SequencedTypeValue) = {
+  def resequenceSnapshot(r: Resync, nextSeqStart: SequencedTypeValue): (Resync, SequencedTypeValue) = {
+    val (snap, lastUsed) = r.snapshot match {
+      case _: SetSnapshot => (r.snapshot, nextSeqStart)
+      case _: MapSnapshot => (r.snapshot, nextSeqStart)
+      case snap: AppendSnapshot => {
+
+        var seqVar = nextSeqStart
+        val prevs = snap.previous.map { diff =>
+          val vseq = seqVar
+          seqVar = seqVar.next
+          diff.copy(sequence = vseq)
+        }
+
+        val currentSeq = seqVar
+        val current = snap.current.copy(sequence = currentSeq)
+        (AppendSnapshot(current, prevs), currentSeq)
+      }
+    }
+
+    (r.copy(sequence = lastUsed, snapshot = snap), lastUsed.next)
+  }
+
+  def resequenceDelta(delta: Delta, startSequence: SequencedTypeValue): (Delta, SequencedTypeValue) = {
     var seqVar = startSequence
-    val values = original.appends.map { v =>
+
+    val diffs = delta.diffs.map { diff =>
       val vseq = seqVar
       seqVar = seqVar.next
-      AppendSetValue(vseq, v.value)
+      diff.copy(sequence = vseq)
     }
-    (AppendSetSequence(values), seqVar)
+
+    (Delta(diffs), seqVar)
   }
 
-  def resequenceDelta(delta: SetDelta, seq: SequencedTypeValue): (SetDelta, SequencedTypeValue) = {
-    delta match {
-      case d: ModifiedSetDelta => (d.copy(sequence = seq), seq.next)
-      case d: ModifiedKeyedSetDelta => (d.copy(sequence = seq), seq.next)
-      case d: AppendSetSequence => resequenceAppendSeq(d, seq)
-    }
-  }
-
-  def resequenceSnapshot(snapshot: SetSnapshot, seq: SequencedTypeValue): (SetSnapshot, SequencedTypeValue) = {
-    snapshot match {
-      case d: ModifiedSetSnapshot => (d.copy(sequence = seq), seq.next)
-      case d: ModifiedKeyedSetSnapshot => (d.copy(sequence = seq), seq.next)
-      case d: AppendSetSequence => resequenceAppendSeq(d, seq)
-    }
-  }
+  sealed trait State
+  case object Uninit extends State
+  case class Synced(filter: StreamFilter, ctx: SequenceCtx) extends State
 }
 
 class GatewayRowSynthesizerImpl(row: RowId, peerSession: PeerSessionId, startSequence: SequencedTypeValue) extends GatewayRowSynthesizer with LazyLogging {
   import GatewayRowSynthesizerImpl._
 
-  private var sessionSequence: SequencedTypeValue = startSequence
-  private var filterOpt = Option.empty[SessionSynthesizingFilter]
+  private var nextSequence: SequencedTypeValue = startSequence
 
-  def current: SequencedTypeValue = sessionSequence
+  private var state: State = Uninit
 
-  private def handleSnapshot(snapshot: SetSnapshot): Seq[AppendEvent] = {
-    filterOpt match {
-      case None => {
-        val builtFilterOpt = SessionSynthesizingFilter.build(row, peerSession, snapshot)
-        builtFilterOpt match {
-          case None =>
-            logger.warn(s"Uinitialized gateway synthesizer could not build filter from snapshot: $row")
+  def currentNextSequence: SequencedTypeValue = nextSequence
+
+  def append(event: AppendEvent): Seq[AppendEvent] = {
+    state match {
+      case Uninit => {
+        event match {
+          case resync: ResyncSession => {
+            handleAndReinitialize(resync)
+          }
+          case _ =>
+            logger.warn(s"Uinitialized gateway synthesizer saw stream delta instead of resync session: $row")
             Seq()
-          case Some(filter) =>
-            filterOpt = Some(filter)
-            val (resequenced, updatedSeq) = resequenceSnapshot(snapshot, sessionSequence)
-            sessionSequence = updatedSeq
-            Seq(ResyncSession(peerSession, resequenced))
         }
       }
-      case Some(filter) => {
-        filter.handleResync(snapshot).map { appendEvent =>
-          val (resequenced, updatedSeq) = resequenceAppendEvent(appendEvent, peerSession, sessionSequence)
-          sessionSequence = updatedSeq
-          Seq(resequenced)
-        }.getOrElse(Seq())
+      case Synced(filter, ctx) => {
+        event match {
+          case ev: StreamDelta => handleEvent(ev)
+          case ev: ResyncSnapshot => handleEvent(ev)
+          case ev: ResyncSession => handleAndReinitialize(ev)
+        }
       }
     }
   }
 
-  def append(event: AppendEvent): Seq[AppendEvent] = {
-    event match {
-      case delta: StreamDelta => {
-        filterOpt match {
-          case None =>
-            logger.warn(s"Uinitialized gateway synthesizer saw stream delta instead of snapshot: $row")
-            Seq()
-          case Some(filter) => {
-            val deltaOpt = filter.handleDelta(delta.update).map { filteredDelta =>
-              val (resequenced, updatedSeq) = resequenceDelta(filteredDelta, sessionSequence)
-              sessionSequence = updatedSeq
-              StreamDelta(resequenced)
-            }
+  private def handleEvent(event: AppendEvent): Seq[AppendEvent] = {
+    logger.debug(s"Handle: $nextSequence -- $event")
+    val (resequenced, updatedNextSeq) = resequenceAppendEvent(event, peerSession, nextSequence)
+    nextSequence = updatedNextSeq
+    logger.debug(s"Resequenced: $nextSequence -- $resequenced")
+    Seq(resequenced)
+  }
 
-            deltaOpt.map(Seq(_)).getOrElse(Seq())
-          }
-        }
-      }
-      case snap: ResyncSnapshot => {
-        handleSnapshot(snap.snapshot)
-      }
-      case snap: ResyncSession => {
-        handleSnapshot(snap.snapshot)
-      }
-    }
+  private def handleAndReinitialize(resync: ResyncSession): Seq[AppendEvent] = {
+    val filter = new GenInitializedStreamFilter(row.toString, resync)
+    state = Synced(filter, resync.context)
+    handleEvent(resync)
   }
 }
 
@@ -260,7 +257,7 @@ class GatewaySynthesizer[Source](localSession: PeerSessionId) extends LazyLoggin
               synthesizer.append(ev.appendEvent).map { appendEvent => RowAppendEvent(ev.rowId, appendEvent) }
             } else {
               // Restart the filter with the same resequencing
-              addRowSynthesizer(ev, synthesizer.current, source, routeMap)
+              addRowSynthesizer(ev, synthesizer.currentNextSequence, source, routeMap)
             }
         }
       case other =>
@@ -271,6 +268,7 @@ class GatewaySynthesizer[Source](localSession: PeerSessionId) extends LazyLoggin
 
   private def addRowSynthesizer(ev: RowAppendEvent, startSequence: SequencedTypeValue, source: Source, routeMap: mutable.Map[TableRow, (Source, GatewayRowSynthesizer)]): Seq[RowAppendEvent] = {
     logger.trace(s"Adding gateway row synthesizer: " + StreamLogging.logEvent(ev) + ", startSequence: " + startSequence)
+    logger.trace(s"Event: $ev")
     val synthesizer = new GatewayRowSynthesizerImpl(ev.rowId, localSession, startSequence)
     routeMap.put(ev.rowId.tableRow, (source, synthesizer))
     synthesizer.append(ev.appendEvent).map(append => RowAppendEvent(ev.rowId, append))

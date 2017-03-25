@@ -110,16 +110,16 @@ class SimpleRoute {
 
   def firstBatch(session: PeerSessionId, n: Int = 0): Seq[RowAppendEvent] = {
     Seq(
-      RowAppendEvent(row1, ResyncSession(session, ModifiedSetSnapshot(Int64Val(0), Set(Int64Val(5 + n), Int64Val(3 + n))))),
-      RowAppendEvent(row2, ResyncSession(session, ModifiedKeyedSetSnapshot(Int64Val(0), Map(Int64Val(3 + n) -> Int64Val(9 + n))))),
-      RowAppendEvent(row3, ResyncSession(session, AppendSetSequence(Seq(AppendSetValue(Int64Val(0), Int64Val(66 + n)))))))
+      RowAppendEvent(row1, ResyncSession(session, SequenceCtx.empty, Resync(Int64Val(0), SetSnapshot(Set(Int64Val(5 + n), Int64Val(3 + n)))))),
+      RowAppendEvent(row2, ResyncSession(session, SequenceCtx.empty, Resync(Int64Val(0), MapSnapshot(Map(Int64Val(3 + n) -> Int64Val(9 + n)))))),
+      RowAppendEvent(row3, ResyncSession(session, SequenceCtx.empty, Resync(Int64Val(0), AppendSnapshot(SequencedDiff(Int64Val(0), AppendValue(Int64Val(66 + n))), Seq())))))
   }
 
   def secondBatch(n: Int = 0): Seq[RowAppendEvent] = {
     Seq(
-      RowAppendEvent(row1, StreamDelta(ModifiedSetDelta(Int64Val(1), Set(Int64Val(5 + n)), Set(Int64Val(7 + n))))),
-      RowAppendEvent(row2, StreamDelta(ModifiedKeyedSetDelta(Int64Val(1), Set(), Set(Int64Val(4) -> Int64Val(55 + n)), Set(Int64Val(3 + n) -> Int64Val(8 + n))))),
-      RowAppendEvent(row3, StreamDelta(AppendSetSequence(Seq(AppendSetValue(Int64Val(1), Int64Val(77 + n)))))))
+      RowAppendEvent(row1, StreamDelta(Delta(Seq(SequencedDiff(Int64Val(1), SetDiff(Set(Int64Val(5 + n)), Set(Int64Val(7 + n)))))))),
+      RowAppendEvent(row2, StreamDelta(Delta(Seq(SequencedDiff(Int64Val(1), MapDiff(Set(), Set(Int64Val(4) -> Int64Val(55 + n)), Set(Int64Val(3 + n) -> Int64Val(8 + n)))))))),
+      RowAppendEvent(row3, StreamDelta(Delta(Seq(SequencedDiff(Int64Val(1), AppendValue(Int64Val(77 + n))))))))
   }
 }
 
@@ -157,9 +157,9 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
     }
 
     val firstRetailBatch = Seq(
-      RowAppendEvent(route1.row1, ResyncSession(sessA, ModifiedSetSnapshot(Int64Val(0), Set(Int64Val(5), Int64Val(3))))),
-      RowAppendEvent(route1.row2, ResyncSession(sessA, ModifiedKeyedSetSnapshot(Int64Val(0), Map(Int64Val(3) -> Int64Val(9))))),
-      RowAppendEvent(route1.row3, ResyncSession(sessA, AppendSetSequence(Seq(AppendSetValue(Int64Val(0), Int64Val(66)))))))
+      RowAppendEvent(route1.row1, ResyncSession(sessA, SequenceCtx.empty, Resync(Int64Val(0), SetSnapshot(Set(Int64Val(5), Int64Val(3)))))),
+      RowAppendEvent(route1.row2, ResyncSession(sessA, SequenceCtx.empty, Resync(Int64Val(0), MapSnapshot(Map(Int64Val(3) -> Int64Val(9)))))),
+      RowAppendEvent(route1.row3, ResyncSession(sessA, SequenceCtx.empty, Resync(Int64Val(0), AppendSnapshot(SequencedDiff(Int64Val(0), AppendValue(Int64Val(66))), Seq())))))
 
     engine.localGatewayEvents(None, firstRetailBatch)
 
@@ -171,9 +171,9 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
     }
 
     val secondRetailBatch = Seq(
-      RowAppendEvent(route1.row1, StreamDelta(ModifiedSetDelta(Int64Val(1), Set(Int64Val(5)), Set(Int64Val(7))))),
-      RowAppendEvent(route1.row2, StreamDelta(ModifiedKeyedSetDelta(Int64Val(1), Set(), Set(Int64Val(4) -> Int64Val(55)), Set(Int64Val(3) -> Int64Val(8))))),
-      RowAppendEvent(route1.row3, StreamDelta(AppendSetSequence(Seq(AppendSetValue(Int64Val(1), Int64Val(77)))))))
+      RowAppendEvent(route1.row1, StreamDelta(Delta(Seq(SequencedDiff(Int64Val(1), SetDiff(Set(Int64Val(5)), Set(Int64Val(7)))))))),
+      RowAppendEvent(route1.row2, StreamDelta(Delta(Seq(SequencedDiff(Int64Val(1), MapDiff(Set(), Set(Int64Val(4) -> Int64Val(55)), Set(Int64Val(3) -> Int64Val(8)))))))),
+      RowAppendEvent(route1.row3, StreamDelta(Delta(Seq(SequencedDiff(Int64Val(1), AppendValue(Int64Val(77))))))))
 
     engine.localGatewayEvents(None, secondRetailBatch)
 
@@ -242,10 +242,10 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
       RowAppendEvent(row, append)
     }
     def sessResyncSet(session: PeerSessionId, seq: Long, set: Set[Long]): ResyncSession = {
-      ResyncSession(session, ModifiedSetSnapshot(Int64Val(seq), set.map(Int64Val)))
+      ResyncSession(session, SequenceCtx.empty, Resync(Int64Val(seq), SetSnapshot(set.map(Int64Val))))
     }
     def sessResyncManifest(session: PeerSessionId, seq: Long, manifest: Map[TypeValue, Int]): ResyncSession = {
-      ResyncSession(session, ModifiedKeyedSetSnapshot(Int64Val(seq), manifest.mapValues(dist => RouteManifestEntry.toTypeValue(RouteManifestEntry(dist)))))
+      ResyncSession(session, SequenceCtx.empty, Resync(Int64Val(seq), MapSnapshot(manifest.mapValues(dist => RouteManifestEntry.toTypeValue(RouteManifestEntry(dist))))))
     }
 
     def writeManifestTup(tup: (TypeValue, Int)): (TypeValue, TypeValue) = {
@@ -253,7 +253,7 @@ class EngineTest extends FunSuite with Matchers with LazyLogging {
     }
 
     def manifestUpdate(seq: Long, removes: Set[TypeValue], adds: Set[(TypeValue, Int)], modifies: Set[(TypeValue, Int)]): StreamDelta = {
-      StreamDelta(ModifiedKeyedSetDelta(Int64Val(seq), removes, adds.map(writeManifestTup), modifies.map(writeManifestTup)))
+      StreamDelta(Delta(Seq(SequencedDiff(Int64Val(seq), MapDiff(removes, adds.map(writeManifestTup), modifies.map(writeManifestTup))))))
     }
   }
 
