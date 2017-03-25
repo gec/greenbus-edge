@@ -24,8 +24,20 @@ import io.greenbus.edge.collection.MapSetBuilder
 
 case class PeerSessionId(persistenceId: UUID, instanceId: Long)
 
-trait SetDelta
-trait SetSnapshot
+object RowId {
+  def setToRouteMap(rows: Set[RowId]): Map[TypeValue, Set[TableRow]] = {
+    val b = MapSetBuilder.newBuilder[TypeValue, TableRow]
+    rows.foreach { row => b += (row.routingKey -> row.tableRow) }
+    b.result()
+  }
+}
+case class RowId(routingKey: TypeValue, table: String, rowKey: TypeValue) {
+  def tableRow: TableRow = TableRow(table, rowKey)
+}
+case class TableRow(table: String, rowKey: TypeValue) {
+  def toRowId(routingKey: TypeValue): RowId = RowId(routingKey, table, rowKey)
+}
+
 
 object Redux {
 
@@ -51,7 +63,9 @@ object Redux {
   case class Resync(sequence: SequencedTypeValue, params: StreamParams, userMetadata: TypeValue, snapshot: StreamSnapshot)
 
   sealed trait StreamEvent
-  sealed trait RowEvent extends StreamEvent
+  sealed trait RowEvent extends StreamEvent {
+    def row: RowId
+  }
   sealed trait RowAppendEvent extends RowEvent
   case class DeltaEvent(row: RowId, delta: Delta) extends RowAppendEvent
   case class ResyncEvent(row: RowId, resync: Resync) extends RowAppendEvent
@@ -60,6 +74,8 @@ object Redux {
   case class RouteUnresolved(route: TypeValue) extends StreamEvent
 }
 
+trait SetDelta
+trait SetSnapshot
 
 case class ModifiedSetDelta(sequence: SequencedTypeValue, removes: Set[TypeValue], adds: Set[TypeValue]) extends SetDelta
 case class ModifiedSetSnapshot(sequence: SequencedTypeValue, snapshot: Set[TypeValue]) extends SetSnapshot
@@ -73,19 +89,6 @@ case class StreamDelta(update: SetDelta) extends AppendEvent
 case class ResyncSnapshot(snapshot: SetSnapshot) extends AppendEvent
 case class ResyncSession(sessionId: PeerSessionId, snapshot: SetSnapshot) extends AppendEvent
 
-object RowId {
-  def setToRouteMap(rows: Set[RowId]): Map[TypeValue, Set[TableRow]] = {
-    val b = MapSetBuilder.newBuilder[TypeValue, TableRow]
-    rows.foreach { row => b += (row.routingKey -> row.tableRow) }
-    b.result()
-  }
-}
-case class RowId(routingKey: TypeValue, table: String, rowKey: TypeValue) {
-  def tableRow: TableRow = TableRow(table, rowKey)
-}
-case class TableRow(table: String, rowKey: TypeValue) {
-  def toRowId(routingKey: TypeValue): RowId = RowId(routingKey, table, rowKey)
-}
 
 sealed trait StreamEvent {
   def routingKey: TypeValue
