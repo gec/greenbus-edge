@@ -21,9 +21,10 @@ package io.greenbus.edge.colset
 import java.util.UUID
 
 import com.typesafe.scalalogging.LazyLogging
+import io.greenbus.edge.colset.old._
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
-import org.scalatest.{ FunSuite, Matchers }
+import org.scalatest.{FunSuite, Matchers}
 
 import scala.collection.mutable
 

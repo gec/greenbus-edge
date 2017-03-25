@@ -19,6 +19,7 @@
 package io.greenbus.edge.colset
 
 import com.typesafe.scalalogging.LazyLogging
+import io.greenbus.edge.colset.old._
 
 case class KeyedSetDiff[A, B](snapshot: Map[A, B], removed: Set[A], added: Set[(A, B)], modified: Set[(A, B)])
 

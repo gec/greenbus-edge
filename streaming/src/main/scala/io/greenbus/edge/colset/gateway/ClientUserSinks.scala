@@ -20,10 +20,11 @@ package io.greenbus.edge.colset.gateway
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.colset._
+import io.greenbus.edge.colset.old._
 import io.greenbus.edge.flow.Sender
 import io.greenbus.edge.thread.CallMarshaller
 
-import scala.util.{ Failure, Success, Try }
+import scala.util.{Failure, Success, Try}
 
 trait SetStateType[Full, Diff] {
 

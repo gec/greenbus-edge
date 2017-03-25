@@ -16,63 +16,10 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.colset
+package io.greenbus.edge.colset.old
 
-import java.util.UUID
+import io.greenbus.edge.colset._
 
-import io.greenbus.edge.collection.MapSetBuilder
-
-case class PeerSessionId(persistenceId: UUID, instanceId: Long)
-
-object RowId {
-  def setToRouteMap(rows: Set[RowId]): Map[TypeValue, Set[TableRow]] = {
-    val b = MapSetBuilder.newBuilder[TypeValue, TableRow]
-    rows.foreach { row => b += (row.routingKey -> row.tableRow) }
-    b.result()
-  }
-}
-case class RowId(routingKey: TypeValue, table: String, rowKey: TypeValue) {
-  def tableRow: TableRow = TableRow(table, rowKey)
-}
-case class TableRow(table: String, rowKey: TypeValue) {
-  def toRowId(routingKey: TypeValue): RowId = RowId(routingKey, table, rowKey)
-}
-
-
-object Redux {
-
-  sealed trait StreamParams
-
-  sealed trait StreamDiff
-
-  case class SetDiff(removes: Set[TypeValue], adds: Set[TypeValue])
-  case class MapDiff(removes: Set[TypeValue], adds: Set[(TypeValue, TypeValue)], modifies: Set[(TypeValue, TypeValue)])
-  case class AppendValue(value: TypeValue)
-
-  sealed trait StreamSnapshot
-
-  case class SetSnapshot(snapshot: Set[TypeValue]) extends StreamSnapshot
-  case class MapSnapshot(snapshot: Map[TypeValue, TypeValue]) extends StreamSnapshot
-
-  case class AppendSetValue(sequence: SequencedTypeValue, value: TypeValue)
-  case class AppendSnapshot(current: AppendSetValue, previous: Seq[AppendSetValue]) extends StreamSnapshot
-
-  case class SequencedDiff(sequence: SequencedTypeValue, diff: StreamDiff)
-  case class Delta(diffs: Seq[SequencedDiff])
-
-  case class Resync(sequence: SequencedTypeValue, params: StreamParams, userMetadata: TypeValue, snapshot: StreamSnapshot)
-
-  sealed trait StreamEvent
-  sealed trait RowEvent extends StreamEvent {
-    def row: RowId
-  }
-  sealed trait RowAppendEvent extends RowEvent
-  case class DeltaEvent(row: RowId, delta: Delta) extends RowAppendEvent
-  case class ResyncEvent(row: RowId, resync: Resync) extends RowAppendEvent
-  case class ResequenceEvent(row: RowId, sessionId: PeerSessionId, resync: Resync) extends RowAppendEvent
-  case class RowResolvedAbsent(row: RowId) extends RowEvent
-  case class RouteUnresolved(route: TypeValue) extends StreamEvent
-}
 
 trait SetDelta
 trait SetSnapshot

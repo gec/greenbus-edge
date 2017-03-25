@@ -18,6 +18,8 @@
  */
 package io.greenbus.edge.colset
 
+import io.greenbus.edge.colset.old.StreamEvent
+
 case class SubscriptionSetUpdate(rows: Set[RowId])
 case class EventBatch(events: Seq[StreamEvent])
 case class ServiceRequestBatch(requests: Seq[ServiceRequest])

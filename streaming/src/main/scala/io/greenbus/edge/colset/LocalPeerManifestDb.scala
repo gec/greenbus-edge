@@ -18,6 +18,8 @@
  */
 package io.greenbus.edge.colset
 
+import io.greenbus.edge.colset.old._
+
 class LocalPeerManifestDb(selfSession: PeerSessionId) {
 
   private val routeRow = PeerRouteSource.peerRouteRow(selfSession)

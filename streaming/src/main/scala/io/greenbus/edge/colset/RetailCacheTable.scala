@@ -19,6 +19,7 @@
 package io.greenbus.edge.colset
 
 import com.typesafe.scalalogging.LazyLogging
+import io.greenbus.edge.colset.old.{ResyncSession, RouteUnresolved, RowAppendEvent, StreamEvent}
 
 class RetailCacheTable extends LazyLogging {
   private var rows = Map.empty[TypeValue, Map[TableRow, RetailRowCache]]

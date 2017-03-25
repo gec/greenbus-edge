@@ -19,6 +19,7 @@
 package io.greenbus.edge.colset
 
 import com.typesafe.scalalogging.LazyLogging
+import io.greenbus.edge.colset.old.StreamEvent
 
 trait ManagedRouteSource {
   def updateRowsForRoute(route: TypeValue, rows: Set[TableRow]): Unit

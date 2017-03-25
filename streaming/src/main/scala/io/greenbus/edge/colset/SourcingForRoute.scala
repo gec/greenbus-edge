@@ -20,6 +20,7 @@ package io.greenbus.edge.colset
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.collection.BiMultiMap
+import io.greenbus.edge.colset.old.{RouteUnresolved, RowAppendEvent, StreamEvent}
 
 import scala.collection.immutable.VectorBuilder
 import scala.collection.mutable

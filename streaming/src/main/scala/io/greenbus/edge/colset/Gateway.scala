@@ -22,6 +22,7 @@ import java.util.UUID
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.collection.OneToManyUniquely
+import io.greenbus.edge.colset.old._
 import io.greenbus.edge.flow._
 
 import scala.collection.mutable

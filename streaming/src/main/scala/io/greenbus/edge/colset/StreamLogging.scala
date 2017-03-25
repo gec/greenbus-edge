@@ -18,6 +18,8 @@
  */
 package io.greenbus.edge.colset
 
+import io.greenbus.edge.colset.old._
+
 object StreamLogging {
 
   def simpleRow(rowId: RowId): String = {

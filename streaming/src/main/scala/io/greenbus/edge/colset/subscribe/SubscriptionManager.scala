@@ -21,6 +21,7 @@ package io.greenbus.edge.colset.subscribe
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.colset._
 import io.greenbus.edge.colset.gateway.MapDiff
+import io.greenbus.edge.colset.old._
 import io.greenbus.edge.flow._
 import io.greenbus.edge.thread.CallMarshaller
 

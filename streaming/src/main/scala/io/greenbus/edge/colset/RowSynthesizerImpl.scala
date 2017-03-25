@@ -19,7 +19,9 @@
 package io.greenbus.edge.colset
 
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.collection.{ BiMultiMap, MapToUniqueValues }
+import io.greenbus.edge.collection.{BiMultiMap, MapToUniqueValues}
+import io.greenbus.edge.colset.old._
+
 import scala.collection.mutable
 
 class SynthesizerTable[Source] extends LazyLogging {
