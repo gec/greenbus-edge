@@ -19,7 +19,7 @@
 package io.greenbus.edge.api.stream.index
 
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.api.{ EndpointDescriptor, EndpointId }
+import io.greenbus.edge.api.{ EndpointDescriptor, EndpointId, EndpointPath }
 import io.greenbus.edge.api.stream.{ EdgeCodecCommon, EdgeTables }
 import io.greenbus.edge.colset.subscribe._
 import io.greenbus.edge.colset._
@@ -180,7 +180,7 @@ class NotifyingDescriptorCache(notify: (EndpointId, EndpointDescriptor) => Unit)
   }
 }
 
-class DataKeyIndexSource(cache: DescriptorCache, indexer: DataKeyIndexDb[TypeValue]) extends DynamicTableSource with DescriptorObserver with LazyLogging {
+class IndexSource[A](cache: DescriptorCache, indexer: TypedIndexDb[A, TypeValue], writer: A => TypeValue) extends DynamicTableSource with DescriptorObserver with LazyLogging {
 
   private var rowMap = Map.empty[TypeValue, SetSink]
 
@@ -199,7 +199,7 @@ class DataKeyIndexSource(cache: DescriptorCache, indexer: DataKeyIndexDb[TypeVal
       }
       case Right(spec) => {
         val orig = indexer.addSubscription(spec, row)
-        sink.update(orig.map(endPath => EdgeCodecCommon.writeEndpointPath(endPath)))
+        sink.update(orig.map(id => writer(id)))
       }
     }
 
@@ -212,7 +212,7 @@ class DataKeyIndexSource(cache: DescriptorCache, indexer: DataKeyIndexDb[TypeVal
     updates.foreach { up =>
       val sinks = up.targets.flatMap(rowMap.get)
       if (sinks.nonEmpty) {
-        val serialized = up.state.map(EdgeCodecCommon.writeEndpointPath)
+        val serialized = up.state.map(writer)
         sinks.foreach { sink =>
           sink.update(serialized)
         }
@@ -242,15 +242,23 @@ class IndexProducer(eventThread: CallMarshaller, routeSource: GatewayRouteSource
 
   private val observer = new NotifyingDescriptorCache(handleUpdate)
 
+  private val endpointIndexDb = new EndpointIndexDb[TypeValue](observer)
+  private val endpointIndexSource = new IndexSource[EndpointId](observer, endpointIndexDb, EdgeCodecCommon.writeEndpointId)
+
   private val dataKeyIndexDb = new DataKeyIndexDb[TypeValue](observer)
-  private val dataKeyIndexSource = new DataKeyIndexSource(observer, dataKeyIndexDb)
+  private val dataKeyIndexSource = new IndexSource[EndpointPath](observer, dataKeyIndexDb, EdgeCodecCommon.writeEndpointPath)
+
+  private val outputKeyIndexDb = new OutputKeyIndexDb[TypeValue](observer)
+  private val outputKeyIndexSource = new IndexSource[EndpointPath](observer, outputKeyIndexDb, EdgeCodecCommon.writeEndpointPath)
 
   private val indexer = new IndexingSubscriptionManager(eventThread, observer)
 
   private var sourceOpt = Option.empty[RouteSourceHandle]
 
   private def handleUpdate(id: EndpointId, desc: EndpointDescriptor): Unit = {
+    endpointIndexSource.observed(id, desc)
     dataKeyIndexSource.observed(id, desc)
+    outputKeyIndexSource.observed(id, desc)
     sourceOpt.foreach(_.flushEvents())
   }
 
@@ -263,7 +271,9 @@ class IndexProducer(eventThread: CallMarshaller, routeSource: GatewayRouteSource
 
   private def register(sess: PeerSessionId, peer: PeerLinkProxyChannel): Unit = {
     val handle = routeSource.route(IndexProducer.routeForSession(sess))
+    handle.dynamicTable(EdgeTables.endpointIndexTable, endpointIndexSource)
     handle.dynamicTable(EdgeTables.dataKeyIndexTable, dataKeyIndexSource)
+    handle.dynamicTable(EdgeTables.outputKeyIndexTable, outputKeyIndexSource)
     sourceOpt = Some(handle)
   }
 }

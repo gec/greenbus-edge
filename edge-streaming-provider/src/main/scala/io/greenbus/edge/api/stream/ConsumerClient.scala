@@ -489,9 +489,23 @@ class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: StreamDynami
         key
       }
 
+      val endpointIndexKeys = indexing.endpointIndexes.map { spec =>
+        val key = EdgeCodecCommon.endpointIndexSpecToSubKey(spec)
+        val mgr = keyMap.getOrElseUpdate(key, new EndpointIndexSubMgr(spec))
+        mgr.addObserver(updateQueue)
+        key
+      }
+
       val dataIndexKeys = indexing.dataKeyIndexes.map { spec =>
         val key = EdgeCodecCommon.dataKeyIndexSpecToSubKey(spec)
         val mgr = keyMap.getOrElseUpdate(key, new DataKeyIndexSubMgr(spec))
+        mgr.addObserver(updateQueue)
+        key
+      }
+
+      val outputIndexKeys = indexing.outputKeyIndexes.map { spec =>
+        val key = EdgeCodecCommon.outputKeyIndexSpecToSubKey(spec)
+        val mgr = keyMap.getOrElseUpdate(key, new OutputKeyIndexSubMgr(spec))
         mgr.addObserver(updateQueue)
         key
       }
@@ -500,7 +514,7 @@ class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: StreamDynami
         subImpl.update(keyMap.keySet.toSet)
       }
 
-      val allKeys = endpointDescKeys ++ dataKeyKeys ++ outputKeyKeys
+      val allKeys = endpointDescKeys ++ dataKeyKeys ++ outputKeyKeys ++ endpointIndexKeys ++ dataIndexKeys ++ outputIndexKeys
 
       closeLatch.bind(() => eventThread.marshal { unsubscribed(updateQueue, allKeys.toSet) })
     }

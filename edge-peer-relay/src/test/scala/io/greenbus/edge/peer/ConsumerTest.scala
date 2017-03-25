@@ -67,7 +67,9 @@ object ConsumerTest extends LazyLogging {
       .keyValue(EndpointPath(EndpointId(Path("my-endpoint")), Path("kv-1")))
       .topicEvent(EndpointPath(EndpointId(Path("my-endpoint")), Path("event-1")))
       .outputStatus(outputKey)*/
+      .endpointIndex(IndexSpecifier(Path("endIndex1"), None))
       .dataKeyIndex(IndexSpecifier(Path("index1"), None))
+      .outputKeyIndex(IndexSpecifier(Path("outIndex1"), None))
       .build()
 
     logger.debug("Subscribing...")
@@ -119,11 +121,13 @@ object ProducerTest extends LazyLogging {
 
     val builder = new EndpointProducerBuilderImpl(EndpointId(Path("my-endpoint")), exe)
 
+    builder.setIndexes(Map(Path("endIndex1") -> ValueString("value 1")))
+
     val series1 = builder.seriesDouble(Path("series-double-1"), CommonMetadata(indexes = Map(Path("index1") -> ValueString("value 1"))))
     val kv1 = builder.latestKeyValue(Path("kv-1"), CommonMetadata(indexes = Map(Path("index1") -> ValueString("value 2"))))
     val event1 = builder.topicEventValue(Path("event-1"))
 
-    val out1 = builder.outputStatus(Path("out-1"))
+    val out1 = builder.outputStatus(Path("out-1"), CommonMetadata(indexes = Map(Path("outIndex1") -> ValueString("value 1"))))
 
     /* val outHandler = new flow.Responder[OutputParams, OutputResult] {
       var i = 0

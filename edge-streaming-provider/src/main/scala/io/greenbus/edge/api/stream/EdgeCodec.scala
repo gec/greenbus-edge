@@ -412,7 +412,13 @@ object EdgeCodecCommon {
     PeerBasedSubKey(sess => RowId(IndexProducer.routeForSession(sess), table, writeIndexSpecifier(spec)))
   }
 
+  def endpointIndexSpecToSubKey(spec: IndexSpecifier): SubscriptionKey = {
+    indexSubKey(spec, EdgeTables.endpointIndexTable)
+  }
   def dataKeyIndexSpecToSubKey(spec: IndexSpecifier): SubscriptionKey = {
     indexSubKey(spec, EdgeTables.dataKeyIndexTable)
+  }
+  def outputKeyIndexSpecToSubKey(spec: IndexSpecifier): SubscriptionKey = {
+    indexSubKey(spec, EdgeTables.outputKeyIndexTable)
   }
 }
