@@ -55,9 +55,10 @@ case class RowAppendEvent(rowId: RowId, appendEvent: AppendEvent) extends RowEve
 /*case class DeltaEvent(row: RowId, delta: Delta) extends RowAppendEvent
 case class ResyncEvent(row: RowId, resync: Resync) extends RowAppendEvent
 case class ResequenceEvent(row: RowId, sessionId: PeerSessionId, resync: Resync) extends RowAppendEvent*/
-case class RowResolvedAbsent(rowId: RowId) extends RowEvent {
+
+/*case class RowResolvedAbsent(rowId: RowId) extends RowEvent {
   def routingKey: TypeValue = rowId.routingKey
-}
+}*/
 case class RouteUnresolved(routingKey: TypeValue) extends StreamEvent
 
 /*

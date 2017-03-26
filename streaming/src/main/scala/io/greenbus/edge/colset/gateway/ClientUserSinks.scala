@@ -294,7 +294,7 @@ class AppendSink(maxBuffered: Int, eventThread: CallMarshaller) extends AppendEv
         }
       }
 
-      publisher.send(toAppendResync(snapshot), handleResult)
+      publisher.send(toAppendResync(snapshot.last, snapshot), handleResult)
     }
   }
 
@@ -323,7 +323,7 @@ class AppendSink(maxBuffered: Int, eventThread: CallMarshaller) extends AppendEv
     Delta(values)
   }
 
-  private def toAppendResync(last: (Long, TypeValue), prev: Seq[(Long, TypeValue)]): Delta = {
+  private def toAppendResync(last: (Long, TypeValue), prev: Seq[(Long, TypeValue)]): Resync = {
 
     val current = SequencedDiff(Int64Val(last._1), AppendValue(last._2))
 
