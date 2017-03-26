@@ -143,7 +143,6 @@ class RowSynthesizerImpl[Source](rowId: RowId, initSource: Source, initSess: Pee
             logger.warn(s"$rowId got delta for inactive source link $initSource"); Seq()
           case Some(sess) => {
             if (sess == activeSession) {
-
               activeFilter.handle(delta)
                 .map(v => Seq(v)).getOrElse(Seq())
 

@@ -202,7 +202,7 @@ trait StreamFilter {
   def handle(event: AppendEvent): Option[AppendEvent]
 }
 
-class GenInitializedStreamFilter(cid: String, startInit: ResyncSession) extends StreamFilter {
+class GenInitializedStreamFilter(cid: String, startInit: ResyncSession) extends StreamFilter with LazyLogging {
 
   private var session = startInit.sessionId
   //private var ctx = startInit.init
@@ -377,9 +377,8 @@ class GenSequenceFilter(cid: String, startSequence: SequencedTypeValue) extends 
 
   private var sequence: SequencedTypeValue = startSequence
 
-  //def currentSequence: SequencedTypeValue = sequence
-
   def delta(delta: Delta): Option[Delta] = {
+
     var seqVar = sequence
 
     val passed = delta.diffs.filter { diff =>
@@ -390,6 +389,8 @@ class GenSequenceFilter(cid: String, startSequence: SequencedTypeValue) extends 
         false
       }
     }
+
+    sequence = seqVar
 
     if (passed.nonEmpty) {
       Some(Delta(passed))

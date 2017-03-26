@@ -48,6 +48,11 @@ case class SequenceCtx(params: Option[StreamParams], userMetadata: Option[TypeVa
 /*
 CONTROL STREAM VS VALUE SEQUENCE
 
+SequenceEvent(Delta or Resync)
+ControlCtxChangeEvent(session, ctx, resync)
+
+Event(controlOpt, sequenceEvent)
+
  */
 sealed trait AppendEvent
 case class StreamDelta(update: Delta) extends AppendEvent
