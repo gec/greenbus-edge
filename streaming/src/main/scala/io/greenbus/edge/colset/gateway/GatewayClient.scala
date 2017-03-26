@@ -24,7 +24,7 @@ import io.greenbus.edge.flow._
 import io.greenbus.edge.thread.CallMarshaller
 
 import scala.collection.mutable
-import scala.util.{Failure, Success, Try}
+import scala.util.{ Failure, Success, Try }
 
 case class RouteServiceRequest(row: TableRow, value: TypeValue, respond: TypeValue => Unit)
 

@@ -20,8 +20,7 @@ package io.greenbus.edge.colset.proto.convert
 
 import com.google.protobuf.ByteString
 import io.greenbus.edge.colset
-import io.greenbus.edge.colset.{old, _}
-import io.greenbus.edge.colset.old._
+import io.greenbus.edge.colset._
 
 import scala.collection.JavaConverters._
 
@@ -63,42 +62,30 @@ object StreamConversions {
     b.build()
   }
 
-  def modSetDeltaFromProto(msg: proto.ModifiedSetDelta): Either[String, ModifiedSetDelta] = {
-    if (msg.hasSequence) {
-      for {
-        sequence <- sequencedFromProto(msg.getSequence)
-        removes <- rightSequence(msg.getRemovesList.asScala.map(fromProto))
-        adds <- rightSequence(msg.getAddsList.asScala.map(fromProto))
-      } yield {
-        old.ModifiedSetDelta(sequence, removes.toSet, adds.toSet)
-      }
-    } else {
-      Left("ModifiedSetDelta missing sequence")
+  def modSetDeltaFromProto(msg: proto.SetDiff): Either[String, colset.SetDiff] = {
+    for {
+      removes <- rightSequence(msg.getRemovesList.asScala.map(fromProto))
+      adds <- rightSequence(msg.getAddsList.asScala.map(fromProto))
+    } yield {
+      colset.SetDiff(removes.toSet, adds.toSet)
     }
   }
-  def modSetDeltaToProto(obj: ModifiedSetDelta): proto.ModifiedSetDelta = {
-    val b = proto.ModifiedSetDelta.newBuilder()
-    b.setSequence(sequencedToProto(obj.sequence))
+  def modSetDeltaToProto(obj: colset.SetDiff): proto.SetDiff = {
+    val b = proto.SetDiff.newBuilder()
     obj.removes.map(toProto).foreach(b.addRemoves)
     obj.adds.map(toProto).foreach(b.addAdds)
     b.build()
   }
 
-  def modSetSnapFromProto(msg: proto.ModifiedSetSnapshot): Either[String, ModifiedSetSnapshot] = {
-    if (msg.hasSequence) {
-      for {
-        sequence <- sequencedFromProto(msg.getSequence)
-        elements <- rightSequence(msg.getElementsList.asScala.map(fromProto))
-      } yield {
-        old.ModifiedSetSnapshot(sequence, elements.toSet)
-      }
-    } else {
-      Left("ModifiedSetSnapshot missing sequence")
+  def modSetSnapFromProto(msg: proto.SetSnapshot): Either[String, colset.SetSnapshot] = {
+    for {
+      elements <- rightSequence(msg.getElementsList.asScala.map(fromProto))
+    } yield {
+      colset.SetSnapshot(elements.toSet)
     }
   }
-  def modSetSnapToProto(obj: ModifiedSetSnapshot): proto.ModifiedSetSnapshot = {
-    val b = proto.ModifiedSetSnapshot.newBuilder()
-    b.setSequence(sequencedToProto(obj.sequence))
+  def modSetSnapToProto(obj: colset.SetSnapshot): proto.SetSnapshot = {
+    val b = proto.SetSnapshot.newBuilder()
     obj.snapshot.map(toProto).foreach(b.addElements)
     b.build()
   }
@@ -122,171 +109,181 @@ object StreamConversions {
     b.build()
   }
 
-  def modKeySetDeltaFromProto(msg: proto.ModifiedKeyedSetDelta): Either[String, ModifiedKeyedSetDelta] = {
-    if (msg.hasSequence) {
-      for {
-        sequence <- sequencedFromProto(msg.getSequence)
-        removes <- rightSequence(msg.getRemovesList.asScala.map(fromProto))
-        adds <- rightSequence(msg.getAddsList.asScala.map(keyPairFromProto))
-        modifies <- rightSequence(msg.getModifiesList.asScala.map(keyPairFromProto))
-      } yield {
-        old.ModifiedKeyedSetDelta(sequence, removes.toSet, adds.toSet, modifies.toSet)
-      }
-    } else {
-      Left("ModifiedKeyedSetDelta missing sequence")
+  def modKeySetDeltaFromProto(msg: proto.MapDiff): Either[String, colset.MapDiff] = {
+    for {
+      removes <- rightSequence(msg.getRemovesList.asScala.map(fromProto))
+      adds <- rightSequence(msg.getAddsList.asScala.map(keyPairFromProto))
+      modifies <- rightSequence(msg.getModifiesList.asScala.map(keyPairFromProto))
+    } yield {
+      colset.MapDiff(removes.toSet, adds.toSet, modifies.toSet)
     }
   }
-  def modKeySetDeltaToProto(obj: ModifiedKeyedSetDelta): proto.ModifiedKeyedSetDelta = {
-    val b = proto.ModifiedKeyedSetDelta.newBuilder()
-    b.setSequence(sequencedToProto(obj.sequence))
+  def modKeySetDeltaToProto(obj: colset.MapDiff): proto.MapDiff = {
+    val b = proto.MapDiff.newBuilder()
     obj.removes.map(toProto).foreach(b.addRemoves)
     obj.adds.map(keyPairToProto).foreach(b.addAdds)
     obj.modifies.map(keyPairToProto).foreach(b.addModifies)
     b.build()
   }
 
-  def modKeySetSnapFromProto(msg: proto.ModifiedKeyedSetSnapshot): Either[String, ModifiedKeyedSetSnapshot] = {
-    if (msg.hasSequence) {
-      for {
-        sequence <- sequencedFromProto(msg.getSequence)
-        elements <- rightSequence(msg.getElementsList.asScala.map(keyPairFromProto))
-      } yield {
-        old.ModifiedKeyedSetSnapshot(sequence, elements.toMap)
-      }
-    } else {
-      Left("ModifiedKeyedSetSnapshot missing sequence")
+  def modKeySetSnapFromProto(msg: proto.MapSnapshot): Either[String, colset.MapSnapshot] = {
+    for {
+      elements <- rightSequence(msg.getElementsList.asScala.map(keyPairFromProto))
+    } yield {
+      colset.MapSnapshot(elements.toMap)
     }
   }
-  def modKeySetSnapToProto(obj: ModifiedKeyedSetSnapshot): proto.ModifiedKeyedSetSnapshot = {
-    val b = proto.ModifiedKeyedSetSnapshot.newBuilder()
-    b.setSequence(sequencedToProto(obj.sequence))
+  def modKeySetSnapToProto(obj: colset.MapSnapshot): proto.MapSnapshot = {
+    val b = proto.MapSnapshot.newBuilder()
     obj.snapshot.map(keyPairToProto).foreach(b.addElements)
     b.build()
   }
 
-  def appSetFromProto(msg: proto.AppendSetValue): Either[String, AppendSetValue] = {
-    if (msg.hasSequence && msg.hasValue) {
+  def appSetSeqFromProto(msg: proto.AppendSnapshot): Either[String, colset.AppendSnapshot] = {
+    if (msg.hasCurrent) {
       for {
-        sequence <- sequencedFromProto(msg.getSequence)
-        value <- fromProto(msg.getValue)
+        prev <- rightSequence(msg.getPreviousList.asScala.map(sequencedDiffFromProto))
+        current <- sequencedDiffFromProto(msg.getCurrent)
       } yield {
-        old.AppendSetValue(sequence, value)
+        colset.AppendSnapshot(current, prev)
       }
     } else {
-      Left("AppendSetValue missing sequence or value")
+      Left("AppendSnapshot missing current value")
     }
   }
-  def appSetToProto(obj: AppendSetValue): proto.AppendSetValue = {
-    val b = proto.AppendSetValue.newBuilder()
-    b.setSequence(sequencedToProto(obj.sequence))
-    b.setValue(toProto(obj.value))
+  def appSetSeqToProto(obj: colset.AppendSnapshot): proto.AppendSnapshot = {
+    val b = proto.AppendSnapshot.newBuilder()
+    b.setCurrent(sequencedDiffToProto(obj.current))
+    obj.previous.map(sequencedDiffToProto).foreach(b.addPrevious)
     b.build()
   }
 
-  def appSetSeqFromProto(msg: proto.AppendSetSequence): Either[String, AppendSetSequence] = {
-    rightSequence(msg.getValuesList.asScala.map(appSetFromProto))
-      .map(seq => old.AppendSetSequence(seq))
-  }
-  def appSetSeqToProto(obj: AppendSetSequence): proto.AppendSetSequence = {
-    val b = proto.AppendSetSequence.newBuilder()
-    obj.appends.map(appSetToProto).foreach(b.addValues)
-    b.build()
-  }
-
-  def setDeltaFromProto(msg: proto.SetDelta): Either[String, Delta] = {
-    import proto.SetDelta.SetTypesCase
+  def setSnapshotFromProto(msg: proto.SeqSnapshot): Either[String, colset.SequenceSnapshot] = {
+    import proto.SeqSnapshot.SetTypesCase
     msg.getSetTypesCase match {
-      case SetTypesCase.MODIFIED_SET_DELTA => modSetDeltaFromProto(msg.getModifiedSetDelta)
-      case SetTypesCase.MODIFIED_KEYED_SET_DELTA => modKeySetDeltaFromProto(msg.getModifiedKeyedSetDelta)
-      case SetTypesCase.APPEND_SET_SEQUENCE => appSetSeqFromProto(msg.getAppendSetSequence)
-      case _ => Left("Unrecognizable SetDelta type")
-    }
-  }
-  def setDeltaToProto(obj: Delta): proto.SetDelta = {
-    val b = proto.SetDelta.newBuilder()
-    obj match {
-      case v: ModifiedSetDelta => b.setModifiedSetDelta(modSetDeltaToProto(v))
-      case v: ModifiedKeyedSetDelta => b.setModifiedKeyedSetDelta(modKeySetDeltaToProto(v))
-      case v: AppendSetSequence => b.setAppendSetSequence(appSetSeqToProto(v))
-      case _ => throw new IllegalArgumentException("Unrecognized SetDelta type")
-    }
-    b.build()
-  }
-
-  def setSnapshotFromProto(msg: proto.SetSnapshot): Either[String, SetSnapshot] = {
-    import proto.SetSnapshot.SetTypesCase
-    msg.getSetTypesCase match {
-      case SetTypesCase.MODIFIED_SET_SNAPSHOT => modSetSnapFromProto(msg.getModifiedSetSnapshot)
-      case SetTypesCase.MODIFIED_KEYED_SET_SNAPSHOT => modKeySetSnapFromProto(msg.getModifiedKeyedSetSnapshot)
+      case SetTypesCase.SET_SNAPSHOT => modSetSnapFromProto(msg.getSetSnapshot)
+      case SetTypesCase.MAP_SNAPSHOT => modKeySetSnapFromProto(msg.getMapSnapshot)
       case SetTypesCase.APPEND_SET_SEQUENCE => appSetSeqFromProto(msg.getAppendSetSequence)
       case _ => Left("Unrecognizable SetSnapshot type")
     }
   }
-  def setSnapshotToProto(obj: SetSnapshot): proto.SetSnapshot = {
-    val b = proto.SetSnapshot.newBuilder()
+  def setSnapshotToProto(obj: colset.SequenceSnapshot): proto.SeqSnapshot = {
+    val b = proto.SeqSnapshot.newBuilder()
     obj match {
-      case v: ModifiedSetSnapshot => b.setModifiedSetSnapshot(modSetSnapToProto(v))
-      case v: ModifiedKeyedSetSnapshot => b.setModifiedKeyedSetSnapshot(modKeySetSnapToProto(v))
-      case v: AppendSetSequence => b.setAppendSetSequence(appSetSeqToProto(v))
+      case v: SetSnapshot => b.setSetSnapshot(modSetSnapToProto(v))
+      case v: MapSnapshot => b.setMapSnapshot(modKeySetSnapToProto(v))
+      case v: AppendSnapshot => b.setAppendSetSequence(appSetSeqToProto(v))
       case _ => throw new IllegalArgumentException("Unrecognized SetSnapshot type")
     }
     b.build()
   }
 
-  def streamDeltaFromProto(msg: proto.StreamDelta): Either[String, StreamDelta] = {
-    if (msg.hasUpdate) {
-      for {
-        update <- setDeltaFromProto(msg.getUpdate)
-      } yield {
-        old.StreamDelta(update)
-      }
-    } else {
-      Left("StreamDelta missing update")
+  def seqDiffFromProto(msg: proto.SeqDiff): Either[String, colset.SequenceTypeDiff] = {
+    import proto.SeqDiff.SetTypesCase
+
+    msg.getSetTypesCase match {
+      case SetTypesCase.SET_DIFF => modSetDeltaFromProto(msg.getSetDiff)
+      case SetTypesCase.MAP_DIFF => modKeySetDeltaFromProto(msg.getMapDiff)
+      case SetTypesCase.APPEND_DIFF => ValueTypeConversions.fromProto(msg.getAppendDiff).map(colset.AppendValue)
+      case _ => Left("Unrecognizable SetSnapshot type")
     }
   }
-  def streamDeltaToProto(obj: StreamDelta): proto.StreamDelta = {
-    val b = proto.StreamDelta.newBuilder()
-    b.setUpdate(setDeltaToProto(obj.update))
+  def seqDiffToProto(obj: colset.SequenceTypeDiff): proto.SeqDiff = {
+    val b = proto.SeqDiff.newBuilder()
+    obj match {
+      case v: colset.SetDiff => b.setSetDiff(modSetDeltaToProto(v))
+      case v: colset.MapDiff => b.setMapDiff(modKeySetDeltaToProto(v))
+      case v: colset.AppendValue => b.setAppendDiff(ValueTypeConversions.toProto(v.value))
+      case _ => throw new IllegalArgumentException("Unrecognized SetDelta type")
+    }
     b.build()
   }
 
-  def resyncSnapshotFromProto(msg: proto.ResyncSnapshot): Either[String, ResyncSnapshot] = {
-    if (msg.hasSnapshot) {
+  def sequencedDiffFromProto(msg: proto.SequencedDiff): Either[String, colset.SequencedDiff] = {
+    if (msg.hasSequence && msg.hasDiff) {
       for {
+        sequence <- sequencedFromProto(msg.getSequence)
+        value <- seqDiffFromProto(msg.getDiff)
+      } yield {
+        colset.SequencedDiff(sequence, value)
+      }
+    } else {
+      Left("AppendSetValue missing sequence or value")
+    }
+  }
+  def sequencedDiffToProto(obj: colset.SequencedDiff): proto.SequencedDiff = {
+    val b = proto.SequencedDiff.newBuilder()
+    b.setSequence(sequencedToProto(obj.sequence))
+    b.setDiff(seqDiffToProto(obj.diff))
+    b.build()
+  }
+
+  def streamDeltaFromProto(msg: proto.StreamDelta): Either[String, colset.StreamDelta] = {
+    rightSequence(msg.getUpdatesList.asScala.map(sequencedDiffFromProto)).map { seqDiffs =>
+      colset.StreamDelta(colset.Delta(seqDiffs))
+    }
+
+  }
+  def streamDeltaToProto(obj: colset.StreamDelta): proto.StreamDelta = {
+    val b = proto.StreamDelta.newBuilder()
+    obj.update.diffs.map(sequencedDiffToProto).foreach(b.addUpdates)
+    b.build()
+  }
+
+  def resyncSnapshotFromProto(msg: proto.ResyncSnapshot): Either[String, colset.ResyncSnapshot] = {
+    if (msg.hasSnapshot && msg.hasSequence) {
+      for {
+        seq <- ValueTypeConversions.sequencedFromProto(msg.getSequence)
         update <- setSnapshotFromProto(msg.getSnapshot)
       } yield {
-        old.ResyncSnapshot(update)
+        colset.ResyncSnapshot(Resync(seq, update))
       }
     } else {
-      Left("ResyncSnapshot missing update")
+      Left("ResyncSnapshot missing update or sequence")
     }
   }
-  def resyncSnapshotToProto(obj: ResyncSnapshot): proto.ResyncSnapshot = {
+  def resyncSnapshotToProto(obj: colset.ResyncSnapshot): proto.ResyncSnapshot = {
     val b = proto.ResyncSnapshot.newBuilder()
-    b.setSnapshot(setSnapshotToProto(obj.snapshot))
+    b.setSnapshot(setSnapshotToProto(obj.resync.snapshot))
     b.build()
   }
 
-  def resyncSessionFromProto(msg: proto.ResyncSession): Either[String, ResyncSession] = {
-    if (msg.hasSessionId && msg.hasSnapshot) {
+  def resyncSessionFromProto(msg: proto.ResyncSession): Either[String, colset.ResyncSession] = {
+    if (msg.hasSessionId && msg.hasSnapshot && msg.hasSequence && msg.hasContext) {
       for {
         session <- sessionFromProto(msg.getSessionId)
+        ctx <- contextFromProto(msg.getContext)
+        seq <- ValueTypeConversions.sequencedFromProto(msg.getSequence)
         update <- setSnapshotFromProto(msg.getSnapshot)
       } yield {
-        old.ResyncSession(session, update)
+        colset.ResyncSession(session, ctx, Resync(seq, update))
       }
     } else {
       Left("ResyncSession missing update")
     }
   }
-  def resyncSessionToProto(obj: ResyncSession): proto.ResyncSession = {
+  def resyncSessionToProto(obj: colset.ResyncSession): proto.ResyncSession = {
     val b = proto.ResyncSession.newBuilder()
     b.setSessionId(sessionToProto(obj.sessionId))
-    b.setSnapshot(setSnapshotToProto(obj.snapshot))
+    b.setSequence(ValueTypeConversions.sequencedToProto(obj.resync.sequence))
+    b.setSnapshot(setSnapshotToProto(obj.resync.snapshot))
     b.build()
   }
 
-  def appendFromProto(msg: proto.AppendEvent): Either[String, AppendEvent] = {
+  def contextFromProto(msg: proto.SequenceContext): Either[String, colset.SequenceCtx] = {
+    for {
+      metaOpt <- if (msg.hasUserMetadata) ValueTypeConversions.fromProto(msg.getUserMetadata).map(v => Some(v)) else Right(None)
+    } yield {
+      colset.SequenceCtx(None, metaOpt)
+    }
+  }
+  def contextToProto(obj: colset.SequenceCtx): proto.SequenceContext = {
+    val b = proto.SequenceContext.newBuilder()
+    obj.userMetadata.map(ValueTypeConversions.toProto).foreach(b.setUserMetadata)
+    b.build()
+  }
+
+  def appendFromProto(msg: proto.AppendEvent): Either[String, colset.AppendEvent] = {
     import proto.AppendEvent.AppendTypesCase
     msg.getAppendTypesCase match {
       case AppendTypesCase.STREAM_DELTA => streamDeltaFromProto(msg.getStreamDelta)
@@ -295,54 +292,54 @@ object StreamConversions {
       case _ => Left("Unrecognizable AppendEvent type")
     }
   }
-  def appendToProto(obj: AppendEvent): proto.AppendEvent = {
+  def appendToProto(obj: colset.AppendEvent): proto.AppendEvent = {
     val b = proto.AppendEvent.newBuilder()
     obj match {
-      case v: StreamDelta => b.setStreamDelta(streamDeltaToProto(v))
-      case v: ResyncSnapshot => b.setResyncSnapshot(resyncSnapshotToProto(v))
-      case v: ResyncSession => b.setResyncSession(resyncSessionToProto(v))
+      case v: colset.StreamDelta => b.setStreamDelta(streamDeltaToProto(v))
+      case v: colset.ResyncSnapshot => b.setResyncSnapshot(resyncSnapshotToProto(v))
+      case v: colset.ResyncSession => b.setResyncSession(resyncSessionToProto(v))
       case _ => throw new IllegalArgumentException("Unrecognized AppendEvent type")
     }
     b.build()
   }
 
-  def rowAppendFromProto(msg: proto.RowAppendEvent): Either[String, RowAppendEvent] = {
+  def rowAppendFromProto(msg: proto.RowAppendEvent): Either[String, colset.RowAppendEvent] = {
     if (msg.hasRow && msg.hasAppend) {
       for {
         row <- rowIdFromProto(msg.getRow)
         append <- appendFromProto(msg.getAppend)
       } yield {
-        old.RowAppendEvent(row, append)
+        colset.RowAppendEvent(row, append)
       }
     } else {
       Left("RowAppendEvent missing update")
     }
   }
-  def rowAppendToProto(obj: RowAppendEvent): proto.RowAppendEvent = {
+  def rowAppendToProto(obj: colset.RowAppendEvent): proto.RowAppendEvent = {
     val b = proto.RowAppendEvent.newBuilder()
     b.setRow(rowIdToProto(obj.rowId))
     b.setAppend(appendToProto(obj.appendEvent))
     b.build()
   }
 
-  def unresolvedFromProto(msg: proto.RouteUnresolved): Either[String, RouteUnresolved] = {
+  def unresolvedFromProto(msg: proto.RouteUnresolved): Either[String, colset.RouteUnresolved] = {
     if (msg.hasRoutingKey) {
       for {
         routingKey <- fromProto(msg.getRoutingKey)
       } yield {
-        old.RouteUnresolved(routingKey)
+        colset.RouteUnresolved(routingKey)
       }
     } else {
       Left("RouteUnresolved missing routing key")
     }
   }
-  def unresolvedToProto(obj: RouteUnresolved): proto.RouteUnresolved = {
+  def unresolvedToProto(obj: colset.RouteUnresolved): proto.RouteUnresolved = {
     val b = proto.RouteUnresolved.newBuilder()
     b.setRoutingKey(toProto(obj.routingKey))
     b.build()
   }
 
-  def streamFromProto(msg: proto.StreamEvent): Either[String, StreamEvent] = {
+  def streamFromProto(msg: proto.StreamEvent): Either[String, colset.StreamEvent] = {
     import proto.StreamEvent.EventTypeCase
     msg.getEventTypeCase match {
       case EventTypeCase.ROW_APPEND => rowAppendFromProto(msg.getRowAppend)
@@ -350,11 +347,11 @@ object StreamConversions {
       case _ => Left("Unrecognizable StreamEvent type")
     }
   }
-  def streamToProto(obj: StreamEvent): proto.StreamEvent = {
+  def streamToProto(obj: colset.StreamEvent): proto.StreamEvent = {
     val b = proto.StreamEvent.newBuilder()
     obj match {
-      case v: RowAppendEvent => b.setRowAppend(rowAppendToProto(v))
-      case v: RouteUnresolved => b.setRouteUnresolved(unresolvedToProto(v))
+      case v: colset.RowAppendEvent => b.setRowAppend(rowAppendToProto(v))
+      case v: colset.RouteUnresolved => b.setRouteUnresolved(unresolvedToProto(v))
       case _ => throw new IllegalArgumentException("Unrecognized StreamEvent type")
     }
     b.build()
@@ -449,7 +446,7 @@ object ProtocolConversions {
   }
 
   def gatewayEventsFromProto(msg: proto.GatewayClientEvents): Either[String, colset.GatewayClientEvents] = {
-    val routesOptEither: Either[String, Option[Set[TypeValue]]] = if (msg.hasRoutesUpdate) {
+    val routesOptEither: Either[String, Option[Set[colset.TypeValue]]] = if (msg.hasRoutesUpdate) {
       rightSequence(msg.getRoutesUpdate.getValuesList.asScala.map(fromProto)).map(r => Some(r.toSet))
     } else {
       Right(None)
@@ -498,7 +495,7 @@ object ValueTypeConversions {
   def sequencedToProto(obj: colset.SequencedTypeValue): proto.SequencedTypeValue = {
     val b = proto.SequencedTypeValue.newBuilder()
     obj match {
-      case v: Int64Val => b.setSint64Value(v.v)
+      case v: colset.Int64Val => b.setSint64Value(v.v)
       //case v: colset.TupleValue => b.setTupleValue(tupleToProto(v))
       case _ => throw new IllegalArgumentException(s"Unrecognized SequencedTypeValue: $obj")
     }
@@ -538,7 +535,7 @@ object ValueTypeConversions {
       case ValueTypesCase.SYMBOL_VALUE => Right(colset.SymbolVal(msg.getSymbolValue))
       case ValueTypesCase.TEXT_VALUE => Right(colset.TextVal(msg.getTextValue))
       case ValueTypesCase.BYTES_VALUE => Right(colset.BytesVal(msg.getBytesValue.toByteArray))
-      case ValueTypesCase.UUID_VALUE => Right(UuidVal(fromProtoSimple(msg.getUuidValue)))
+      case ValueTypesCase.UUID_VALUE => Right(colset.UuidVal(fromProtoSimple(msg.getUuidValue)))
       case ValueTypesCase.TUPLE_VALUE => tupleFromProto(msg.getTupleValue)
       case ValueTypesCase.VALUETYPES_NOT_SET => Left("Unrecognizable value type")
       case _ => Left("Unrecognizable value type")

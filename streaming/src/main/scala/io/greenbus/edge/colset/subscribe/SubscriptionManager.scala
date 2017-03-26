@@ -73,7 +73,6 @@ class GenConsumerFilter extends ConsumerSetFilter {
 
 }*/
 
-
 /*
 class ModifiedSetConsumerFilter(session: PeerSessionId, startSequence: SequencedTypeValue, start: SetSnapshot, prevOpt: Option[Set[TypeValue]]) extends ConsumerSetFilter with LazyLogging {
 
@@ -262,7 +261,6 @@ case class KeyedSetUpdated(session: PeerSessionId, sequence: SequencedTypeValue,
 case class RowUpdate(row: RowId, update: ValueUpdate)
  */
 
-
 trait UpdateSynthesizer {
   def delta(delta: Delta): Option[ValueUpdate]
   def resync(resync: Resync): Option[ValueUpdate]
@@ -299,15 +297,15 @@ class SetUpdateSynthesizer(orig: Set[TypeValue]) extends UpdateSynthesizer with 
   def resync(resync: Resync): Option[ValueUpdate] = {
     resync.snapshot match {
       case d: SetSnapshot => {
-          val added = d.snapshot -- current
-          val removed = current -- d.snapshot
-          current = d.snapshot
+        val added = d.snapshot -- current
+        val removed = current -- d.snapshot
+        current = d.snapshot
 
-          if (added.nonEmpty || removed.nonEmpty) {
-            Some(SetUpdated(d.snapshot, removed, added))
-          } else {
-            None
-          }
+        if (added.nonEmpty || removed.nonEmpty) {
+          Some(SetUpdated(d.snapshot, removed, added))
+        } else {
+          None
+        }
       }
       case _ =>
         logger.warn(s"Incorrect snapshot type in consumer filter: " + resync)
@@ -395,7 +393,6 @@ class AppendUpdateSynthesizer extends UpdateSynthesizer with LazyLogging {
     }
   }
 
-
   def resync(resync: Resync): Option[ValueUpdate] = {
     resync.snapshot match {
       case v: AppendSnapshot =>
@@ -423,11 +420,10 @@ class ConsumerUpdateFilter(cid: String, resync: ResyncSession, updates: UpdateSy
     filter.handle(event).flatMap {
       case sd: StreamDelta => updates.delta(sd.update)
       case rs: ResyncSnapshot => updates.resync(rs.resync)
-      case rs: ResyncSnapshot => updates.resync(rs.resync)
+      case rss: ResyncSession => updates.resync(rss.resync)
     }
   }
 }
-
 
 class RowFilterImpl extends RowFilter with LazyLogging {
 

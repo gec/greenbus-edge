@@ -18,7 +18,6 @@
  */
 package io.greenbus.edge.colset
 
-
 class LocalPeerManifestDb(selfSession: PeerSessionId) {
 
   private val routeRow = PeerRouteSource.peerRouteRow(selfSession)
@@ -27,7 +26,7 @@ class LocalPeerManifestDb(selfSession: PeerSessionId) {
   private var manifest = Map.empty[TypeValue, RouteManifestEntry]
 
   def initial(): StreamEvent = {
-    val result = RowAppendEvent(routeRow, ResyncSession(selfSession, SequenceCtx.empty, Resync(Int64Val(sequence), MapSnapshot(Map())) ))
+    val result = RowAppendEvent(routeRow, ResyncSession(selfSession, SequenceCtx.empty, Resync(Int64Val(sequence), MapSnapshot(Map()))))
     sequence += 1
     result
   }

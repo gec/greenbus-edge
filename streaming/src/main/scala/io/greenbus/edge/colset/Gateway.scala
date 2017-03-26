@@ -252,7 +252,6 @@ class GatewayRowSynthesizerImpl(row: RowId, peerSession: PeerSessionId, startSeq
 
   def current: SequencedTypeValue = sessionSequence
 
-
   def append(event: AppendEvent): Seq[AppendEvent] = {
     state match {
       case Uninit => {
@@ -291,7 +290,6 @@ class GatewayRowSynthesizerImpl(row: RowId, peerSession: PeerSessionId, startSeq
     state = Synced(filter, resync.context)
     handleEvent(resync)
   }
-
 
   /*def append(event: AppendEvent): Seq[AppendEvent] = {
     event match {
@@ -340,7 +338,6 @@ class GatewayRowSynthesizerImpl(row: RowId, peerSession: PeerSessionId, startSeq
       }
     }
   }*/
-
 
   /*private def handleSnapshot(snapshot: Resync): Seq[AppendEvent] = {
     filterOpt match {

@@ -19,7 +19,7 @@
 package io.greenbus.edge.colset
 
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.collection.{BiMultiMap, MapToUniqueValues}
+import io.greenbus.edge.collection.{ BiMultiMap, MapToUniqueValues }
 
 import scala.collection.mutable
 
@@ -100,7 +100,7 @@ class SynthesizerTable[Source] extends LazyLogging {
         sourceToRow += (sourceLink -> ev.rowId)
         Seq(ev)
 
-        /*RowSynthesizer.build(ev.rowId, sourceLink, resync.sessionId, resync.resync) match {
+      /*RowSynthesizer.build(ev.rowId, sourceLink, resync.sessionId, resync.resync) match {
           case None =>
             logger.warn(s"Initial row event could not construct log: $ev")
             Seq()
@@ -233,7 +233,7 @@ class RowSynthesizerImpl[Source](rowId: RowId, initSource: Source, initSess: Pee
       }
     }
   }
-/*  private def snapshotForSession(resync: ResyncSession): Seq[AppendEvent] = {
+  /*  private def snapshotForSession(resync: ResyncSession): Seq[AppendEvent] = {
     if (resync.sessionId == activeSession) {
       activeFilter.handle(resync)
         .map(v => Seq(v)).getOrElse(Seq())
@@ -303,10 +303,6 @@ class RowSynthesizerImpl[Source](rowId: RowId, initSource: Source, initSess: Pee
   }
 
 }
-
-
-
-
 
 /*object SessionRowLog {
   def build(rowId: RowId, sessionId: PeerSessionId, init: Resync): Option[SessionRowLog] = {

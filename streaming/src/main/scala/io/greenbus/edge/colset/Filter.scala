@@ -1,9 +1,26 @@
+/**
+ * Copyright 2011-2017 Green Energy Corp.
+ *
+ * Licensed to Green Energy Corp (www.greenenergycorp.com) under one or more
+ * contributor license agreements. See the NOTICE file distributed with this
+ * work for additional information regarding copyright ownership. Green Energy
+ * Corp licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 package io.greenbus.edge.colset
 
 import com.typesafe.scalalogging.LazyLogging
 
 //import scala.collection.mutable
-
 
 object StreamTypes extends LazyLogging {
 
@@ -121,7 +138,6 @@ object StreamTypes extends LazyLogging {
   }
 }
 
-
 trait StreamCache {
   def handle(append: AppendEvent): Unit
   def sync(): ResyncSession
@@ -140,12 +156,10 @@ class RetailStreamCache(cid: String, startInit: ResyncSession) extends StreamCac
   }
 }
 
-
 trait StreamQueue {
   def append(event: AppendEvent): Unit
   def dequeue(): Seq[AppendEvent]
 }
-
 
 trait StandbyStreamQueue {
   def append(event: AppendEvent): Unit
@@ -184,11 +198,9 @@ class GenStandbyStreamQueue(cid: String, startInit: ResyncSession) extends Stand
   }
 }
 
-
 trait StreamFilter {
   def handle(event: AppendEvent): Option[AppendEvent]
 }
-
 
 class GenInitializedStreamFilter(cid: String, startInit: ResyncSession) extends StreamFilter {
 
@@ -354,8 +366,6 @@ class GenSequenceQueue {
     }
   }
 }
-
-
 
 trait SequenceFilter {
   def delta(delta: Delta): Option[Delta]

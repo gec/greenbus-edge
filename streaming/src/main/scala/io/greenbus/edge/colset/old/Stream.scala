@@ -20,7 +20,6 @@ package io.greenbus.edge.colset.old
 
 import io.greenbus.edge.colset._
 
-
 trait SetDelta
 trait SetSnapshot
 
@@ -35,7 +34,6 @@ sealed trait AppendEvent
 case class StreamDelta(update: SetDelta) extends AppendEvent
 case class ResyncSnapshot(snapshot: SetSnapshot) extends AppendEvent
 case class ResyncSession(sessionId: PeerSessionId, snapshot: SetSnapshot) extends AppendEvent
-
 
 sealed trait StreamEvent {
   def routingKey: TypeValue

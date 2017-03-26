@@ -18,7 +18,6 @@
  */
 package io.greenbus.edge.colset
 
-
 object StreamLogging {
 
   def simpleRow(rowId: RowId): String = {
@@ -41,7 +40,6 @@ object StreamLogging {
       case up: AppendValue => s"AppendValue(${up.value.simpleString()})"
     }
   }
-
 
   def simpleSnapshot(update: SequenceSnapshot): String = {
     update match {

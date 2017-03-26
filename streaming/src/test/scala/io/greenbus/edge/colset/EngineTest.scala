@@ -23,7 +23,7 @@ import java.util.UUID
 import com.typesafe.scalalogging.LazyLogging
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
-import org.scalatest.{FunSuite, Matchers}
+import org.scalatest.{ FunSuite, Matchers }
 
 import scala.collection.mutable
 
