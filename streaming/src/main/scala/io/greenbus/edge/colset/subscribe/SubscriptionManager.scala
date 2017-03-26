@@ -67,7 +67,7 @@ object ConsumerSetFilter extends LazyLogging {
   }
 }
 trait ConsumerSetFilter {
-  def delta(delta: SetDelta): Option[ValueUpdate]
+  def delta(delta: Delta): Option[ValueUpdate]
   def snapshot(snapshot: SetSnapshot): Option[ValueUpdate]
 }
 
@@ -88,7 +88,7 @@ class ModifiedSetConsumerFilter(session: PeerSessionId, start: ModifiedSetSnapsh
     }
   }
 
-  def delta(delta: SetDelta): Option[ValueUpdate] = {
+  def delta(delta: Delta): Option[ValueUpdate] = {
     delta match {
       case d: ModifiedSetDelta => {
         if (seq.precedes(d.sequence)) {
@@ -149,7 +149,7 @@ class ModifiedKeyedSetConsumerFilter(session: PeerSessionId, start: ModifiedKeye
     }
   }
 
-  def delta(delta: SetDelta): Option[ValueUpdate] = {
+  def delta(delta: Delta): Option[ValueUpdate] = {
     delta match {
       case d: ModifiedKeyedSetDelta => {
         if (seq.precedes(d.sequence)) {
@@ -224,7 +224,7 @@ class AppendSetConsumerFilter(session: PeerSessionId, start: AppendSetSequence) 
     }
   }
 
-  def delta(delta: SetDelta): Option[ValueUpdate] = {
+  def delta(delta: Delta): Option[ValueUpdate] = {
     delta match {
       case d: AppendSetSequence => handleSequence(d)
       case _ =>

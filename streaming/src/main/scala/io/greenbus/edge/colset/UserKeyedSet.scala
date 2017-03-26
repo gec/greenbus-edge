@@ -19,7 +19,6 @@
 package io.greenbus.edge.colset
 
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.colset.old._
 
 case class KeyedSetDiff[A, B](snapshot: Map[A, B], removed: Set[A], added: Set[(A, B)], modified: Set[(A, B)])
 
@@ -46,18 +45,23 @@ class RawUserKeyedSetImpl extends RawUserKeyedSet with LazyLogging {
 
   def lastSnapshot: Map[TypeValue, TypeValue] = last
 
-  def handleDelta(sd: SetDelta): Unit = {
-    sd match {
-      case delta: ModifiedKeyedSetDelta =>
-        val updates = (updatedOpt.getOrElse(last) -- delta.removes) ++ delta.adds ++ delta.modifies
-        updatedOpt = Some(updates)
-      case _ =>
-        logger.error("UserKeyedSet saw non-keyed set delta")
+  def handleDelta(sd: Delta): Unit = {
+    sd.diffs.lastOption match {
+      case Some(seqDiff) =>
+        seqDiff.diff match {
+          case delta: MapDiff =>
+            val updates = (updatedOpt.getOrElse(last) -- delta.removes) ++ delta.adds ++ delta.modifies
+            updatedOpt = Some(updates)
+          case _ =>
+            logger.error("UserKeyedSet saw non-keyed set delta")
+        }
+      case None =>
+        logger.error("UserKeyedSet saw empty set delta")
     }
   }
-  def handleSnapshot(sd: SetSnapshot): Unit = {
-    sd match {
-      case snap: ModifiedKeyedSetSnapshot =>
+  def handleSnapshot(sd: Resync): Unit = {
+    sd.snapshot match {
+      case snap: MapSnapshot =>
         updatedOpt = Some(snap.snapshot)
       case _ =>
         logger.error("UserKeyedSet saw non-keyed set delta")
@@ -68,7 +72,7 @@ class RawUserKeyedSetImpl extends RawUserKeyedSet with LazyLogging {
     events.foreach {
       case StreamDelta(sd) => handleDelta(sd)
       case ResyncSnapshot(ss) => handleSnapshot(ss)
-      case ResyncSession(_, ss) => handleSnapshot(ss)
+      case ResyncSession(_, _, ss) => handleSnapshot(ss)
     }
   }
 

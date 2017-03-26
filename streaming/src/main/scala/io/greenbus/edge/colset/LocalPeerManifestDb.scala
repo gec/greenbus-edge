@@ -18,7 +18,6 @@
  */
 package io.greenbus.edge.colset
 
-import io.greenbus.edge.colset.old._
 
 class LocalPeerManifestDb(selfSession: PeerSessionId) {
 
@@ -28,7 +27,7 @@ class LocalPeerManifestDb(selfSession: PeerSessionId) {
   private var manifest = Map.empty[TypeValue, RouteManifestEntry]
 
   def initial(): StreamEvent = {
-    val result = RowAppendEvent(routeRow, ResyncSession(selfSession, ModifiedKeyedSetSnapshot(Int64Val(sequence), Map())))
+    val result = RowAppendEvent(routeRow, ResyncSession(selfSession, SequenceCtx.empty, Resync(Int64Val(sequence), MapSnapshot(Map())) ))
     sequence += 1
     result
   }
@@ -71,7 +70,8 @@ class LocalPeerManifestDb(selfSession: PeerSessionId) {
     val addedResult = added.result().toSet
 
     if (removedResult.nonEmpty || modifiedResult.nonEmpty || addedResult.nonEmpty) {
-      val results = Seq(RowAppendEvent(routeRow, StreamDelta(ModifiedKeyedSetDelta(Int64Val(sequence), removedResult, addedResult.map(writeKv), modifiedResult.map(writeKv)))))
+      val diff = SequencedDiff(Int64Val(sequence), MapDiff(removedResult, addedResult.map(writeKv), modifiedResult.map(writeKv)))
+      val results = Seq(RowAppendEvent(routeRow, StreamDelta(Delta(Seq(diff)))))
       sequence += 1
       manifest = (manifest -- removedResult) ++ addedResult ++ modifiedResult
       results

@@ -18,7 +18,6 @@
  */
 package io.greenbus.edge.colset
 
-import io.greenbus.edge.colset.old._
 
 object StreamLogging {
 
@@ -30,31 +29,41 @@ object StreamLogging {
     s"(${tup._1.simpleString()}, ${tup._2.simpleString()})"
   }
 
-  def simpleAppendSetSequence(up: AppendSetSequence): String = {
-    up.appends.map(av => (av.sequence.simpleString(), av.value.simpleString())).mkString("Appends(", ", ", ")")
+  def simpleAppendSnapshot(up: AppendSnapshot): String = {
+    val all = up.previous ++ Seq(up.current)
+    all.map(av => (av.sequence.simpleString(), simpleDiff(av.diff))).mkString("Appends(", ", ", ")")
   }
 
-  def simpleDelta(update: SetDelta): String = {
+  def simpleDiff(update: SequenceTypeDiff): String = {
     update match {
-      case up: ModifiedSetDelta => s"ModifiedSetDelta(${up.sequence.simpleString()}, ${up.removes.map(_.simpleString())}, ${up.adds.map(_.simpleString())})"
-      case up: ModifiedKeyedSetDelta => s"ModifiedKeyedSetDelta(${up.sequence.simpleString()}, ${up.removes.map(_.simpleString())}, ${up.adds.map(simpleTup)}, ${up.modifies.map(simpleTup)})"
-      case up: AppendSetSequence => simpleAppendSetSequence(up)
+      case up: SetDiff => s"SetDiff(${up.removes.map(_.simpleString())}, ${up.adds.map(_.simpleString())})"
+      case up: MapDiff => s"MapDiff(${up.removes.map(_.simpleString())}, ${up.adds.map(simpleTup)}, ${up.modifies.map(simpleTup)})"
+      case up: AppendValue => s"AppendValue(${up.value.simpleString()})"
     }
   }
 
-  def simpleSnapshot(update: SetSnapshot): String = {
+
+  def simpleSnapshot(update: SequenceSnapshot): String = {
     update match {
-      case up: ModifiedSetSnapshot => s"ModifiedSetSnapshot(${up.sequence.simpleString()}, ${up.snapshot.map(_.simpleString())})"
-      case up: ModifiedKeyedSetSnapshot => s"ModifiedKeyedSetSnapshot(${up.sequence.simpleString()}, ${up.snapshot.map(simpleTup)})"
-      case up: AppendSetSequence => simpleAppendSetSequence(up)
+      case up: SetSnapshot => s"SetSnapshot(${up.snapshot.map(_.simpleString())})"
+      case up: MapSnapshot => s"MapSnapshot(${up.snapshot.map(simpleTup)})"
+      case up: AppendSnapshot => simpleAppendSnapshot(up)
     }
+  }
+
+  def simpleResync(d: Resync): String = {
+    s"(${d.sequence.simpleString()}, ${simpleSnapshot(d.snapshot)})"
+  }
+
+  def simpleSequencedDiff(d: SequencedDiff): String = {
+    s"(${d.sequence.simpleString()}, ${simpleDiff(d.diff)})"
   }
 
   def simpleAppend(append: AppendEvent): String = {
     append match {
-      case sd: StreamDelta => s"StreamDelta(${simpleDelta(sd.update)})"
-      case sd: ResyncSnapshot => s"ResyncSnapshot(${simpleSnapshot(sd.snapshot)})"
-      case sd: ResyncSession => s"ResyncSession(${sd.sessionId}, ${simpleSnapshot(sd.snapshot)})"
+      case sd: StreamDelta => s"StreamDelta(${sd.update.diffs.map(simpleSequencedDiff).mkString(", ")})"
+      case sd: ResyncSnapshot => s"ResyncSnapshot(${simpleResync(sd.resync)})"
+      case sd: ResyncSession => s"ResyncSession(${sd.sessionId}, ${sd.context.toString}, ${simpleResync(sd.resync)})"
     }
   }
 

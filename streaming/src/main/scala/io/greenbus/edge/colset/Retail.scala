@@ -19,16 +19,17 @@
 package io.greenbus.edge.colset
 
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.colset.old._
 
 import scala.collection.mutable
 
+/*
 trait RetailRowQueue {
 
   def handle(append: AppendEvent): Unit
 
   def dequeue(): Seq[AppendEvent]
 }
+
 
 object RetailRowCache {
   def build(rowId: RowId, sessionId: PeerSessionId, init: SetSnapshot): Option[RetailRowCache] = {
@@ -322,3 +323,4 @@ class KeyedModifiedSetRetailRowQueue(rowId: RowId, initSess: PeerSessionId, init
     }
   }
 }
+*/

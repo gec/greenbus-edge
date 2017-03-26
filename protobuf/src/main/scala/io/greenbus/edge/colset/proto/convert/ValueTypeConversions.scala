@@ -193,7 +193,7 @@ object StreamConversions {
     b.build()
   }
 
-  def setDeltaFromProto(msg: proto.SetDelta): Either[String, SetDelta] = {
+  def setDeltaFromProto(msg: proto.SetDelta): Either[String, Delta] = {
     import proto.SetDelta.SetTypesCase
     msg.getSetTypesCase match {
       case SetTypesCase.MODIFIED_SET_DELTA => modSetDeltaFromProto(msg.getModifiedSetDelta)
@@ -202,7 +202,7 @@ object StreamConversions {
       case _ => Left("Unrecognizable SetDelta type")
     }
   }
-  def setDeltaToProto(obj: SetDelta): proto.SetDelta = {
+  def setDeltaToProto(obj: Delta): proto.SetDelta = {
     val b = proto.SetDelta.newBuilder()
     obj match {
       case v: ModifiedSetDelta => b.setModifiedSetDelta(modSetDeltaToProto(v))

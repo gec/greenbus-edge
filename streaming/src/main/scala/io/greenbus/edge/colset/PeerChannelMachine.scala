@@ -19,7 +19,6 @@
 package io.greenbus.edge.colset
 
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.colset.old.StreamEvent
 import io.greenbus.edge.flow._
 
 trait StreamSubscribable {

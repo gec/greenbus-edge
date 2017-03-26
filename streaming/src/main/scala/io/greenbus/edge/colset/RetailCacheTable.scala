@@ -19,14 +19,13 @@
 package io.greenbus.edge.colset
 
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.colset.old.{ResyncSession, RouteUnresolved, RowAppendEvent, StreamEvent}
 
 class RetailCacheTable extends LazyLogging {
-  private var rows = Map.empty[TypeValue, Map[TableRow, RetailRowCache]]
+  private var rows = Map.empty[TypeValue, Map[TableRow, StreamCache]]
 
   def getSync(row: RowId): Seq[StreamEvent] = {
     lookup(row).map(log => log.sync())
-      .map(_.map(apEv => RowAppendEvent(row, apEv)).toVector)
+      .map(ev => Seq(RowAppendEvent(row, ev)))
       .getOrElse(Seq())
   }
 
@@ -43,20 +42,22 @@ class RetailCacheTable extends LazyLogging {
     }
   }
 
-  private def lookup(rowId: RowId): Option[RetailRowCache] = {
+  private def lookup(rowId: RowId): Option[StreamCache] = {
     rows.get(rowId.routingKey).flatMap { map =>
       map.get(rowId.tableRow)
     }
   }
 
-  private def addRouted(ev: RowAppendEvent, routingKey: TypeValue, existingRows: Map[TableRow, RetailRowCache]): Unit = {
+  private def addRouted(ev: RowAppendEvent, routingKey: TypeValue, existingRows: Map[TableRow, StreamCache]): Unit = {
     ev.appendEvent match {
       case resync: ResyncSession =>
-        RetailRowCache.build(ev.rowId, resync.sessionId, resync.snapshot) match {
+        val cache = new RetailStreamCache(ev.rowId.toString, resync)
+        rows += (routingKey -> (existingRows + (ev.rowId.tableRow -> cache)))
+        /*RetailRowCache.build(ev.rowId, resync.sessionId, resync.snapshot) match {
           case None => logger.warn(s"Initial row event could not create cache: $ev")
           case Some(log) =>
             rows += (routingKey -> (existingRows + (ev.rowId.tableRow -> log)))
-        }
+        }*/
       case _ =>
         logger.warn(s"Initial row event was not resync session: $ev")
     }

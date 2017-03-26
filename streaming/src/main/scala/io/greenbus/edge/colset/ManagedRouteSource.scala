@@ -19,7 +19,6 @@
 package io.greenbus.edge.colset
 
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.colset.old.StreamEvent
 
 trait ManagedRouteSource {
   def updateRowsForRoute(route: TypeValue, rows: Set[TableRow]): Unit
@@ -72,9 +71,9 @@ class PeerRouteSource(peerId: PeerSessionId, source: PeerLink) extends ManagedRo
     source.setSubscriptions(rowIdSet)
   }
 
-  def snapshot(): Map[TypeValue, RouteManifestEntry] = {
+  /*def snapshot(): Map[TypeValue, RouteManifestEntry] = {
     routeLog.lastSnapshot
-  }
+  }*/
 
   def handleSelfEvents(events: Seq[StreamEvent]): Option[KeyedSetDiff[TypeValue, RouteManifestEntry]] = {
     events.foreach {

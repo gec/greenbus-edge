@@ -19,7 +19,6 @@
 package io.greenbus.edge.colset.channel
 
 import io.greenbus.edge.colset._
-import io.greenbus.edge.colset.old.StreamEvent
 import io.greenbus.edge.flow._
 
 class PeerLinkProxyChannelImpl(

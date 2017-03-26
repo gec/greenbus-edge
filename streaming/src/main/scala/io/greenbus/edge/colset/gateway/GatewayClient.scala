@@ -20,7 +20,6 @@ package io.greenbus.edge.colset.gateway
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.colset._
-import io.greenbus.edge.colset.old._
 import io.greenbus.edge.flow._
 import io.greenbus.edge.thread.CallMarshaller
 
@@ -91,14 +90,14 @@ trait DynamicTableSource {
 
 object DynamicBindableTableMgr {
 
-  def sendPair(row: RowId, sender: Sender[RowAppendEvent, Boolean]): (Sender[SetSnapshot, Boolean], Sender[SetDelta, Boolean]) = {
-    val snap = new Sender[SetSnapshot, Boolean] {
-      def send(obj: SetSnapshot, handleResponse: (Try[Boolean]) => Unit): Unit = {
+  def sendPair(row: RowId, sender: Sender[RowAppendEvent, Boolean]): (Sender[Resync, Boolean], Sender[Delta, Boolean]) = {
+    val snap = new Sender[Resync, Boolean] {
+      def send(obj: Resync, handleResponse: (Try[Boolean]) => Unit): Unit = {
         sender.send(RowAppendEvent(row, ResyncSnapshot(obj)), handleResponse)
       }
     }
-    val delt = new Sender[SetDelta, Boolean] {
-      def send(obj: SetDelta, handleResponse: (Try[Boolean]) => Unit): Unit = {
+    val delt = new Sender[Delta, Boolean] {
+      def send(obj: Delta, handleResponse: (Try[Boolean]) => Unit): Unit = {
         sender.send(RowAppendEvent(row, StreamDelta(obj)), handleResponse)
       }
     }
@@ -145,7 +144,7 @@ class DynamicBindableTableMgr(route: TypeValue, table: String, source: DynamicTa
 }
 
 trait BindableRowMgr {
-  def bind(snapshot: Sender[SetSnapshot, Boolean], deltas: Sender[SetDelta, Boolean]): Unit
+  def bind(snapshot: Sender[Resync, Boolean], deltas: Sender[Delta, Boolean]): Unit
   def unbind(): Unit
 }
 
@@ -436,18 +435,18 @@ class EventBuffer(proxy: GatewayProxy) extends LazyLogging {
   private val events = mutable.ArrayBuffer.empty[StreamEvent]
   private val callbacks = mutable.ArrayBuffer.empty[Try[Boolean] => Unit]
 
-  def snapshotSender(row: RowId): Sender[SetSnapshot, Boolean] = {
-    new Sender[SetSnapshot, Boolean] {
-      def send(obj: SetSnapshot, handleResponse: (Try[Boolean]) => Unit): Unit = {
+  def snapshotSender(row: RowId): Sender[Resync, Boolean] = {
+    new Sender[Resync, Boolean] {
+      def send(obj: Resync, handleResponse: (Try[Boolean]) => Unit): Unit = {
         events += RowAppendEvent(row, ResyncSnapshot(obj))
         callbacks += handleResponse
       }
     }
   }
 
-  def deltaSender(row: RowId): Sender[SetDelta, Boolean] = {
-    new Sender[SetDelta, Boolean] {
-      def send(obj: SetDelta, handleResponse: (Try[Boolean]) => Unit): Unit = {
+  def deltaSender(row: RowId): Sender[Delta, Boolean] = {
+    new Sender[Delta, Boolean] {
+      def send(obj: Delta, handleResponse: (Try[Boolean]) => Unit): Unit = {
         events += RowAppendEvent(row, StreamDelta(obj))
         callbacks += handleResponse
       }

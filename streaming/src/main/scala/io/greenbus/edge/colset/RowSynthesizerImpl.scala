@@ -20,7 +20,6 @@ package io.greenbus.edge.colset
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.collection.{BiMultiMap, MapToUniqueValues}
-import io.greenbus.edge.colset.old._
 
 import scala.collection.mutable
 
@@ -95,7 +94,13 @@ class SynthesizerTable[Source] extends LazyLogging {
   private def addRouted(sourceLink: Source, ev: RowAppendEvent, routingKey: TypeValue, existingRows: Map[TableRow, RowSynthesizer[Source]]): Seq[StreamEvent] = {
     ev.appendEvent match {
       case resync: ResyncSession =>
-        RowSynthesizer.build(ev.rowId, sourceLink, resync.sessionId, resync.snapshot) match {
+
+        val synth = RowSynthesizer.build(ev.rowId, sourceLink, resync)
+        routed += (routingKey -> (existingRows + (ev.rowId.tableRow -> synth)))
+        sourceToRow += (sourceLink -> ev.rowId)
+        Seq(ev)
+
+        /*RowSynthesizer.build(ev.rowId, sourceLink, resync.sessionId, resync.resync) match {
           case None =>
             logger.warn(s"Initial row event could not construct log: $ev")
             Seq()
@@ -103,7 +108,7 @@ class SynthesizerTable[Source] extends LazyLogging {
             routed += (routingKey -> (existingRows + (ev.rowId.tableRow -> db)))
             sourceToRow += (sourceLink -> ev.rowId)
             events.map(v => RowAppendEvent(ev.rowId, v))
-        }
+        }*/
       case _ =>
         logger.warn(s"Initial row event was not resync session: $ev")
         Seq()
@@ -112,14 +117,19 @@ class SynthesizerTable[Source] extends LazyLogging {
 }
 
 object RowSynthesizer {
-  def build[Source](rowId: RowId, initSource: Source, initSess: PeerSessionId, snapshot: SetSnapshot): Option[(RowSynthesizer[Source], Seq[AppendEvent])] = {
+
+  def build[Source](rowId: RowId, initSource: Source, resyncSession: ResyncSession): RowSynthesizer[Source] = {
+    val filter = new GenInitializedStreamFilter(rowId.toString, resyncSession)
+    new RowSynthesizerImpl[Source](rowId, initSource, resyncSession.sessionId, filter)
+  }
+  /*def build[Source](rowId: RowId, initSource: Source, initSess: PeerSessionId, resync: Resync): Option[(RowSynthesizer[Source], Seq[AppendEvent])] = {
     val logOpt = SessionRowLog.build(rowId, initSess, snapshot)
     logOpt.map { log =>
       val (events, db) = log.activate()
       val synthesizer = new RowSynthesizerImpl[Source](rowId, initSource, initSess, db)
       (synthesizer, events)
     }
-  }
+  }*/
 }
 trait RowSynthesizer[Source] {
   def append(source: Source, event: AppendEvent): Seq[AppendEvent]
@@ -136,28 +146,31 @@ three modes a session can be in:
 
  */
 // TODO: emit desync when no sources left
-class RowSynthesizerImpl[Source](rowId: RowId, initSource: Source, initSess: PeerSessionId, initMgr: SessionSynthesizingFilter) extends RowSynthesizer[Source] with LazyLogging {
+class RowSynthesizerImpl[Source](rowId: RowId, initSource: Source, initSess: PeerSessionId, initFilter: StreamFilter) extends RowSynthesizer[Source] with LazyLogging {
 
   private var activeSession: PeerSessionId = initSess
-  private var activeDb: SessionSynthesizingFilter = initMgr
-  private var standbySessions = Map.empty[PeerSessionId, SessionRowLog]
+  private var activeFilter: StreamFilter = initFilter
+  private var standbySessions = Map.empty[PeerSessionId, StandbyStreamQueue]
   private var sessionToSources: MapToUniqueValues[PeerSessionId, Source] = MapToUniqueValues((initSess, initSource))
-  private def sourceToSession: Map[Source, PeerSessionId] = sessionToSources.valToKey
+  private def currentSessionForSource: Map[Source, PeerSessionId] = sessionToSources.valToKey
 
   def append(source: Source, event: AppendEvent): Seq[AppendEvent] = {
     event match {
       case delta: StreamDelta => {
-        sourceToSession.get(source) match {
+        currentSessionForSource.get(source) match {
           case None =>
             logger.warn(s"$rowId got delta for inactive source link $initSource"); Seq()
           case Some(sess) => {
             if (sess == activeSession) {
-              activeDb.handleDelta(delta.update).map(StreamDelta)
+
+              activeFilter.handle(delta)
                 .map(v => Seq(v)).getOrElse(Seq())
+
             } else {
+
               standbySessions.get(sess) match {
                 case None => logger.error(s"$rowId got delta for inactive source link $initSource")
-                case Some(log) => log.handleDelta(delta.update)
+                case Some(log) => log.append(delta)
               }
               Seq()
             }
@@ -165,18 +178,28 @@ class RowSynthesizerImpl[Source](rowId: RowId, initSource: Source, initSess: Pee
         }
       }
       case resync: ResyncSnapshot => {
-        sourceToSession.get(source) match {
+        currentSessionForSource.get(source) match {
           case None =>
             logger.warn(s"$rowId got snapshot for inactive source link $initSource"); Seq()
           case Some(sess) => {
-            snapshotForSession(sess, resync.snapshot)
+            //snapshotForSession(sess, resync)
+            if (sess == activeSession) {
+              activeFilter.handle(resync)
+                .map(v => Seq(v)).getOrElse(Seq())
+            } else {
+              standbySessions.get(sess) match {
+                case None => logger.error(s"$rowId got snapshot for inactive source link $initSource")
+                case Some(log) => log.append(resync)
+              }
+              Seq()
+            }
           }
         }
       }
       case sessionResync: ResyncSession => {
 
         // TODO: session succession logic by actually reading peer session id
-        val prevSessOpt = sourceToSession.get(source)
+        val prevSessOpt = currentSessionForSource.get(source)
 
         if (!prevSessOpt.contains(sessionResync.sessionId)) {
           sessionToSources = sessionToSources.remove(source) + (sessionResync.sessionId -> source)
@@ -191,20 +214,18 @@ class RowSynthesizerImpl[Source](rowId: RowId, initSource: Source, initSess: Pee
             }
           }
 
-          activeDb.handleResync(sessionResync.snapshot)
-            .map(v => Seq(v)).getOrElse(Seq())
+          activeFilter.handle(sessionResync)
+            .map(v => Seq(v))
+            .getOrElse(Seq())
 
         } else {
 
           standbySessions.get(sessionResync.sessionId) match {
             case None => {
-              SessionRowLog.build(rowId, sessionResync.sessionId, sessionResync.snapshot) match {
-                case None => logger.warn(s"Session row log for $rowId could not be created from session resync: $sessionResync")
-                case Some(log) =>
-                  standbySessions += (sessionResync.sessionId -> log)
-              }
+              val standbyQueue = new GenStandbyStreamQueue(rowId.toString, sessionResync)
+              standbySessions += (sessionResync.sessionId -> standbyQueue)
             }
-            case Some(log) => log.handleResync(sessionResync.snapshot)
+            case Some(log) => log.append(sessionResync)
           }
 
           activeSessionChangeCheck()
@@ -212,15 +233,27 @@ class RowSynthesizerImpl[Source](rowId: RowId, initSource: Source, initSess: Pee
       }
     }
   }
-
-  private def snapshotForSession(sess: PeerSessionId, snapshot: SetSnapshot): Seq[AppendEvent] = {
-    if (sess == activeSession) {
-      activeDb.handleResync(snapshot)
+/*  private def snapshotForSession(resync: ResyncSession): Seq[AppendEvent] = {
+    if (resync.sessionId == activeSession) {
+      activeFilter.handle(resync)
         .map(v => Seq(v)).getOrElse(Seq())
     } else {
-      standbySessions.get(sess) match {
+      standbySessions.get(resync.sessionId) match {
         case None => logger.error(s"$rowId got delta for inactive source link $initSource")
-        case Some(log) => log.handleResync(snapshot)
+        case Some(log) => log.append(resync)
+      }
+      Seq()
+    }
+  }*/
+
+  private def snapshotForSession(session: PeerSessionId, resync: ResyncSnapshot): Seq[AppendEvent] = {
+    if (session == activeSession) {
+      activeFilter.handle(resync)
+        .map(v => Seq(v)).getOrElse(Seq())
+    } else {
+      standbySessions.get(session) match {
+        case None => logger.error(s"$rowId got snapshot for inactive source link $initSource")
+        case Some(log) => log.append(resync)
       }
       Seq()
     }
@@ -234,8 +267,11 @@ class RowSynthesizerImpl[Source](rowId: RowId, initSource: Source, initSess: Pee
         val (nowActiveSession, log) = standbySessions.head
         standbySessions -= nowActiveSession
         activeSession = nowActiveSession
-        val (events, db) = log.activate()
-        activeDb = db
+        //val (events, db) = log.activate()
+        val resync = log.dequeue()
+        val events = Seq(resync)
+        val filter = new GenInitializedStreamFilter(rowId.toString, resync)
+        activeFilter = filter
         events
 
       } else {
@@ -249,7 +285,7 @@ class RowSynthesizerImpl[Source](rowId: RowId, initSource: Source, initSess: Pee
 
   def sourceRemoved(source: Source): Seq[AppendEvent] = {
 
-    val prevSessOpt = sourceToSession.get(source)
+    val prevSessOpt = currentSessionForSource.get(source)
     sessionToSources = sessionToSources.remove(source)
 
     prevSessOpt match {
@@ -268,8 +304,12 @@ class RowSynthesizerImpl[Source](rowId: RowId, initSource: Source, initSess: Pee
 
 }
 
-object SessionRowLog {
-  def build(rowId: RowId, sessionId: PeerSessionId, init: SetSnapshot): Option[SessionRowLog] = {
+
+
+
+
+/*object SessionRowLog {
+  def build(rowId: RowId, sessionId: PeerSessionId, init: Resync): Option[SessionRowLog] = {
     init match {
       case snap: ModifiedSetSnapshot => Some(new SessionModifyRowLog(rowId, sessionId, snap))
       case snap: ModifiedKeyedSetSnapshot => Some(new SessionKeyedModifyRowLog(rowId, sessionId, snap))
@@ -286,10 +326,11 @@ object SessionRowLog {
 trait SessionRowLog {
   def activate(): (Seq[AppendEvent], SessionSynthesizingFilter)
   //def resyncEvents: Seq[AppendEvent]
-  def handleDelta(delta: SetDelta): Unit
+  def handleDelta(delta: Delta): Unit
   def handleResync(snapshot: SetSnapshot): Unit
-}
+}*/
 
+/*
 object SessionSynthesizingFilter {
   def build(rowId: RowId, sessionId: PeerSessionId, init: SetSnapshot): Option[SessionSynthesizingFilter] = {
     init match {
@@ -306,13 +347,15 @@ object SessionSynthesizingFilter {
   }
 }
 trait SessionSynthesizingFilter {
-  def handleDelta(delta: SetDelta): Option[SetDelta]
+  def handleDelta(delta: Delta): Option[Delta]
   def handleResync(snapshot: SetSnapshot): Option[AppendEvent]
 }
+*/
 
 sealed trait SessionSeqElement {
   def sequence: SequencedTypeValue
 }
+/*
 
 class SessionAppendRowLog(rowId: RowId, sessionId: PeerSessionId, init: Seq[AppendSetValue], last: AppendSetValue) extends SessionRowLog with LazyLogging {
 
@@ -333,7 +376,7 @@ class SessionAppendRowLog(rowId: RowId, sessionId: PeerSessionId, init: Seq[Appe
     }
   }
 
-  def handleDelta(delta: SetDelta): Unit = {
+  def handleDelta(delta: Delta): Unit = {
     delta match {
       case AppendSetSequence(appends) => {
         handleInOrder(appends)
@@ -375,7 +418,7 @@ class SessionAppendSynthesizingFilter(rowId: RowId, sessionId: PeerSessionId, st
     b.result()
   }
 
-  def handleDelta(delta: SetDelta): Option[SetDelta] = {
+  def handleDelta(delta: Delta): Option[Delta] = {
     delta match {
       case AppendSetSequence(appends) => {
         val results = handleInOrder(appends)
@@ -436,7 +479,7 @@ class SessionModifyRowLog(rowId: RowId, sessionId: PeerSessionId, init: Modified
     Seq(ResyncSession(sessionId, snap))
   }
 
-  def handleDelta(delta: SetDelta): Unit = {
+  def handleDelta(delta: Delta): Unit = {
     delta match {
       case d: ModifiedSetDelta =>
         if (sequence.precedes(d.sequence)) {
@@ -469,13 +512,14 @@ class SessionModifyRowLog(rowId: RowId, sessionId: PeerSessionId, init: Modified
   }
 }
 
+
 class SessionModifyRowSynthesizingFilter(rowId: RowId, sessionId: PeerSessionId, startSequence: SequencedTypeValue) extends SessionSynthesizingFilter with LazyLogging {
 
   private var sequence: SequencedTypeValue = startSequence
   //private var current: Set[TypeValue] = init.snapshot
 
-  def handleDelta(delta: SetDelta): Option[SetDelta] = {
-    delta match {
+  def handleDelta(delta: Delta): Option[Delta] = {
+    /*delta match {
       case d: ModifiedSetDelta => {
         if (sequence.precedes(d.sequence)) {
           sequence = d.sequence
@@ -489,7 +533,7 @@ class SessionModifyRowSynthesizingFilter(rowId: RowId, sessionId: PeerSessionId,
       case _ =>
         logger.warn(s"Unrecognized set delta event for $rowId, session $sessionId: $delta")
         None
-    }
+    }*/
   }
 
   // TODO: could compute set diff to a resync for retail instead of the full thing; is skipping seqs allowed for latest-value in the stream semantics?
@@ -529,7 +573,7 @@ class SessionKeyedModifyRowLog(rowId: RowId, sessionId: PeerSessionId, init: Mod
     Seq(ResyncSession(sessionId, snap))
   }
 
-  def handleDelta(delta: SetDelta): Unit = {
+  def handleDelta(delta: Delta): Unit = {
     delta match {
       case d: ModifiedKeyedSetDelta =>
         if (sequence.precedes(d.sequence)) {
@@ -566,7 +610,7 @@ class SessionKeyedModifyRowSynthesizingFilter(rowId: RowId, sessionId: PeerSessi
 
   private var sequence: SequencedTypeValue = startSequence
 
-  def handleDelta(delta: SetDelta): Option[SetDelta] = {
+  def handleDelta(delta: Delta): Option[Delta] = {
     delta match {
       case d: ModifiedKeyedSetDelta => {
         if (sequence.precedes(d.sequence)) {
@@ -599,4 +643,5 @@ class SessionKeyedModifyRowSynthesizingFilter(rowId: RowId, sessionId: PeerSessi
     }
   }
 }
+*/
 
