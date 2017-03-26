@@ -153,16 +153,6 @@ object GatewayRowSynthesizerImpl {
 
   }
 
-  /*private def resequenceAppendSeq(original: AppendSetSequence, startSequence: SequencedTypeValue): (AppendSetSequence, SequencedTypeValue) = {
-    var seqVar = startSequence
-    val values = original.appends.map { v =>
-      val vseq = seqVar
-      seqVar = seqVar.next
-      AppendSetValue(vseq, v.value)
-    }
-    (AppendSetSequence(values), seqVar)
-  }*/
-
   def resequenceStreamSnap(ss: SequenceSnapshot, startSequence: SequencedTypeValue): (SequenceSnapshot, SequencedTypeValue) = {
     ss match {
       case _: SetSnapshot => (ss, startSequence.next)
@@ -200,53 +190,15 @@ object GatewayRowSynthesizerImpl {
     (Delta(diffs), seqVar)
   }
 
-  /*def resequenceSnapshot(snapshot: SetSnapshot, seq: SequencedTypeValue): (SetSnapshot, SequencedTypeValue) = {
-    snapshot match {
-      case d: ModifiedSetSnapshot => (d.copy(sequence = seq), seq.next)
-      case d: ModifiedKeyedSetSnapshot => (d.copy(sequence = seq), seq.next)
-      case d: AppendSetSequence => resequenceAppendSeq(d, seq)
-    }
-  }*/
-
   sealed trait State
   case object Uninit extends State
   case class Synced(filter: StreamFilter, ctx: SequenceCtx) extends State
 }
 
-/*
-
-class GenInitializedStreamFilter(cid: String, startInit: ResyncSession) extends StreamFilter {
-
-  private var session = startInit.sessionId
-  //private var ctx = startInit.init
-
-  private var seqFilter = new GenSequenceFilter(cid, startInit.resync.sequence)
-
-  def handle(event: AppendEvent): Option[AppendEvent] = {
-    event match {
-      case StreamDelta(delta) => seqFilter.delta(delta).map(StreamDelta)
-      case ResyncSnapshot(resync) => seqFilter.resync(resync).map(ResyncSnapshot)
-      case resyncSession: ResyncSession => {
-        if (resyncSession.sessionId != session) {
-          session = resyncSession.sessionId
-          seqFilter = new GenSequenceFilter(cid, resyncSession.resync.sequence)
-
-          Some(resyncSession)
-        } else {
-          seqFilter.resync(resyncSession.resync).map(up => resyncSession.copy(resync = up))
-        }
-      }
-    }
-  }
-}
- */
-
 class GatewayRowSynthesizerImpl(row: RowId, peerSession: PeerSessionId, startSequence: SequencedTypeValue) extends GatewayRowSynthesizer with LazyLogging {
   import GatewayRowSynthesizerImpl._
 
   private var sessionSequence: SequencedTypeValue = startSequence
-  //private var ctx = Option.empty[]
-  //private var filterOpt = Option.empty[SequenceFilter]
 
   private var state: State = Uninit
 
@@ -258,11 +210,6 @@ class GatewayRowSynthesizerImpl(row: RowId, peerSession: PeerSessionId, startSeq
         event match {
           case resync: ResyncSession => {
             handleAndReinitialize(resync)
-            /*val filter = new GenInitializedStreamFilter(row.toString, resync)
-            state = Synced(filter, resync.context)
-            val (resequenced, updatedSeq) = resequenceAppendEvent(resync, peerSession, sessionSequence)
-            sessionSequence = updatedSeq
-            Seq(resequenced)*/
           }
           case _ =>
             logger.warn(s"Uinitialized gateway synthesizer saw stream delta instead of resync session: $row")
@@ -290,112 +237,6 @@ class GatewayRowSynthesizerImpl(row: RowId, peerSession: PeerSessionId, startSeq
     state = Synced(filter, resync.context)
     handleEvent(resync)
   }
-
-  /*def append(event: AppendEvent): Seq[AppendEvent] = {
-    event match {
-      case delta: StreamDelta => {
-        state match {
-          case Uninit =>
-            logger.warn(s"Uinitialized gateway synthesizer saw stream delta instead of resync session: $row")
-            Seq()
-          case Synced(filter, ctx) => {
-            val deltaOpt = filter.delta(delta.update).map { filteredDelta =>
-              val (resequenced, updatedSeq) = resequenceDelta(filteredDelta, sessionSequence)
-              sessionSequence = updatedSeq
-              StreamDelta(resequenced)
-            }
-            deltaOpt.map(Seq(_)).getOrElse(Seq())
-          }
-        }
-      }
-      case snap: ResyncSnapshot => {
-        state match {
-          case Uninit =>
-            logger.warn(s"Uinitialized gateway synthesizer saw stream snapshot instead of resync session: $row")
-            Seq()
-          case Synced(filter, ctx) => {
-            filter.resync(snap.resync).map { appendEvent =>
-              val (resequenced, updatedSeq) = resequenceAppendEvent(ResyncSnapshot(appendEvent), peerSession, sessionSequence)
-              sessionSequence = updatedSeq
-              Seq(resequenced)
-            }.getOrElse(Seq())
-          }
-        }
-      }
-      case snap: ResyncSession => {
-        state match {
-          case Uninit =>
-            logger.warn(s"Uinitialized gateway synthesizer saw stream snapshot instead of resync session: $row")
-            Seq()
-          case Synced(filter, ctx) => {
-            filter.resync(snap.resync).map { appendEvent =>
-              val (resequenced, updatedSeq) = resequenceAppendEvent(ResyncSnapshot(appendEvent), peerSession, sessionSequence)
-              sessionSequence = updatedSeq
-              Seq(resequenced)
-            }.getOrElse(Seq())
-          }
-        }
-      }
-    }
-  }*/
-
-  /*private def handleSnapshot(snapshot: Resync): Seq[AppendEvent] = {
-    filterOpt match {
-      case None => {
-
-        val filter = new GenSequenceFilter(row.toString, snapshot.sequence)
-        filterOpt = Some(filter)
-        val (resequenced, updatedSeq) = resequenceSnapshot(snapshot, sessionSequence)
-        sessionSequence = updatedSeq
-        Seq(ResyncSession(peerSession, resequenced))
-        /*val builtFilterOpt = SessionSynthesizingFilter.build(row, peerSession, snapshot)
-        builtFilterOpt match {
-          case None =>
-            logger.warn(s"Uninitialized gateway synthesizer could not build filter from snapshot: $row")
-            Seq()
-          case Some(filter) =>
-            filterOpt = Some(filter)
-            val (resequenced, updatedSeq) = resequenceSnapshot(snapshot, sessionSequence)
-            sessionSequence = updatedSeq
-            Seq(ResyncSession(peerSession, resequenced))
-        }*/
-      }
-      case Some(filter) => {
-        filter.resync(snapshot).map { appendEvent =>
-          val (resequenced, updatedSeq) = resequenceAppendEvent(appendEvent, peerSession, sessionSequence)
-          sessionSequence = updatedSeq
-          Seq(resequenced)
-        }.getOrElse(Seq())
-      }
-    }
-  }*/
-
-  /*def append(event: AppendEvent): Seq[AppendEvent] = {
-    event match {
-      case delta: StreamDelta => {
-        filterOpt match {
-          case None =>
-            logger.warn(s"Uinitialized gateway synthesizer saw stream delta instead of snapshot: $row")
-            Seq()
-          case Some(filter) => {
-            val deltaOpt = filter.handleDelta(delta.update).map { filteredDelta =>
-              val (resequenced, updatedSeq) = resequenceDelta(filteredDelta, sessionSequence)
-              sessionSequence = updatedSeq
-              StreamDelta(resequenced)
-            }
-
-            deltaOpt.map(Seq(_)).getOrElse(Seq())
-          }
-        }
-      }
-      case snap: ResyncSnapshot => {
-        handleSnapshot(snap.resync)
-      }
-      case snap: ResyncSession => {
-        handleSnapshot(snap.resync)
-      }
-    }
-  }*/
 }
 
 import scala.collection.mutable

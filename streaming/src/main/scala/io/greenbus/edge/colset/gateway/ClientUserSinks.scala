@@ -55,8 +55,6 @@ object MapDiffCalc {
   }
 
 }
-//case class KeyedSetDiff[A, B](snapshot: Map[A, B], removed: Set[A], added: Set[(A, B)], modified: Set[(A, B)])
-//case class MapDiff(removes: Set[TypeValue], adds: Set[(TypeValue, TypeValue)], modifies: Set[(TypeValue, TypeValue)])
 
 object KeyedSetSink extends SetStateType[Map[TypeValue, TypeValue], MapDiff] {
 

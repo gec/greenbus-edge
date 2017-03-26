@@ -71,10 +71,6 @@ class PeerRouteSource(peerId: PeerSessionId, source: PeerLink) extends ManagedRo
     source.setSubscriptions(rowIdSet)
   }
 
-  /*def snapshot(): Map[TypeValue, RouteManifestEntry] = {
-    routeLog.lastSnapshot
-  }*/
-
   def handleSelfEvents(events: Seq[StreamEvent]): Option[KeyedSetDiff[TypeValue, RouteManifestEntry]] = {
     events.foreach {
       case RowAppendEvent(row, ev) =>

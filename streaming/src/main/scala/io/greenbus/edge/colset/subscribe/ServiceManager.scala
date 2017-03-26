@@ -63,34 +63,3 @@ class StreamServiceClientImpl(proxy: PeerLinkProxyChannel, eventThread: CallMars
 
   def onClose: LatchSubscribable = proxy.onClose
 }
-
-/*
-trait ServiceManager {
-  def connected(proxy: PeerLinkProxyChannel): Unit
-}
-
-class ServiceManagerImpl(eventThread: CallMarshaller) {
-
-  private var connectionOpt = Option.empty[PeerLinkProxy]
-
-  def connected(proxy: PeerLinkProxyChannel): Unit = {
-    eventThread.marshal {
-      connectionOpt = Some(proxy)
-    }
-    proxy.onClose.subscribe(() => eventThread.marshal { disconnected() })
-    proxy.responses.bind(resps => eventThread.marshal { handleResponses(resps) })
-  }
-
-  /*def request(request: ServiceRequest): Unit = {
-    request.
-  }*/
-
-  protected def handleResponses(responses: Seq[ServiceResponse]): Unit = {
-
-  }
-
-  private def disconnected(): Unit = {
-    connectionOpt = None
-  }
-}
-*/

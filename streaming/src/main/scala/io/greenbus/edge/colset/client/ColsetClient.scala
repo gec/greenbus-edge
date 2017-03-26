@@ -55,8 +55,6 @@ class MultiChannelColsetClientImpl(client: ChannelClient)(implicit val ex: Execu
     result
   }
 
-  //def openGatewayClientProxy(): Future[GatewayClientProxyChannel] = ???
-
   def openPeerLinkClient(): Future[(PeerSessionId, PeerLinkProxyChannel)] = {
     val correlator = UUID.randomUUID().toString
     val subFut = client.openSender[SubscriptionSetUpdate, SubSubscriptionSetDesc](SubSubscriptionSetDesc(correlator))
@@ -82,6 +80,4 @@ class MultiChannelColsetClientImpl(client: ChannelClient)(implicit val ex: Execu
 
     result
   }
-
-  //def openSubscriberProxyClient(localSession: PeerSessionId): Future[SubscriberProxyChannel] = ???
 }
