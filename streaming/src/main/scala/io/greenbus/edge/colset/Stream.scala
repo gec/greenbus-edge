@@ -53,6 +53,11 @@ ControlCtxChangeEvent(session, ctx, resync)
 
 Event(controlOpt, sequenceEvent)
 
+Control:
+
+ResyncControl (full)
+ResyncContext
+
  */
 sealed trait AppendEvent
 case class StreamDelta(update: Delta) extends AppendEvent

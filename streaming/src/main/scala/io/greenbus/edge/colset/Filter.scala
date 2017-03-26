@@ -379,6 +379,8 @@ class GenSequenceFilter(cid: String, startSequence: SequencedTypeValue) extends 
 
   def delta(delta: Delta): Option[Delta] = {
 
+    logger.trace(s"$cid got $delta at $sequence")
+
     var seqVar = sequence
 
     val passed = delta.diffs.filter { diff =>
@@ -400,6 +402,9 @@ class GenSequenceFilter(cid: String, startSequence: SequencedTypeValue) extends 
   }
 
   def resync(resync: Resync): Option[Resync] = {
+
+    logger.debug(s"$cid got $resync at $sequence")
+
     if (resync.sequence == sequence) {
       None
     } else if (sequence.precedes(resync.sequence)) {

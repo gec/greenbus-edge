@@ -98,8 +98,8 @@ class Gateway(localSession: PeerSessionId) extends LocalGateway with LazyLogging
       }
     }
 
-    val synthesizedEvents = synthesizer.handle(ctx.id, events)
     logger.trace("Synthesized gateway before:" + StreamLogging.logEvents(events))
+    val synthesizedEvents = synthesizer.handle(ctx.id, events)
     logger.trace("Synthesized gateway after:" + StreamLogging.logEvents(synthesizedEvents))
 
     eventDist.push(GatewayEvents(setUpdate, synthesizedEvents))

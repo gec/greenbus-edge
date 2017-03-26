@@ -259,13 +259,14 @@ object StreamConversions {
         colset.ResyncSession(session, ctx, Resync(seq, update))
       }
     } else {
-      Left("ResyncSession missing update")
+      Left("ResyncSession missing session, snapshot, sequence, or context")
     }
   }
   def resyncSessionToProto(obj: colset.ResyncSession): proto.ResyncSession = {
     val b = proto.ResyncSession.newBuilder()
     b.setSessionId(sessionToProto(obj.sessionId))
     b.setSequence(ValueTypeConversions.sequencedToProto(obj.resync.sequence))
+    b.setContext(contextToProto(obj.context))
     b.setSnapshot(setSnapshotToProto(obj.resync.snapshot))
     b.build()
   }

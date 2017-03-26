@@ -18,6 +18,8 @@
  */
 package io.greenbus.edge.colset.gateway
 
+import java.util.UUID
+
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.colset._
 import io.greenbus.edge.flow._
@@ -78,7 +80,7 @@ trait RouteSourceHandle {
  */
 
 trait BindableTableMgr {
-  def bind(sender: Sender[RowAppendEvent, Boolean]): Unit
+  def bind(sender: Sender[RowAppendEvent, Boolean], session: PeerSessionId): Unit
   def setUpdate(keys: Set[TypeValue]): Unit
   def unbind(): Unit
 }
@@ -90,10 +92,10 @@ trait DynamicTableSource {
 
 object DynamicBindableTableMgr {
 
-  def sendPair(row: RowId, sender: Sender[RowAppendEvent, Boolean]): (Sender[Resync, Boolean], Sender[Delta, Boolean]) = {
-    val snap = new Sender[Resync, Boolean] {
-      def send(obj: Resync, handleResponse: (Try[Boolean]) => Unit): Unit = {
-        sender.send(RowAppendEvent(row, ResyncSnapshot(obj)), handleResponse)
+  def sendPair(row: RowId, session: PeerSessionId, sender: Sender[RowAppendEvent, Boolean]): (Sender[UserResync, Boolean], Sender[Delta, Boolean]) = {
+    val snap = new Sender[UserResync, Boolean] {
+      def send(obj: UserResync, handleResponse: (Try[Boolean]) => Unit): Unit = {
+        sender.send(RowAppendEvent(row, ResyncSession(session, obj.ctx, obj.resync)), handleResponse)
       }
     }
     val delt = new Sender[Delta, Boolean] {
@@ -107,10 +109,10 @@ object DynamicBindableTableMgr {
 class DynamicBindableTableMgr(route: TypeValue, table: String, source: DynamicTableSource) extends BindableTableMgr {
 
   private var rows = Map.empty[TypeValue, BindableRowMgr]
-  private var bindingOpt = Option.empty[Sender[RowAppendEvent, Boolean]]
+  private var bindingOpt = Option.empty[(Sender[RowAppendEvent, Boolean], PeerSessionId)]
 
-  def bind(sender: Sender[RowAppendEvent, Boolean]): Unit = {
-    bindingOpt = Some(sender)
+  def bind(sender: Sender[RowAppendEvent, Boolean], session: PeerSessionId): Unit = {
+    bindingOpt = Some((sender, session))
   }
 
   def setUpdate(keys: Set[TypeValue]): Unit = {
@@ -121,9 +123,10 @@ class DynamicBindableTableMgr(route: TypeValue, table: String, source: DynamicTa
     added.foreach { key =>
       val rowMgr = source.added(key)
 
-      bindingOpt.foreach { sender =>
-        val (snap, delt) = DynamicBindableTableMgr.sendPair(RowId(route, table, key), sender)
-        rowMgr.bind(snap, delt)
+      bindingOpt.foreach {
+        case (sender, session) =>
+          val (snap, delt) = DynamicBindableTableMgr.sendPair(RowId(route, table, key), session, sender)
+          rowMgr.bind(snap, delt)
       }
 
       // Bind
@@ -144,13 +147,13 @@ class DynamicBindableTableMgr(route: TypeValue, table: String, source: DynamicTa
 }
 
 trait BindableRowMgr {
-  def bind(snapshot: Sender[Resync, Boolean], deltas: Sender[Delta, Boolean]): Unit
+  def bind(snapshot: Sender[UserResync, Boolean], deltas: Sender[Delta, Boolean]): Unit
   def unbind(): Unit
 }
 
 class RouteHandleImpl(eventThread: CallMarshaller, route: TypeValue, mgr: RouteMgr, reqSrc: Source[Seq[RouteServiceRequest]]) extends RouteSourceHandle {
   def setRow(id: TableRow): SetEventSink = {
-    val bindable = new SetSink
+    val bindable = new SetSink(SequenceCtx.empty)
     eventThread.marshal {
       mgr.addBindable(id, bindable)
     }
@@ -158,7 +161,7 @@ class RouteHandleImpl(eventThread: CallMarshaller, route: TypeValue, mgr: RouteM
   }
 
   def keyedSetRow(id: TableRow): KeyedSetEventSink = {
-    val bindable = new KeyedSetSink
+    val bindable = new KeyedSetSink(SequenceCtx.empty)
     eventThread.marshal {
       mgr.addBindable(id, bindable)
     }
@@ -166,7 +169,7 @@ class RouteHandleImpl(eventThread: CallMarshaller, route: TypeValue, mgr: RouteM
   }
 
   def appendSetRow(id: TableRow, maxBuffered: Int): AppendEventSink = {
-    val bindable = new AppendSink(maxBuffered, eventThread)
+    val bindable = new AppendSink(maxBuffered, SequenceCtx.empty, eventThread)
     eventThread.marshal {
       mgr.addBindable(id, bindable)
     }
@@ -188,7 +191,7 @@ class RouteHandleImpl(eventThread: CallMarshaller, route: TypeValue, mgr: RouteM
 }
 
 object RouteMgr {
-  case class Binding(buffer: EventBuffer, subscribed: Set[TableRow])
+  case class Binding(buffer: EventBuffer, session: PeerSessionId, subscribed: Set[TableRow])
 }
 class RouteMgr(route: TypeValue, mgr: SourceMgr, requestSink: Sink[Seq[RouteServiceRequest]]) extends LazyLogging {
   import RouteMgr._
@@ -221,7 +224,7 @@ class RouteMgr(route: TypeValue, mgr: SourceMgr, requestSink: Sink[Seq[RouteServ
     dynamicTables += (table -> mgr)
     bindingOpt.foreach { binding =>
       val rows = binding.subscribed.filter(_.table == table).map(_.rowKey)
-      mgr.bind(binding.buffer.rowSender())
+      mgr.bind(binding.buffer.rowSender(), binding.session)
       mgr.setUpdate(rows)
     }
   }
@@ -274,9 +277,12 @@ class RouteMgr(route: TypeValue, mgr: SourceMgr, requestSink: Sink[Seq[RouteServ
     mgr.routeFlushed(route)
   }
 
-  def bind(buffer: EventBuffer): Unit = {
+  def bind(buffer: EventBuffer, session: PeerSessionId): Unit = {
     logger.debug(s"Route $route bound")
-    bindingOpt = Some(Binding(buffer, Set()))
+    bindingOpt = Some(Binding(buffer, session, Set()))
+    dynamicTables.foreach {
+      case (_, bindable) => bindable.bind(buffer.rowSender(), session)
+    }
   }
 
   def unbindAll(): Unit = {
@@ -303,6 +309,7 @@ case class SourceConnectedState(buffer: EventBuffer, subscribedRows: Set[RowId],
 // TODO: get rid of unsourced routes in favor of something like just storing subs separately or blank route mgrs like in peer sourcing mgr
 class SourceMgr(eventThread: CallMarshaller) extends GatewayRouteSource with LazyLogging {
 
+  private val gatewaySession = PeerSessionId(UUID.randomUUID(), 0)
   private var routes = Map.empty[TypeValue, RouteMgr]
 
   private var connectionOpt = Option.empty[SourceConnectedState]
@@ -321,7 +328,7 @@ class SourceMgr(eventThread: CallMarshaller) extends GatewayRouteSource with Laz
 
     logger.debug(s"Route $route sourced, connected: " + connectionOpt.nonEmpty)
     connectionOpt.foreach { ctx =>
-      mgr.bind(ctx.buffer)
+      mgr.bind(ctx.buffer, gatewaySession)
       ctx.unsourcedRoutes.get(route).foreach { rows =>
         mgr.subscriptionUpdate(rows)
       }
@@ -342,7 +349,7 @@ class SourceMgr(eventThread: CallMarshaller) extends GatewayRouteSource with Laz
     connectionOpt = Some(SourceConnectedState(buffer, Set(), Map()))
 
     routes.foreach {
-      case (route, mgr) => mgr.bind(buffer)
+      case (route, mgr) => mgr.bind(buffer, gatewaySession)
     }
     buffer.flush(Some(routes.keySet))
   }
@@ -353,7 +360,7 @@ class SourceMgr(eventThread: CallMarshaller) extends GatewayRouteSource with Laz
     proxy.requests.bind(reqs => eventThread.marshal { onServiceRequest(proxy, reqs) })
     proxy.subscriptions.bind(rows => eventThread.marshal { onSubscriptionUpdate(rows) })
 
-    val buffer = new EventBuffer(proxy)
+    val buffer = new EventBuffer(proxy, gatewaySession)
     eventThread.marshal {
       onConnect(buffer)
     }
@@ -430,15 +437,17 @@ class SourceMgr(eventThread: CallMarshaller) extends GatewayRouteSource with Laz
   }
 }
 
-class EventBuffer(proxy: GatewayProxy) extends LazyLogging {
+case class UserResync(ctx: SequenceCtx, resync: Resync)
+
+class EventBuffer(proxy: GatewayProxy, session: PeerSessionId) extends LazyLogging {
 
   private val events = mutable.ArrayBuffer.empty[StreamEvent]
   private val callbacks = mutable.ArrayBuffer.empty[Try[Boolean] => Unit]
 
-  def snapshotSender(row: RowId): Sender[Resync, Boolean] = {
-    new Sender[Resync, Boolean] {
-      def send(obj: Resync, handleResponse: (Try[Boolean]) => Unit): Unit = {
-        events += RowAppendEvent(row, ResyncSnapshot(obj))
+  def snapshotSender(row: RowId): Sender[UserResync, Boolean] = {
+    new Sender[UserResync, Boolean] {
+      def send(obj: UserResync, handleResponse: (Try[Boolean]) => Unit): Unit = {
+        events += RowAppendEvent(row, ResyncSession(session, obj.ctx, obj.resync))
         callbacks += handleResponse
       }
     }

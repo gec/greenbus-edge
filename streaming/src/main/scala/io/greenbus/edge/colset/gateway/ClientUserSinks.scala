@@ -30,7 +30,7 @@ trait SetStateType[Full, Diff] {
   sealed trait State
   case object UnboundUninit extends State
   case class Unbound(current: Full) extends State
-  case class BoundUninit(snapSender: Sender[Resync, Boolean], deltaSender: Sender[Delta, Boolean]) extends State
+  case class BoundUninit(snapSender: Sender[UserResync, Boolean], deltaSender: Sender[Delta, Boolean]) extends State
   case class Bound(deltaSender: Sender[Delta, Boolean], current: Full) extends State
 }
 
@@ -71,7 +71,7 @@ object KeyedSetSink extends SetStateType[Map[TypeValue, TypeValue], MapDiff] {
     Resync(Int64Val(seq), MapSnapshot(current))
   }
 }
-class KeyedSetSink extends KeyedSetEventSink with BindableRowMgr with LazyLogging {
+class KeyedSetSink(context: SequenceCtx) extends KeyedSetEventSink with BindableRowMgr with LazyLogging {
   import KeyedSetSink._
 
   private var sequence: Long = 0
@@ -85,7 +85,7 @@ class KeyedSetSink extends KeyedSetEventSink with BindableRowMgr with LazyLoggin
         s.copy(current = set)
       case s: BoundUninit =>
         val seq = sequence
-        s.snapSender.send(toSnapshot(seq, set), _ => {})
+        s.snapSender.send(UserResync(context, toSnapshot(seq, set)), _ => {})
         Bound(s.deltaSender, set)
       case s: Bound =>
         sequence += 1
@@ -95,11 +95,11 @@ class KeyedSetSink extends KeyedSetEventSink with BindableRowMgr with LazyLoggin
     }
   }
 
-  def bind(snapshot: Sender[Resync, Boolean], deltas: Sender[Delta, Boolean]): Unit = {
+  def bind(snapshot: Sender[UserResync, Boolean], deltas: Sender[Delta, Boolean]): Unit = {
     state = state match {
       case UnboundUninit => BoundUninit(snapshot, deltas)
       case s: Unbound => {
-        snapshot.send(toSnapshot(sequence, s.current), _ => ())
+        snapshot.send(UserResync(context, toSnapshot(sequence, s.current)), _ => ())
         Bound(deltas, s.current)
       }
       case _ => state
@@ -132,7 +132,7 @@ object SetSink extends SetStateType[Set[TypeValue], SetDiff] {
     Resync(Int64Val(seq), SetSnapshot(current))
   }
 }
-class SetSink extends SetEventSink with BindableRowMgr with LazyLogging {
+class SetSink(context: SequenceCtx) extends SetEventSink with BindableRowMgr with LazyLogging {
   import SetSink._
 
   private var sequence: Long = 0
@@ -146,7 +146,7 @@ class SetSink extends SetEventSink with BindableRowMgr with LazyLogging {
         s.copy(current = set)
       case s: BoundUninit =>
         val seq = sequence
-        s.snapSender.send(toSnapshot(seq, set), _ => {})
+        s.snapSender.send(UserResync(context, toSnapshot(seq, set)), _ => {})
         Bound(s.deltaSender, set)
       case s: Bound =>
         sequence += 1
@@ -156,11 +156,11 @@ class SetSink extends SetEventSink with BindableRowMgr with LazyLogging {
     }
   }
 
-  def bind(snapshot: Sender[Resync, Boolean], deltas: Sender[Delta, Boolean]): Unit = {
+  def bind(snapshot: Sender[UserResync, Boolean], deltas: Sender[Delta, Boolean]): Unit = {
     state = state match {
       case UnboundUninit => BoundUninit(snapshot, deltas)
       case s: Unbound => {
-        snapshot.send(toSnapshot(sequence, s.current), _ => ())
+        snapshot.send(UserResync(context, toSnapshot(sequence, s.current)), _ => ())
         Bound(deltas, s.current)
       }
       case _ => state
@@ -184,18 +184,18 @@ object AppendSink {
     assert(buffer.nonEmpty)
   }
   case class UnboundConfirmed(lastConfirmed: (Long, TypeValue), buffer: Vector[(Long, TypeValue)]) extends State
-  case class BoundUninit(snapSender: Sender[Resync, Boolean], deltaSender: Sender[Delta, Boolean]) extends State
+  case class BoundUninit(snapSender: Sender[UserResync, Boolean], deltaSender: Sender[Delta, Boolean]) extends State
   case class Bound(deltaSender: Sender[Delta, Boolean], pending: Vector[(Long, TypeValue)]) extends State
   case class BoundConfirmed(deltaSender: Sender[Delta, Boolean], lastConfirmed: (Long, TypeValue), pending: Vector[(Long, TypeValue)]) extends State
 
 }
-class AppendSink(maxBuffered: Int, eventThread: CallMarshaller) extends AppendEventSink with BindableRowMgr with LazyLogging {
+class AppendSink(maxBuffered: Int, context: SequenceCtx, eventThread: CallMarshaller) extends AppendEventSink with BindableRowMgr with LazyLogging {
   import AppendSink._
 
   private var sequence: Long = 0
   private var state: State = UnboundUninit
 
-  def bind(snapshot: Sender[Resync, Boolean], deltas: Sender[Delta, Boolean]): Unit = {
+  def bind(snapshot: Sender[UserResync, Boolean], deltas: Sender[Delta, Boolean]): Unit = {
     state match {
       case UnboundUninit => state = BoundUninit(snapshot, deltas)
       case s: Unbound =>
@@ -279,7 +279,7 @@ class AppendSink(maxBuffered: Int, eventThread: CallMarshaller) extends AppendEv
     }
   }
 
-  private def publishSnapshot(publisher: Sender[Resync, Boolean], snapshot: Seq[(Long, TypeValue)]): Unit = {
+  private def publishSnapshot(publisher: Sender[UserResync, Boolean], snapshot: Seq[(Long, TypeValue)]): Unit = {
     if (snapshot.nonEmpty) {
 
       val last = snapshot.last._1
@@ -292,7 +292,7 @@ class AppendSink(maxBuffered: Int, eventThread: CallMarshaller) extends AppendEv
         }
       }
 
-      publisher.send(toAppendResync(snapshot.last, snapshot), handleResult)
+      publisher.send(UserResync(context, toAppendResync(snapshot.last, snapshot)), handleResult)
     }
   }
 
