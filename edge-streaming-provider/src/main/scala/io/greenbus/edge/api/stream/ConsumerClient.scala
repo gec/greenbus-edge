@@ -194,7 +194,13 @@ class AppendDataKeySubCodec(logId: String, id: EndpointPath, codec: AppendDataKe
           }
         }
 
-        readValues.map(v => IdDataKeyUpdate(id, ResolvedValue(DataKeyUpdate(descOpt, v))))
+        if (readValues.nonEmpty) {
+          val head = readValues.head
+          val headUp = IdDataKeyUpdate(id, ResolvedValue(DataKeyUpdate(descOpt, head)))
+          Seq(headUp) ++ readValues.tail.map(v => IdDataKeyUpdate(id, ResolvedValue(DataKeyUpdate(None, v))))
+        } else {
+          Seq()
+        }
       }
       case _ =>
         Seq()

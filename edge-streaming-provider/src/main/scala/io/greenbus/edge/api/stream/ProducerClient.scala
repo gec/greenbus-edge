@@ -237,7 +237,7 @@ class StreamProviderFactory(routeSource: GatewayRouteSource) extends ProviderFac
     val routeHandle = routeSource.route(EdgeCodecCommon.endpointIdToRoute(provider.endpointId))
 
     val endpointDescriptorRow = EdgeCodecCommon.endpointIdToEndpointDescriptorTableRow(provider.endpointId)
-    val descSink = routeHandle.appendSetRow(endpointDescriptorRow, 1)
+    val descSink = routeHandle.appendSetRow(endpointDescriptorRow, 1, None)
     descSink.append(EdgeCodecCommon.writeEndpointDescriptor(provider.descriptor))
 
     provider.data.foreach { entry =>
@@ -246,27 +246,32 @@ class StreamProviderFactory(routeSource: GatewayRouteSource) extends ProviderFac
       val (tableRow, sink) = entry.dataType match {
         case d: LatestKeyValueDescriptor =>
           val tableRow = TableRow(EdgeTables.latestKeyValueTable, rowKey)
-          val sink = routeHandle.appendSetRow(tableRow, 1)
+          val desc = EdgeCodecCommon.writeDataKeyDescriptor(d)
+          val sink = routeHandle.appendSetRow(tableRow, 1, Some(desc))
           bindAppend(sink, entry.distributor)
           (tableRow, sink)
         case d: TimeSeriesValueDescriptor =>
           val tableRow = TableRow(EdgeTables.timeSeriesValueTable, rowKey)
-          val sink = routeHandle.appendSetRow(tableRow, seriesBuffersSize)
+          val desc = EdgeCodecCommon.writeDataKeyDescriptor(d)
+          val sink = routeHandle.appendSetRow(tableRow, seriesBuffersSize, Some(desc))
           bindAppend(sink, entry.distributor)
           (tableRow, sink)
         case d: EventTopicValueDescriptor =>
           val tableRow = TableRow(EdgeTables.eventTopicValueTable, rowKey)
-          val sink = routeHandle.appendSetRow(tableRow, eventBuffersSize)
+          val desc = EdgeCodecCommon.writeDataKeyDescriptor(d)
+          val sink = routeHandle.appendSetRow(tableRow, eventBuffersSize, Some(desc))
           bindAppend(sink, entry.distributor)
           (tableRow, sink)
         case d: ActiveSetValueDescriptor =>
           val tableRow = TableRow(EdgeTables.activeSetValueTable, rowKey)
-          val sink = routeHandle.keyedSetRow(tableRow)
+          val desc = EdgeCodecCommon.writeDataKeyDescriptor(d)
+          val sink = routeHandle.mapSetRow(tableRow, Some(desc))
           bindKeyed(sink, entry.distributor)
           (tableRow, sink)
         case d: OutputKeyDescriptor =>
           val tableRow = TableRow(EdgeTables.outputTable, rowKey)
-          val sink = routeHandle.appendSetRow(tableRow, 1)
+          val desc = EdgeCodecCommon.writeOutputKeyDescriptor(d)
+          val sink = routeHandle.appendSetRow(tableRow, 1, Some(desc))
           bindAppend(sink, entry.distributor)
           (tableRow, sink)
       }
