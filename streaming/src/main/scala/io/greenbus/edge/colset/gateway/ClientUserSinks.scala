@@ -282,17 +282,17 @@ class AppendSink(maxBuffered: Int, context: SequenceCtx, eventThread: CallMarsha
   private def publishSnapshot(publisher: Sender[UserResync, Boolean], snapshot: Seq[(Long, TypeValue)]): Unit = {
     if (snapshot.nonEmpty) {
 
-      val last = snapshot.last._1
+      val lastSequence = snapshot.last._1
 
       def handleResult(result: Try[Boolean]): Unit = {
         result match {
-          case Success(_) => confirmed(last)
+          case Success(_) => confirmed(lastSequence)
           case Failure(ex) =>
             logger.debug(s"AppendLog send failure: " + ex)
         }
       }
 
-      publisher.send(UserResync(context, toAppendResync(snapshot.last, snapshot)), handleResult)
+      publisher.send(UserResync(context, toAppendResync(snapshot.last, snapshot.init)), handleResult)
     }
   }
 
