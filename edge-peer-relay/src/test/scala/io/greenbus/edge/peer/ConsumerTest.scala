@@ -111,7 +111,7 @@ object ProducerTest extends LazyLogging {
 
     val out1Rcv = builder.registerOutput(Path("out-1"))
 
-    val buffer = producerServices.bindings.bindEndpoint(builder.build(), seriesBuffersSize = 100, eventBuffersSize = 100)
+    val buffer = builder.build(seriesBuffersSize = 100, eventBuffersSize = 100)
 
     val outputInc = new AtomicInteger(0)
 

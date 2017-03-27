@@ -25,7 +25,6 @@ import io.greenbus.edge.colset.gateway.GatewayRouteSource
 import io.greenbus.edge.thread.SchedulableCallMarshaller
 
 trait ProducerServices {
-  def bindings: ProducerBinder
   def endpointBuilder(id: EndpointId): EndpointBuilder
 }
 
@@ -43,9 +42,7 @@ class ProducerManager(eventThread: SchedulableCallMarshaller) extends ProducerSe
     gatewaySource.connect(channel)
   }
 
-  def bindings: ProducerBinder = provider
-
   def endpointBuilder(id: EndpointId): EndpointBuilder = {
-    new EndpointProducerBuilderImpl(id, eventThread)
+    new EndpointProducerBuilderImpl(id, eventThread, provider)
   }
 }

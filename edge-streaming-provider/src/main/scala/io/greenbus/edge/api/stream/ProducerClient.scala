@@ -52,10 +52,10 @@ trait EndpointBuilder {
 
   def registerOutput(key: Path): Receiver[OutputParams, OutputResult]
 
-  def build(): EndpointProducerDesc
+  def build(seriesBuffersSize: Int, eventBuffersSize: Int): ProducerHandle
 }
 
-class EndpointProducerBuilderImpl(endpointId: EndpointId, outputHandlerThread: CallMarshaller) extends EndpointBuilder {
+class EndpointProducerBuilderImpl(endpointId: EndpointId, outputHandlerThread: CallMarshaller, producerBinder: ProducerBinder) extends EndpointBuilder {
 
   private var indexes = Map.empty[Path, IndexableValue]
   private var metadata = Map.empty[Path, Value]
@@ -143,9 +143,10 @@ class EndpointProducerBuilderImpl(endpointId: EndpointId, outputHandlerThread: C
   def compareAndSetOutput() = ???
   def sequencedCompareAndSetOutput() = ???*/
 
-  def build(): EndpointProducerDesc = {
+  def build(seriesBuffersSize: Int, eventBuffersSize: Int): ProducerHandle = {
     val desc = EndpointDescriptor(indexes, metadata, data.toMap, outputStatuses.toMap)
-    EndpointProducerDesc(endpointId, desc, dataDescs.toVector, outputEntries.toVector)
+    val params = EndpointProducerDesc(endpointId, desc, dataDescs.toVector, outputEntries.toVector)
+    producerBinder.bindEndpoint(params, seriesBuffersSize, eventBuffersSize)
   }
 }
 
