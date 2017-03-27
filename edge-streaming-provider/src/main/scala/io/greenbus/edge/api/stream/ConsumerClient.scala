@@ -20,6 +20,7 @@ package io.greenbus.edge.api.stream
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.api._
+import io.greenbus.edge.api.stream.SetCodec.EndpointIdSetCodec
 import io.greenbus.edge.colset._
 import io.greenbus.edge.colset.subscribe._
 import io.greenbus.edge.flow._
@@ -44,20 +45,23 @@ case class EndpointDescSub(endpointId: EndpointId)
 
 class EndpointSubscription(endpointId: EndpointId, descOpt: Option[EndpointDescSub], dataKeys: Set[Path], outputKeys: Path)
 
-sealed trait EdgeDataKeyValue
-sealed trait EdgeSequenceDataKeyValue extends EdgeDataKeyValue
-case class KeyValueUpdate(value: Value) extends EdgeSequenceDataKeyValue
-case class SeriesUpdate(value: SampleValue, time: Long) extends EdgeSequenceDataKeyValue
-case class TopicEventUpdate(topic: Path, value: Value, time: Long) extends EdgeSequenceDataKeyValue
-case class ActiveSetUpdate(value: Map[IndexableValue, Value], removes: Set[IndexableValue], added: Set[(IndexableValue, Value)], modified: Set[(IndexableValue, Value)]) extends EdgeDataKeyValue
+case class DataKeyUpdate(descriptor: Option[DataKeyDescriptor], value: DataKeyValueUpdate)
+case class OutputKeyUpdate(descriptor: Option[OutputKeyDescriptor], value: OutputKeyStatus)
+
+sealed trait DataKeyValueUpdate
+sealed trait SequenceDataKeyValueUpdate extends DataKeyValueUpdate
+case class KeyValueUpdate(value: Value) extends SequenceDataKeyValueUpdate
+case class SeriesUpdate(value: SampleValue, time: Long) extends SequenceDataKeyValueUpdate
+case class TopicEventUpdate(topic: Path, value: Value, time: Long) extends SequenceDataKeyValueUpdate
+case class ActiveSetUpdate(value: Map[IndexableValue, Value], removes: Set[IndexableValue], added: Set[(IndexableValue, Value)], modified: Set[(IndexableValue, Value)]) extends DataKeyValueUpdate
 
 case class EndpointSetUpdate(set: Set[EndpointId], removes: Set[EndpointId], adds: Set[EndpointId])
 case class KeySetUpdate(set: Set[EndpointPath], removes: Set[EndpointPath], adds: Set[EndpointPath])
 
 sealed trait IdentifiedEdgeUpdate
 case class IdEndpointUpdate(id: EndpointId, data: EdgeDataStatus[EndpointDescriptor]) extends IdentifiedEdgeUpdate
-case class IdDataKeyUpdate(id: EndpointPath, data: EdgeDataStatus[EdgeDataKeyValue]) extends IdentifiedEdgeUpdate
-case class IdOutputKeyUpdate(id: EndpointPath, data: EdgeDataStatus[OutputKeyStatus]) extends IdentifiedEdgeUpdate
+case class IdDataKeyUpdate(id: EndpointPath, data: EdgeDataStatus[DataKeyUpdate]) extends IdentifiedEdgeUpdate
+case class IdOutputKeyUpdate(id: EndpointPath, data: EdgeDataStatus[OutputKeyUpdate]) extends IdentifiedEdgeUpdate
 
 case class IdEndpointPrefixUpdate(prefix: Path, data: EdgeDataStatus[EndpointSetUpdate]) extends IdentifiedEdgeUpdate
 case class IdEndpointIndexUpdate(specifier: IndexSpecifier, data: EdgeDataStatus[EndpointSetUpdate]) extends IdentifiedEdgeUpdate
@@ -98,6 +102,18 @@ trait EdgeUpdateSubjectImpl extends EdgeTypeSubMgr {
   }
 }
 
+trait ObservedEdgeTypeSubMgr extends EdgeTypeSubMgr {
+
+  private var observerSet = Set.empty[EdgeUpdateQueue]
+  def observers: Set[EdgeUpdateQueue] = observerSet
+  def addObserver(buffer: EdgeUpdateQueue): Unit = {
+    observerSet += buffer
+  }
+  def removeObserver(buffer: EdgeUpdateQueue): Unit = {
+    observerSet -= buffer
+  }
+}
+
 trait EdgeTypeSubMgr {
   def handle(update: ValueUpdate): Set[EdgeUpdateQueue]
   def observers: Set[EdgeUpdateQueue]
@@ -105,295 +121,313 @@ trait EdgeTypeSubMgr {
   def removeObserver(buffer: EdgeUpdateQueue): Unit
 }
 
-trait GenEdgeTypeSubMgr extends EdgeUpdateSubjectImpl with LazyLogging {
+trait EdgeSubCodec {
 
-  protected def logId: String
+  def simpleToUpdate(v: EdgeDataStatus[Nothing]): IdentifiedEdgeUpdate
 
-  protected type Data
+  def updateFor(v: DataValueUpdate, metaOpt: Option[TypeValue]): Seq[IdentifiedEdgeUpdate]
+}
 
-  protected var state: EdgeDataStatus[Data] = Pending
-
-  protected def current(): EdgeDataStatus[Data] = state
-
-  protected def toUpdate(v: EdgeDataStatus[Data]): IdentifiedEdgeUpdate
-
-  protected def handleData(dataUpdate: DataValueUpdate): Set[EdgeUpdateQueue]
+class GenEdgeTypeSubMgrComp(logId: String, codec: EdgeSubCodec) extends ObservedEdgeTypeSubMgr with LazyLogging {
 
   def handle(update: ValueUpdate): Set[EdgeUpdateQueue] = {
     update match {
-      case dvu: DataValueUpdate => handleData(dvu)
+      case vs: ValueSync =>
+        val updates = codec.updateFor(vs.initial, vs.metadata)
+        if (updates.nonEmpty) {
+          observers.foreach(obs => updates.foreach(up => obs.enqueue(up)))
+          observers
+        } else {
+          Set()
+        }
+      case vd: ValueDelta =>
+        val updates = codec.updateFor(vd.update, None)
+        if (updates.nonEmpty) {
+          observers.foreach(obs => updates.foreach(up => obs.enqueue(up)))
+          observers
+        } else {
+          Set()
+        }
       case ValueAbsent =>
-        observers.foreach(_.enqueue(toUpdate(ResolvedAbsent)))
+        val up = codec.simpleToUpdate(ResolvedAbsent)
+        observers.foreach(_.enqueue(up))
         observers
       case ValueUnresolved =>
-        observers.foreach(_.enqueue(toUpdate(DataUnresolved)))
+        val up = codec.simpleToUpdate(DataUnresolved)
+        observers.foreach(_.enqueue(up))
         observers
       case ValueDisconnected =>
-        observers.foreach(_.enqueue(toUpdate(Disconnected)))
+        val up = codec.simpleToUpdate(Disconnected)
+        observers.foreach(_.enqueue(up))
         observers
       case _ => Set()
     }
   }
 }
 
-trait GenAppendSubMgr extends GenEdgeTypeSubMgr with LazyLogging {
+class AppendDataKeySubCodec(logId: String, id: EndpointPath, codec: AppendDataKeyCodec) extends EdgeSubCodec with LazyLogging {
 
-  def latest: Boolean
-
-  def fromTypeValue(v: TypeValue): Either[String, Data]
-
-  private def handleValue(v: Data): Set[EdgeUpdateQueue] = {
-    val nextOpt = state match {
-      case ResolvedValue(prev) => if (v != prev) Some(ResolvedValue(v)) else None
-      case _ => Some(ResolvedValue(v))
-    }
-
-    nextOpt match {
-      case None => Set()
-      case Some(next) =>
-        state = next
-        val up = toUpdate(next)
-        observers.foreach(_.enqueue(up))
-        observers
-    }
-  }
-
-  protected def handleData(dataUpdate: DataValueUpdate): Set[EdgeUpdateQueue] = {
-    dataUpdate match {
-      case ap: Appended => {
-        // TODO: don't pass dirtiness awareness onto handleValue() when it can be called multiple times
-        if (latest) {
-          ap.values.lastOption.map { last =>
-            fromTypeValue(last.value) match {
-              case Left(str) =>
-                logger.warn(s"Could not extract data value for $logId: $str")
-                Set.empty[EdgeUpdateQueue]
-              case Right(desc) =>
-                handleValue(desc)
-            }
-          }.getOrElse(Set())
-        } else {
-
-          var dirty = false
-          ap.values.foreach { append =>
-            fromTypeValue(append.value) match {
-              case Left(str) =>
-                logger.warn(s"Could not extract data value for $logId: $str")
-              case Right(desc) =>
-                handleValue(desc)
-                dirty = true
-            }
-          }
-
-          if (dirty) {
-            observers
-          } else {
-            Set()
-          }
-        }
-      }
-      case _ =>
-        logger.warn(s"Wrong value update type for $logId: $dataUpdate")
-        Set()
-    }
-  }
-}
-
-class EndpointDescSubMgr(id: EndpointId) extends GenAppendSubMgr {
-
-  protected type Data = EndpointDescriptor
-
-  protected def logId: String = id.toString
-
-  def latest: Boolean = true
-
-  def toUpdate(v: EdgeDataStatus[EndpointDescriptor]): IdentifiedEdgeUpdate = IdEndpointUpdate(id, v)
-
-  def fromTypeValue(v: TypeValue): Either[String, EndpointDescriptor] = {
-    EdgeCodecCommon.readEndpointDescriptor(v)
-  }
-
-}
-
-// TODO: need different gen for actual series???
-class AppendDataKeySubMgr(id: EndpointPath, codec: AppendDataKeyCodec) extends GenAppendSubMgr {
-
-  protected type Data = EdgeSequenceDataKeyValue
-
-  protected def logId: String = id.toString
-
-  def latest: Boolean = codec.latest
-
-  def toUpdate(v: EdgeDataStatus[EdgeSequenceDataKeyValue]): IdentifiedEdgeUpdate = {
+  def simpleToUpdate(v: EdgeDataStatus[Nothing]): IdentifiedEdgeUpdate = {
     IdDataKeyUpdate(id, v)
   }
 
-  def fromTypeValue(v: TypeValue): Either[String, EdgeSequenceDataKeyValue] = {
-    codec.fromTypeValue(v)
-  }
-}
+  def updateFor(dataValueUpdate: DataValueUpdate, metaOpt: Option[TypeValue]): Seq[IdentifiedEdgeUpdate] = {
 
-class KeyedSetSubMgr(id: EndpointPath, codec: KeyedSetDataKeyCodec) extends GenEdgeTypeSubMgr with LazyLogging {
-
-  protected def logId: String = id.toString
-
-  protected type Data = ActiveSetUpdate
-
-  protected def toUpdate(v: EdgeDataStatus[ActiveSetUpdate]): IdentifiedEdgeUpdate = {
-    IdDataKeyUpdate(id, v)
-  }
-
-  protected def handleData(dataUpdate: DataValueUpdate): Set[EdgeUpdateQueue] = {
-    dataUpdate match {
-      case up: KeyedSetUpdated => {
-        codec.fromTypeValue(up) match {
-          case Left(str) =>
-            logger.warn(s"Could not extract data update for $logId: $str")
-            Set.empty[EdgeUpdateQueue]
-          case Right(data) =>
-            val updateOpt = if (data.removes.nonEmpty || data.added.nonEmpty || data.modified.nonEmpty) {
-              state = ResolvedValue(ActiveSetUpdate(data.value, Set(), Set(), Set()))
-              Some(ResolvedValue(data))
-            } else {
+    dataValueUpdate match {
+      case up: Appended => {
+        val readValues: Seq[SequenceDataKeyValueUpdate] = up.values.flatMap { ap =>
+          codec.fromTypeValue(ap.value) match {
+            case Left(str) =>
+              logger.warn(s"Could not extract data value for $logId: $str")
               None
-            }
-
-            updateOpt match {
-              case None => Set()
-              case Some(update) =>
-                val identified = toUpdate(update)
-                observers.foreach(_.enqueue(identified))
-                observers
-            }
+            case Right(value) =>
+              Some(value)
+          }
         }
+
+        val descOpt = metaOpt.flatMap { tv =>
+          EdgeCodecCommon.readDataKeyDescriptor(tv) match {
+            case Left(str) =>
+              logger.warn(s"Could not extract descriptor for $logId: $str")
+              None
+            case Right(value) => Some(value)
+          }
+        }
+
+        readValues.map(v => IdDataKeyUpdate(id, ResolvedValue(DataKeyUpdate(descOpt, v))))
       }
       case _ =>
-        logger.warn(s"Wrong value update type for $logId: $dataUpdate")
-        Set()
+        Seq()
     }
   }
 }
 
-class OutputStatusSubMgr(id: EndpointPath) extends GenAppendSubMgr {
+class EndpointDescSubCodec(logId: String, id: EndpointId) extends EdgeSubCodec with LazyLogging {
 
-  protected type Data = OutputKeyStatus
+  def simpleToUpdate(v: EdgeDataStatus[Nothing]): IdentifiedEdgeUpdate = {
+    IdEndpointUpdate(id, v)
+  }
 
-  protected def logId: String = id.toString
+  def updateFor(dataValueUpdate: DataValueUpdate, metaOpt: Option[TypeValue]): Seq[IdentifiedEdgeUpdate] = {
 
-  def latest: Boolean = true
+    dataValueUpdate match {
+      case up: Appended => {
+        val descOpt = up.values.lastOption.flatMap { av =>
+          EdgeCodecCommon.readEndpointDescriptor(av.value) match {
+            case Left(str) =>
+              logger.warn(s"Could not extract data value for $logId: $str")
+              None
+            case Right(value) =>
+              Some(value)
+          }
 
-  def toUpdate(v: EdgeDataStatus[OutputKeyStatus]): IdentifiedEdgeUpdate = {
+        }
+
+        descOpt.map(desc => IdEndpointUpdate(id, ResolvedValue(desc)))
+          .map(v => Seq(v)).getOrElse(Seq())
+      }
+      case _ =>
+        Seq()
+    }
+  }
+}
+
+class MapDataKeySubCodec(logId: String, id: EndpointPath, codec: KeyedSetDataKeyCodec) extends EdgeSubCodec with LazyLogging {
+
+  def simpleToUpdate(v: EdgeDataStatus[Nothing]): IdentifiedEdgeUpdate = {
+    IdDataKeyUpdate(id, v)
+  }
+
+  def updateFor(dataValueUpdate: DataValueUpdate, metaOpt: Option[TypeValue]): Seq[IdentifiedEdgeUpdate] = {
+    dataValueUpdate match {
+      case up: MapUpdated => {
+
+        val vOpt = codec.fromTypeValue(up) match {
+          case Left(str) =>
+            logger.warn(s"Could not extract data value for $logId: $str")
+            None
+          case Right(value) =>
+            Some(value)
+        }
+
+        val descOpt = metaOpt.flatMap { tv =>
+          EdgeCodecCommon.readDataKeyDescriptor(tv) match {
+            case Left(str) =>
+              logger.warn(s"Could not extract descriptor for $logId: $str")
+              None
+            case Right(value) => Some(value)
+          }
+        }
+
+        vOpt.map(v => IdDataKeyUpdate(id, ResolvedValue(DataKeyUpdate(descOpt, v))))
+          .map(v => Seq(v)).getOrElse(Seq())
+      }
+      case _ =>
+        Seq()
+    }
+  }
+}
+
+class AppendOutputKeySubCodec(logId: String, id: EndpointPath, codec: AppendOutputKeyCodec) extends EdgeSubCodec with LazyLogging {
+
+  def simpleToUpdate(v: EdgeDataStatus[Nothing]): IdentifiedEdgeUpdate = {
     IdOutputKeyUpdate(id, v)
   }
 
-  def fromTypeValue(v: TypeValue): Either[String, OutputKeyStatus] = {
-    AppendOutputKeyCodec.fromTypeValue(v)
-  }
-}
+  def updateFor(dataValueUpdate: DataValueUpdate, metaOpt: Option[TypeValue]): Seq[IdentifiedEdgeUpdate] = {
 
-trait EndpointSetUpdateSubMgr extends GenEdgeTypeSubMgr {
-
-  protected type Data = EndpointSetUpdate
-
-  private val codec = SetCodec.EndpointIdSetCodec
-
-  protected def handleData(dataUpdate: DataValueUpdate): Set[EdgeUpdateQueue] = {
-    dataUpdate match {
-      case up: SetUpdated => {
-        codec.fromTypeValue(up) match {
-          case Left(str) =>
-            logger.warn(s"Could not extract data update for $logId: $str")
-            Set.empty[EdgeUpdateQueue]
-          case Right(data) =>
-            val updateOpt = if (data.removes.nonEmpty || data.adds.nonEmpty) {
-              state = ResolvedValue(data)
-              Some(ResolvedValue(data))
-            } else {
+    dataValueUpdate match {
+      case up: Appended => {
+        val valueOpt = up.values.lastOption.flatMap { av =>
+          codec.fromTypeValue(av.value) match {
+            case Left(str) =>
+              logger.warn(s"Could not extract data value for $logId: $str")
               None
-            }
-
-            updateOpt match {
-              case None => Set()
-              case Some(update) =>
-                val identified = toUpdate(update)
-                observers.foreach(_.enqueue(identified))
-                observers
-            }
+            case Right(value) =>
+              Some(value)
+          }
         }
+
+        val descOpt = metaOpt.flatMap { tv =>
+          EdgeCodecCommon.readOutputKeyDescriptor(tv) match {
+            case Left(str) =>
+              logger.warn(s"Could not extract descriptor for $logId: $str")
+              None
+            case Right(value) => Some(value)
+          }
+        }
+
+        valueOpt.map(v => IdOutputKeyUpdate(id, ResolvedValue(OutputKeyUpdate(descOpt, v))))
+          .map(v => Seq(v)).getOrElse(Seq())
       }
       case _ =>
-        logger.warn(s"Wrong value update type for $logId: $dataUpdate")
-        Set()
+        Seq()
     }
   }
 }
 
-class EndpointPrefixSubMgr(prefix: Path) extends EndpointSetUpdateSubMgr {
-  protected def logId: String = prefix.toString
+class EndpointSetSubCodec(logId: String, identify: EdgeDataStatus[EndpointSetUpdate] => IdentifiedEdgeUpdate) extends EdgeSubCodec with LazyLogging {
 
-  protected def toUpdate(v: EdgeDataStatus[EndpointSetUpdate]): IdentifiedEdgeUpdate = {
-    IdEndpointPrefixUpdate(prefix, v)
+  def simpleToUpdate(v: EdgeDataStatus[Nothing]): IdentifiedEdgeUpdate = {
+    identify(v)
   }
-}
 
-class EndpointIndexSubMgr(specifier: IndexSpecifier) extends EndpointSetUpdateSubMgr {
-  protected def logId: String = specifier.toString
-
-  protected def toUpdate(v: EdgeDataStatus[EndpointSetUpdate]): IdentifiedEdgeUpdate = {
-    IdEndpointIndexUpdate(specifier, v)
-  }
-}
-
-trait KeySetUpdateSubMgr extends GenEdgeTypeSubMgr {
-
-  protected type Data = KeySetUpdate
-
-  private val codec = SetCodec.EndpointPathSetCodec
-
-  protected def handleData(dataUpdate: DataValueUpdate): Set[EdgeUpdateQueue] = {
-    dataUpdate match {
+  def updateFor(dataValueUpdate: DataValueUpdate, metaOpt: Option[TypeValue]): Seq[IdentifiedEdgeUpdate] = {
+    dataValueUpdate match {
       case up: SetUpdated => {
-        codec.fromTypeValue(up) match {
+        val vOpt = EndpointIdSetCodec.fromTypeValue(up) match {
           case Left(str) =>
-            logger.warn(s"Could not extract data update for $logId: $str")
-            Set.empty[EdgeUpdateQueue]
+            logger.warn(s"Could not extract data value for $logId: $str")
+            None
           case Right(data) =>
-            val updateOpt = if (data.removes.nonEmpty || data.adds.nonEmpty) {
-              state = ResolvedValue(data)
-              Some(ResolvedValue(data))
-            } else {
-              None
-            }
-
-            updateOpt match {
-              case None => Set()
-              case Some(update) =>
-                val identified = toUpdate(update)
-                observers.foreach(_.enqueue(identified))
-                observers
-            }
+            Some(data)
         }
+
+        vOpt.map(v => identify(ResolvedValue(v)))
+          .map(v => Seq(v)).getOrElse(Seq())
       }
       case _ =>
-        logger.warn(s"Wrong value update type for $logId: $dataUpdate")
-        Set()
+        Seq()
     }
   }
 }
 
-class DataKeyIndexSubMgr(specifier: IndexSpecifier) extends KeySetUpdateSubMgr {
-  protected def logId: String = specifier.toString
+class KeySetSubCodec(logId: String, identify: EdgeDataStatus[KeySetUpdate] => IdentifiedEdgeUpdate) extends EdgeSubCodec with LazyLogging {
 
-  protected def toUpdate(v: EdgeDataStatus[KeySetUpdate]): IdentifiedEdgeUpdate = {
-    IdDataKeyIndexUpdate(specifier, v)
+  def simpleToUpdate(v: EdgeDataStatus[Nothing]): IdentifiedEdgeUpdate = {
+    identify(v)
+  }
+
+  def updateFor(dataValueUpdate: DataValueUpdate, metaOpt: Option[TypeValue]): Seq[IdentifiedEdgeUpdate] = {
+    dataValueUpdate match {
+      case up: SetUpdated => {
+        val vOpt = SetCodec.EndpointPathSetCodec.fromTypeValue(up) match {
+          case Left(str) =>
+            logger.warn(s"Could not extract data value for $logId: $str")
+            None
+          case Right(data) =>
+            Some(data)
+        }
+
+        vOpt.map(v => identify(ResolvedValue(v)))
+          .map(v => Seq(v)).getOrElse(Seq())
+      }
+      case _ =>
+        Seq()
+    }
   }
 }
-class OutputKeyIndexSubMgr(specifier: IndexSpecifier) extends KeySetUpdateSubMgr {
-  protected def logId: String = specifier.toString
 
-  protected def toUpdate(v: EdgeDataStatus[KeySetUpdate]): IdentifiedEdgeUpdate = {
-    IdOutputKeyIndexUpdate(specifier, v)
+object SubscriptionManagers {
+
+  def subEndpointDesc(id: EndpointId): EdgeTypeSubMgr = {
+    new GenEdgeTypeSubMgrComp(id.toString, endpointDesc(id.toString, id))
   }
+  def endpointDesc(logId: String, id: EndpointId): EdgeSubCodec = {
+    new EndpointDescSubCodec(logId, id)
+  }
+
+  def subAppendDataKey(id: EndpointPath, codec: AppendDataKeyCodec): EdgeTypeSubMgr = {
+    new GenEdgeTypeSubMgrComp(id.toString, appendDataKey(id, codec))
+  }
+  def appendDataKey(id: EndpointPath, codec: AppendDataKeyCodec): EdgeSubCodec = {
+    new AppendDataKeySubCodec(id.toString, id, codec)
+  }
+
+  def subMapDataKey(id: EndpointPath, codec: KeyedSetDataKeyCodec): EdgeTypeSubMgr = {
+    new GenEdgeTypeSubMgrComp(id.toString, mapDataKey(id, codec))
+  }
+  def mapDataKey(id: EndpointPath, codec: KeyedSetDataKeyCodec): EdgeSubCodec = {
+    new MapDataKeySubCodec(id.toString, id, codec)
+  }
+
+  def subOutputStatus(id: EndpointPath, codec: AppendOutputKeyCodec): EdgeTypeSubMgr = {
+    new GenEdgeTypeSubMgrComp(id.toString, outputStatus(id, codec))
+  }
+  def outputStatus(id: EndpointPath, codec: AppendOutputKeyCodec): EdgeSubCodec = {
+    new AppendOutputKeySubCodec(id.toString, id, codec)
+  }
+
+  def subPrefixSet(prefix: Path): EdgeTypeSubMgr = {
+    new GenEdgeTypeSubMgrComp(prefix.toString, prefixSet(prefix))
+  }
+  def prefixSet(prefix: Path): EdgeSubCodec = {
+
+    def identify(status: EdgeDataStatus[EndpointSetUpdate]): IdentifiedEdgeUpdate = IdEndpointPrefixUpdate(prefix, status)
+
+    new EndpointSetSubCodec(prefix.toString, identify)
+  }
+
+  def subEndpointIndexSet(spec: IndexSpecifier): EdgeTypeSubMgr = {
+    new GenEdgeTypeSubMgrComp(spec.toString, endpointIndexSet(spec))
+  }
+  def endpointIndexSet(spec: IndexSpecifier): EdgeSubCodec = {
+
+    def identify(status: EdgeDataStatus[EndpointSetUpdate]): IdentifiedEdgeUpdate = IdEndpointIndexUpdate(spec, status)
+
+    new EndpointSetSubCodec(spec.toString, identify)
+  }
+
+  def subDataKeyIndexSet(spec: IndexSpecifier): EdgeTypeSubMgr = {
+    new GenEdgeTypeSubMgrComp(spec.toString, dataKeyIndexSet(spec))
+  }
+  def dataKeyIndexSet(spec: IndexSpecifier): EdgeSubCodec = {
+
+    def identify(status: EdgeDataStatus[KeySetUpdate]): IdentifiedEdgeUpdate = IdDataKeyIndexUpdate(spec, status)
+
+    new KeySetSubCodec(spec.toString, identify)
+  }
+
+  def subOutputKeyIndexSet(spec: IndexSpecifier): EdgeTypeSubMgr = {
+    new GenEdgeTypeSubMgrComp(spec.toString, outputKeyIndexSet(spec))
+  }
+  def outputKeyIndexSet(spec: IndexSpecifier): EdgeSubCodec = {
+
+    def identify(status: EdgeDataStatus[KeySetUpdate]): IdentifiedEdgeUpdate = IdOutputKeyIndexUpdate(spec, status)
+
+    new KeySetSubCodec(spec.toString, identify)
+  }
+
 }
 
 class BatchedSink[A](batchSink: Sink[Seq[A]]) {
@@ -462,7 +496,7 @@ class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: StreamDynami
       val endpointDescKeys = endpoints.map { id =>
         val row = EdgeCodecCommon.endpointIdToEndpointDescriptorRow(id)
         val key = RowSubKey(row)
-        val mgr = keyMap.getOrElseUpdate(key, new EndpointDescSubMgr(id))
+        val mgr = keyMap.getOrElseUpdate(key, SubscriptionManagers.subEndpointDesc(id))
         mgr.addObserver(updateQueue)
         key
       }
@@ -473,8 +507,8 @@ class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: StreamDynami
           val key = RowSubKey(row)
           val mgr = keyMap.getOrElseUpdate(key, {
             codec match {
-              case c: AppendDataKeyCodec => new AppendDataKeySubMgr(id, c)
-              case c: KeyedSetDataKeyCodec => new KeyedSetSubMgr(id, c)
+              case c: AppendDataKeyCodec => SubscriptionManagers.subAppendDataKey(id, c)
+              case c: KeyedSetDataKeyCodec => SubscriptionManagers.subMapDataKey(id, c)
             }
           })
           mgr.addObserver(updateQueue)
@@ -484,35 +518,35 @@ class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: StreamDynami
       val outputKeyKeys = outputKeys.map { id =>
         val row = EdgeCodecCommon.outputKeyRowId(id)
         val key = RowSubKey(row)
-        val mgr = keyMap.getOrElseUpdate(key, new OutputStatusSubMgr(id))
+        val mgr = keyMap.getOrElseUpdate(key, SubscriptionManagers.subOutputStatus(id, AppendOutputKeyCodec))
         mgr.addObserver(updateQueue)
         key
       }
 
       val endpointPrefixKeys = indexing.endpointPrefixes.map { path =>
         val key = EdgeCodecCommon.endpointPrefixToSubKey(path)
-        val mgr = keyMap.getOrElseUpdate(key, new EndpointPrefixSubMgr(path))
+        val mgr = keyMap.getOrElseUpdate(key, SubscriptionManagers.subPrefixSet(path))
         mgr.addObserver(updateQueue)
         key
       }
 
       val endpointIndexKeys = indexing.endpointIndexes.map { spec =>
         val key = EdgeCodecCommon.endpointIndexSpecToSubKey(spec)
-        val mgr = keyMap.getOrElseUpdate(key, new EndpointIndexSubMgr(spec))
+        val mgr = keyMap.getOrElseUpdate(key, SubscriptionManagers.subEndpointIndexSet(spec))
         mgr.addObserver(updateQueue)
         key
       }
 
       val dataIndexKeys = indexing.dataKeyIndexes.map { spec =>
         val key = EdgeCodecCommon.dataKeyIndexSpecToSubKey(spec)
-        val mgr = keyMap.getOrElseUpdate(key, new DataKeyIndexSubMgr(spec))
+        val mgr = keyMap.getOrElseUpdate(key, SubscriptionManagers.subDataKeyIndexSet(spec))
         mgr.addObserver(updateQueue)
         key
       }
 
       val outputIndexKeys = indexing.outputKeyIndexes.map { spec =>
         val key = EdgeCodecCommon.outputKeyIndexSpecToSubKey(spec)
-        val mgr = keyMap.getOrElseUpdate(key, new OutputKeyIndexSubMgr(spec))
+        val mgr = keyMap.getOrElseUpdate(key, SubscriptionManagers.subOutputKeyIndexSet(spec))
         mgr.addObserver(updateQueue)
         key
       }

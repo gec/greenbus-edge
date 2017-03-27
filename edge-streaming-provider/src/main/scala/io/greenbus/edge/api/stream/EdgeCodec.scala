@@ -23,7 +23,7 @@ import io.greenbus.edge.api.proto.convert.{ Conversions, OutputConversions, Valu
 import io.greenbus.edge.colset._
 import io.greenbus.edge.api.proto
 import io.greenbus.edge.api.stream.index.IndexProducer
-import io.greenbus.edge.colset.subscribe.{ KeyedSetUpdated, PeerBasedSubKey, SetUpdated, SubscriptionKey }
+import io.greenbus.edge.colset.subscribe.{ MapUpdated, PeerBasedSubKey, SetUpdated, SubscriptionKey }
 import io.greenbus.edge.util.EitherUtil
 
 object EdgeTables {
@@ -64,7 +64,7 @@ object AppendDataKeyCodec {
       EdgeCodecCommon.keyRowId(endpointPath, EdgeTables.timeSeriesValueTable)
     }
 
-    def fromTypeValue(value: TypeValue): Either[String, EdgeSequenceDataKeyValue] = {
+    def fromTypeValue(value: TypeValue): Either[String, SequenceDataKeyValueUpdate] = {
 
       value match {
         case TupleVal(elems) => {
@@ -92,7 +92,7 @@ object AppendDataKeyCodec {
       EdgeCodecCommon.keyRowId(endpointPath, EdgeTables.latestKeyValueTable)
     }
 
-    def fromTypeValue(value: TypeValue): Either[String, EdgeSequenceDataKeyValue] = {
+    def fromTypeValue(value: TypeValue): Either[String, SequenceDataKeyValueUpdate] = {
       EdgeCodecCommon.readValue(value)
         .map(v => KeyValueUpdate(v))
     }
@@ -106,7 +106,7 @@ object AppendDataKeyCodec {
       EdgeCodecCommon.keyRowId(endpointPath, EdgeTables.eventTopicValueTable)
     }
 
-    def fromTypeValue(value: TypeValue): Either[String, EdgeSequenceDataKeyValue] = {
+    def fromTypeValue(value: TypeValue): Either[String, SequenceDataKeyValueUpdate] = {
       value match {
         case TupleVal(elems) => {
           if (elems.size >= 2) {
@@ -127,7 +127,7 @@ object AppendDataKeyCodec {
   }
 }
 trait AppendDataKeyCodec extends EdgeDataKeyCodec {
-  def fromTypeValue(v: TypeValue): Either[String, EdgeSequenceDataKeyValue]
+  def fromTypeValue(v: TypeValue): Either[String, SequenceDataKeyValueUpdate]
   def latest: Boolean
 }
 
@@ -194,7 +194,7 @@ object KeyedSetDataKeyCodec {
       EdgeCodecCommon.keyRowId(endpointPath, EdgeTables.activeSetValueTable)
     }
 
-    def fromTypeValue(v: KeyedSetUpdated): Either[String, ActiveSetUpdate] = {
+    def fromTypeValue(v: MapUpdated): Either[String, ActiveSetUpdate] = {
       for {
         map <- EitherUtil.rightSequence(v.value.toVector.map(readMapTuple)).map(_.toMap)
         removes <- EitherUtil.rightSequence(v.removed.toVector.map(EdgeCodecCommon.readIndexableValue))
@@ -207,7 +207,7 @@ object KeyedSetDataKeyCodec {
   }
 }
 trait KeyedSetDataKeyCodec extends EdgeDataKeyCodec {
-  def fromTypeValue(v: KeyedSetUpdated): Either[String, ActiveSetUpdate]
+  def fromTypeValue(v: MapUpdated): Either[String, ActiveSetUpdate]
 }
 
 trait EdgeCodec {
@@ -437,5 +437,31 @@ object EdgeCodecCommon {
   }
   def outputKeyIndexSpecToSubKey(spec: IndexSpecifier): SubscriptionKey = {
     indexSubKey(spec, EdgeTables.outputKeyIndexTable)
+  }
+
+  def writeDataKeyDescriptor(desc: DataKeyDescriptor): TypeValue = {
+    BytesVal(Conversions.toProto(desc).toByteArray)
+  }
+  def readDataKeyDescriptor(v: TypeValue): Either[String, DataKeyDescriptor] = {
+    v match {
+      case b: BytesVal =>
+        parse(b.v, proto.DataKeyDescriptor.parseFrom).flatMap { protoValue =>
+          Conversions.fromProto(protoValue)
+        }
+      case _ => Left(s"Wrong value type for DataKeyDescriptor: " + v)
+    }
+  }
+
+  def writeOutputKeyDescriptor(desc: OutputKeyDescriptor): TypeValue = {
+    BytesVal(Conversions.toProto(desc).toByteArray)
+  }
+  def readOutputKeyDescriptor(v: TypeValue): Either[String, OutputKeyDescriptor] = {
+    v match {
+      case b: BytesVal =>
+        parse(b.v, proto.OutputKeyDescriptor.parseFrom).flatMap { protoValue =>
+          Conversions.fromProto(protoValue)
+        }
+      case _ => Left(s"Wrong value type for OutputKeyDescriptor: " + v)
+    }
   }
 }

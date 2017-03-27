@@ -54,7 +54,7 @@ class IndexingSubscriptionManager(eventThread: CallMarshaller, observer: Descrip
     events.foreach { update =>
       if (update.key == peerManifestKey) {
         update.value match {
-          case up: KeyedSetUpdated =>
+          case up: MapUpdated =>
             onRouteManifestUpdate(up.value)
           case _ => logger.warn(s"Manifest data update was unexpected type: " + update)
         }
