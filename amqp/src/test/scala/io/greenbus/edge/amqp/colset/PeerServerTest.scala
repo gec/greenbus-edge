@@ -116,10 +116,10 @@ object GatewayTest {
     var setElems: Vector[Long] = Vector(5, 11)
     def toSet: Set[TypeValue] = setElems.map(Int64Val).toSet
 
-    val setRow1 = route.setRow(TableRow("set_table", SymbolVal("row1")))
+    val setRow1 = route.setRow(TableRow("set_table", SymbolVal("row1")), None)
     setRow1.update(Set(Int64Val(5), Int64Val(11)))
 
-    val appRow1 = route.appendSetRow(TableRow("append_table", SymbolVal("row1")), 30)
+    val appRow1 = route.appendSetRow(TableRow("append_table", SymbolVal("row1")), 30, None)
     appRow1.append(Int64Val(22), Int64Val(23))
 
     route.requests.bind { requests =>

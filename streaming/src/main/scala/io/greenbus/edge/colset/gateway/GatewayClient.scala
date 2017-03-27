@@ -59,9 +59,9 @@ Support:
  */
 
 trait RouteSourceHandle {
-  def setRow(id: TableRow): SetEventSink
-  def keyedSetRow(id: TableRow): KeyedSetEventSink
-  def appendSetRow(id: TableRow, maxBuffered: Int): AppendEventSink
+  def setRow(id: TableRow, metadata: Option[TypeValue]): SetEventSink
+  def mapSetRow(id: TableRow, metadata: Option[TypeValue]): KeyedSetEventSink
+  def appendSetRow(id: TableRow, maxBuffered: Int, metadata: Option[TypeValue]): AppendEventSink
   def dynamicTable(table: String, source: DynamicTableSource): Unit
 
   def requests: Source[Seq[RouteServiceRequest]]
@@ -152,24 +152,24 @@ trait BindableRowMgr {
 }
 
 class RouteHandleImpl(eventThread: CallMarshaller, route: TypeValue, mgr: RouteMgr, reqSrc: Source[Seq[RouteServiceRequest]]) extends RouteSourceHandle {
-  def setRow(id: TableRow): SetEventSink = {
-    val bindable = new SetSink(SequenceCtx.empty)
+  def setRow(id: TableRow, metadata: Option[TypeValue]): SetEventSink = {
+    val bindable = new SetSink(SequenceCtx(None, metadata))
     eventThread.marshal {
       mgr.addBindable(id, bindable)
     }
     bindable
   }
 
-  def keyedSetRow(id: TableRow): KeyedSetEventSink = {
-    val bindable = new KeyedSetSink(SequenceCtx.empty)
+  def mapSetRow(id: TableRow, metadata: Option[TypeValue]): KeyedSetEventSink = {
+    val bindable = new KeyedSetSink(SequenceCtx(None, metadata))
     eventThread.marshal {
       mgr.addBindable(id, bindable)
     }
     bindable
   }
 
-  def appendSetRow(id: TableRow, maxBuffered: Int): AppendEventSink = {
-    val bindable = new AppendSink(maxBuffered, SequenceCtx.empty, eventThread)
+  def appendSetRow(id: TableRow, maxBuffered: Int, metadata: Option[TypeValue]): AppendEventSink = {
+    val bindable = new AppendSink(maxBuffered, SequenceCtx(None, metadata), eventThread)
     eventThread.marshal {
       mgr.addBindable(id, bindable)
     }
