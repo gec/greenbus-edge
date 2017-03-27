@@ -45,20 +45,6 @@ object SequenceCtx {
 }
 case class SequenceCtx(params: Option[StreamParams], userMetadata: Option[TypeValue])
 
-/*
-CONTROL STREAM VS VALUE SEQUENCE
-
-SequenceEvent(Delta or Resync)
-ControlCtxChangeEvent(session, ctx, resync)
-
-Event(controlOpt, sequenceEvent)
-
-Control:
-
-ResyncControl (full)
-ResyncContext
-
- */
 sealed trait AppendEvent
 case class StreamDelta(update: Delta) extends AppendEvent
 case class ResyncSnapshot(resync: Resync) extends AppendEvent
