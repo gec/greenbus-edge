@@ -39,7 +39,7 @@ object AmqpEdgeService {
 }
 class AmqpEdgeService(host: String, port: Int, retryIntervalMs: Long)(implicit ec: ExecutionContext) extends EdgeServices {
 
-  private val service = AmqpService.build(Some("AMQP"))
+  private val service = AmqpService.build()
   private val exe = EventThreadService.build("event")
   private val retrier = new RetryingConnector(exe, service, host, port, 10000)
 

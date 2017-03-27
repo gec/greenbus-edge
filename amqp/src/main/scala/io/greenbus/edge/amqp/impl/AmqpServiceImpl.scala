@@ -72,6 +72,7 @@ class AmqpChannelClientSourceImpl(ioThread: CallMarshaller, c: Connection, promi
     }
 
     def onRemoteClose(c: Connection): Unit = {
+      closeLatch()
       children.notifyOfClose()
     }
   }
