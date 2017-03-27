@@ -710,7 +710,9 @@ trait SubscriptionBuilder {
 }
 
 trait ServiceClient extends Sender[OutputRequest, OutputResult]
-class ServiceClientImpl(client: StreamServiceClient) extends ServiceClient with CloseObservable {
+trait ServiceClientChannel extends ServiceClient with CloseObservable
+
+class ServiceClientImpl(client: StreamServiceClient) extends ServiceClientChannel {
 
   def send(obj: OutputRequest, handleResponse: (Try[OutputResult]) => Unit): Unit = {
     val row = EdgeCodecCommon.keyRowId(obj.key, EdgeTables.outputTable)

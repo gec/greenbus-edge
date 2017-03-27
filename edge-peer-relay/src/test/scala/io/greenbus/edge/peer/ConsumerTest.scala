@@ -28,37 +28,26 @@ import io.greenbus.edge.amqp.colset.{ ChannelDescriberImpl, ClientResponseParser
 import io.greenbus.edge.api._
 import io.greenbus.edge.api.stream._
 import io.greenbus.edge.api.stream.index.IndexProducer
-import io.greenbus.edge.colset.{ SymbolVal, TextVal }
-import io.greenbus.edge.colset.client.{ ColsetClient, MultiChannelColsetClientImpl }
+import io.greenbus.edge.colset.client.{ MultiChannelStreamClientImpl, StreamClient }
 import io.greenbus.edge.colset.gateway.GatewayRouteSource
 import io.greenbus.edge.colset.proto.provider.ProtoSerializationProvider
-import io.greenbus.edge.colset.subscribe.{ DynamicSubscriptionManager, StreamServiceClientImpl, SubscriptionManager }
-import io.greenbus.edge.flow
 import io.greenbus.edge.flow.Responder
 import io.greenbus.edge.thread.CallMarshaller
 
 import scala.concurrent.Await
-import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
 import scala.util.Try
 
 object ConsumerTest extends LazyLogging {
 
   def main(args: Array[String]): Unit = {
 
-    val service = AmqpService.build(Some("gateway"))
+    val services = AmqpEdgeService.build("127.0.0.1", 50001, 10000)
+    services.start()
+    val consumerServices = services.consumer
 
-    val client = Common.client(service, "127.0.0.1", 50001)
-
-    val (session, channel) = Await.result(client.openPeerLinkClient(), 5000.milliseconds)
-
-    val exe = new Common.ExecutorEventThread("event")
-
-    val streamingSubMgr = new DynamicSubscriptionManager(exe)
-
-    streamingSubMgr.connected(session, channel)
-
-    val edgeSubMgr = new EdgeSubscriptionManager(exe, streamingSubMgr)
+    val subClient = consumerServices.subscriptionClient
 
     val outputKey = EndpointPath(EndpointId(Path("my-endpoint")), Path("out-1"))
 
@@ -74,15 +63,14 @@ object ConsumerTest extends LazyLogging {
       .build()
 
     logger.debug("Subscribing...")
-    val subscription = edgeSubMgr.subscribe(sub)
+    val subscription = subClient.subscribe(sub)
 
     subscription.updates.bind { batch =>
       logger.info("Got batch: ")
       batch.foreach(up => logger.info("\t" + up))
     }
 
-    val streamServices = new StreamServiceClientImpl(channel, exe)
-    val edgeServices = new ServiceClientImpl(streamServices)
+    val serviceClient = consumerServices.queuingServiceClient
 
     var i = 0
     while (true) {
@@ -91,7 +79,7 @@ object ConsumerTest extends LazyLogging {
         println("result: " + result)
       }
 
-      edgeServices.send(OutputRequest(outputKey, OutputParams(outputValueOpt = Some(ValueString("an output string " + i)))), handleResponse)
+      serviceClient.send(OutputRequest(outputKey, OutputParams(outputValueOpt = Some(ValueString("an output string " + i)))), handleResponse)
 
       i += 1
       Thread.sleep(2000)
@@ -107,45 +95,23 @@ object ProducerTest extends LazyLogging {
 
     val outSession = UUID.randomUUID()
 
-    val service = AmqpService.build(Some("gateway"))
+    val services = AmqpEdgeService.build("127.0.0.1", 50001, 10000)
+    services.start()
+    val producerServices = services.producer
 
-    val client = Common.client(service, "127.0.0.1", 50001)
-
-    val channel = Await.result(client.openGatewayChannel(), 5000.milliseconds)
-
-    val exe = new Common.ExecutorEventThread("event")
-    val gatewaySource = GatewayRouteSource.build(exe)
-
-    gatewaySource.connect(channel)
-
-    val factory = new StreamProviderFactory(gatewaySource)
-
-    val builder = new EndpointProducerBuilderImpl(EndpointId(Path("my-endpoint")), exe)
+    val builder = producerServices.endpointBuilder(EndpointId(Path("my-endpoint")))
 
     builder.setIndexes(Map(Path("endIndex1") -> ValueString("value 1")))
 
-    val series1 = builder.seriesDouble(Path("series-double-1"), CommonMetadata(indexes = Map(Path("index1") -> ValueString("value 1"))))
-    val kv1 = builder.latestKeyValue(Path("kv-1"), CommonMetadata(indexes = Map(Path("index1") -> ValueString("value 2"))))
+    val series1 = builder.seriesDouble(Path("series-double-1"), KeyMetadata(indexes = Map(Path("index1") -> ValueString("value 1"))))
+    val kv1 = builder.latestKeyValue(Path("kv-1"), KeyMetadata(indexes = Map(Path("index1") -> ValueString("value 2"))))
     val event1 = builder.topicEventValue(Path("event-1"))
 
-    val out1 = builder.outputStatus(Path("out-1"), CommonMetadata(indexes = Map(Path("outIndex1") -> ValueString("value 1"))))
-
-    /* val outHandler = new flow.Responder[OutputParams, OutputResult] {
-      var i = 0
-      def handle(obj: OutputParams, respond: (OutputResult) => Unit): Unit = {
-        logger.info("Output params: " + obj)
-        i += 1
-        println(i)
-        out1.update(OutputKeyStatus(outSession, i, None))
-        respond(OutputSuccess(Some(ValueString("we did it"))))
-      }
-    }
-
-    builder.outputRequests(Path("out-1"), outHandler)*/
+    val out1 = builder.outputStatus(Path("out-1"), KeyMetadata(indexes = Map(Path("outIndex1") -> ValueString("value 1"))))
 
     val out1Rcv = builder.registerOutput(Path("out-1"))
 
-    val buffer = factory.bindEndpoint(builder.build(), seriesBuffersSize = 100, eventBuffersSize = 100)
+    val buffer = producerServices.bindings.bindEndpoint(builder.build(), seriesBuffersSize = 100, eventBuffersSize = 100)
 
     val outputInc = new AtomicInteger(0)
 
@@ -201,7 +167,7 @@ object IndexerTest extends LazyLogging {
 
 object Common {
 
-  def client(service: AmqpService, host: String, port: Int): ColsetClient = {
+  def client(service: AmqpService, host: String, port: Int): StreamClient = {
 
     val connection = Await.result(service.connect(host, port, 5000), 5000.milliseconds)
 
@@ -211,7 +177,7 @@ object Common {
 
     val session = Await.result(connection.open(describer, responseParser, serialization), 5000.milliseconds)
 
-    new MultiChannelColsetClientImpl(session)
+    new MultiChannelStreamClientImpl(session)
   }
 
   class ExecutorEventThread(id: String) extends CallMarshaller {

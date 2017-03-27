@@ -27,16 +27,35 @@ import io.greenbus.edge.thread.CallMarshaller
 
 import scala.collection.mutable
 
-case class CommonMetadata(indexes: Map[Path, IndexableValue] = Map(), metadata: Map[Path, Value] = Map())
+case class KeyMetadata(indexes: Map[Path, IndexableValue] = Map(), metadata: Map[Path, Value] = Map())
 
-trait EndpointProducerBuilder {
+trait EndpointBuilder {
 
-  def seriesBool(): BoolSeriesHandle
+  def setIndexes(paramIndexes: Map[Path, IndexableValue]): Unit
+  def setMetadata(paramMetadata: Map[Path, Value]): Unit
 
-  def build()
+  def seriesBool(key: Path, metadata: KeyMetadata = KeyMetadata()): BoolSeriesHandle
+
+  def seriesLong(key: Path, metadata: KeyMetadata = KeyMetadata()): LongSeriesHandle
+
+  def seriesDouble(key: Path, metadata: KeyMetadata = KeyMetadata()): DoubleSeriesHandle
+
+  def latestKeyValue(key: Path, metadata: KeyMetadata = KeyMetadata()): LatestKeyValueHandle
+
+  def topicEventValue(key: Path, metadata: KeyMetadata = KeyMetadata()): TopicEventHandle
+
+  def activeSet(key: Path, metadata: KeyMetadata = KeyMetadata()): ActiveSetHandle
+
+  def outputStatus(key: Path, metadata: KeyMetadata = KeyMetadata()): OutputStatusHandle
+
+  def outputRequests(key: Path, handler: Responder[OutputParams, OutputResult]): Unit
+
+  def registerOutput(key: Path): Receiver[OutputParams, OutputResult]
+
+  def build(): EndpointProducerDesc
 }
 
-class EndpointProducerBuilderImpl(endpointId: EndpointId, outputHandlerThread: CallMarshaller) {
+class EndpointProducerBuilderImpl(endpointId: EndpointId, outputHandlerThread: CallMarshaller) extends EndpointBuilder {
 
   private var indexes = Map.empty[Path, IndexableValue]
   private var metadata = Map.empty[Path, Value]
@@ -53,7 +72,7 @@ class EndpointProducerBuilderImpl(endpointId: EndpointId, outputHandlerThread: C
     metadata = paramMetadata
   }
 
-  def seriesBool(key: Path, metadata: CommonMetadata = CommonMetadata()): BoolSeriesHandle = {
+  def seriesBool(key: Path, metadata: KeyMetadata = KeyMetadata()): BoolSeriesHandle = {
     val desc = TimeSeriesValueDescriptor(metadata.indexes, metadata.metadata)
     val handle = new BoolSeriesQueue
     data += (key -> desc)
@@ -61,7 +80,7 @@ class EndpointProducerBuilderImpl(endpointId: EndpointId, outputHandlerThread: C
     handle
   }
 
-  def seriesLong(key: Path, metadata: CommonMetadata = CommonMetadata()): LongSeriesHandle = {
+  def seriesLong(key: Path, metadata: KeyMetadata = KeyMetadata()): LongSeriesHandle = {
     val desc = TimeSeriesValueDescriptor(metadata.indexes, metadata.metadata)
     val handle = new LongSeriesQueue
     data += (key -> desc)
@@ -69,7 +88,7 @@ class EndpointProducerBuilderImpl(endpointId: EndpointId, outputHandlerThread: C
     handle
   }
 
-  def seriesDouble(key: Path, metadata: CommonMetadata = CommonMetadata()): DoubleSeriesHandle = {
+  def seriesDouble(key: Path, metadata: KeyMetadata = KeyMetadata()): DoubleSeriesHandle = {
     val desc = TimeSeriesValueDescriptor(metadata.indexes, metadata.metadata)
     val handle = new DoubleSeriesQueue
     data += (key -> desc)
@@ -77,7 +96,7 @@ class EndpointProducerBuilderImpl(endpointId: EndpointId, outputHandlerThread: C
     handle
   }
 
-  def latestKeyValue(key: Path, metadata: CommonMetadata = CommonMetadata()): LatestKeyValueHandle = {
+  def latestKeyValue(key: Path, metadata: KeyMetadata = KeyMetadata()): LatestKeyValueHandle = {
     val desc = LatestKeyValueDescriptor(metadata.indexes, metadata.metadata)
     val handle = new LatestKeyValueQueue
     data += (key -> desc)
@@ -85,7 +104,7 @@ class EndpointProducerBuilderImpl(endpointId: EndpointId, outputHandlerThread: C
     handle
   }
 
-  def topicEventValue(key: Path, metadata: CommonMetadata = CommonMetadata()): TopicEventHandle = {
+  def topicEventValue(key: Path, metadata: KeyMetadata = KeyMetadata()): TopicEventHandle = {
     val desc = EventTopicValueDescriptor(metadata.indexes, metadata.metadata)
     val handle = new TopicEventQueue
     data += (key -> desc)
@@ -93,7 +112,7 @@ class EndpointProducerBuilderImpl(endpointId: EndpointId, outputHandlerThread: C
     handle
   }
 
-  def activeSet(key: Path, metadata: CommonMetadata = CommonMetadata()): ActiveSetHandle = {
+  def activeSet(key: Path, metadata: KeyMetadata = KeyMetadata()): ActiveSetHandle = {
     val desc = ActiveSetValueDescriptor(metadata.indexes, metadata.metadata)
     val handle = new ActiveSetQueue
     data += (key -> desc)
@@ -101,7 +120,7 @@ class EndpointProducerBuilderImpl(endpointId: EndpointId, outputHandlerThread: C
     handle
   }
 
-  def outputStatus(key: Path, metadata: CommonMetadata = CommonMetadata()): OutputStatusHandle = {
+  def outputStatus(key: Path, metadata: KeyMetadata = KeyMetadata()): OutputStatusHandle = {
     val desc = OutputKeyDescriptor(metadata.indexes, metadata.metadata)
     val handle = new OutputKeyStatusQueue
     outputStatuses += (key -> desc)
@@ -119,10 +138,10 @@ class EndpointProducerBuilderImpl(endpointId: EndpointId, outputHandlerThread: C
     rcvImpl
   }
 
-  def output() = ???
+  /*def output() = ???
   def sequencedOutput() = ???
   def compareAndSetOutput() = ???
-  def sequencedCompareAndSetOutput() = ???
+  def sequencedCompareAndSetOutput() = ???*/
 
   def build(): EndpointProducerDesc = {
     val desc = EndpointDescriptor(indexes, metadata, data.toMap, outputStatuses.toMap)
@@ -205,12 +224,12 @@ class ProducerHandleImpl(handle: RouteSourceHandle) extends ProducerHandle {
   }
 }
 
-trait ProviderFactory {
+trait ProducerBinder {
 
   def bindEndpoint(provider: EndpointProducerDesc, seriesBuffersSize: Int, eventBuffersSize: Int): ProducerHandle
 }
 
-object StreamProviderFactory {
+object StreamProducerBinder {
 
   private def bindAppend(sink: AppendEventSink, queue: DataValueQueue): Unit = {
     queue match {
@@ -230,8 +249,8 @@ object StreamProviderFactory {
   }
 }
 
-class StreamProviderFactory(routeSource: GatewayRouteSource) extends ProviderFactory with LazyLogging {
-  import StreamProviderFactory._
+class StreamProducerBinder(routeSource: GatewayRouteSource) extends ProducerBinder with LazyLogging {
+  import StreamProducerBinder._
 
   def bindEndpoint(provider: EndpointProducerDesc, seriesBuffersSize: Int, eventBuffersSize: Int): ProducerHandle = {
     val routeHandle = routeSource.route(EdgeCodecCommon.endpointIdToRoute(provider.endpointId))

@@ -22,7 +22,7 @@ import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.amqp.channel.impl.{ ClientReceiverChannelImpl, ClientSenderChannelImpl }
 import io.greenbus.edge.amqp.channel.{ AmqpChannelDescriber, AmqpChannelInitiator, AmqpClientResponseParser }
 import io.greenbus.edge.channel2.{ ChannelClient, ChannelDescriptor, ChannelSerializationProvider }
-import io.greenbus.edge.flow.{ ReceiverChannel, SenderChannel }
+import io.greenbus.edge.flow.{ Receiver => _, Sender => _, _ }
 import io.greenbus.edge.thread.CallMarshaller
 import org.apache.qpid.proton.engine._
 
@@ -35,13 +35,18 @@ class ChannelClientImpl(
     responseParser: AmqpClientResponseParser,
     serialization: ChannelSerializationProvider,
     promise: Promise[ChannelClient],
-    parent: ResourceRemoveObserver) extends ChannelClient with HandlerResource with LazyLogging {
+    parent: ResourceRemoveObserver) extends ChannelClient with HandlerResource with CloseObservable with LazyLogging {
 
   private val children = new ResourceContainer
 
   private val initiator = new AmqpChannelInitiator(describer, serialization)
 
+  private val closeLatch = new RemoteSubscribedLatch(ioThread)
+
+  def onClose: LatchSubscribable = closeLatch
+
   def handleParentClose(): Unit = {
+    closeLatch()
     children.notifyOfClose()
   }
 
@@ -120,6 +125,7 @@ class ChannelClientImpl(
     }
 
     def onRemoteClose(s: Session): Unit = {
+      closeLatch()
       children.notifyOfClose()
       parent.handleChildRemove(self)
     }

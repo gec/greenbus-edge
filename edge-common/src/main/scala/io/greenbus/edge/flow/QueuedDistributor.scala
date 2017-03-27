@@ -171,7 +171,7 @@ class LocallyAppliedLatchSource(self: CallMarshaller) extends LatchSource with L
   }
 }
 
-class LocallyAppliedLatchSubscribable(self: CallMarshaller) extends LatchSubscribable with LatchSink {
+class RemoteSubscribedLatch(self: CallMarshaller) extends LatchSubscribable with LatchSink {
   private var latched = false
   private var handlers = Set.empty[LatchHandler]
 
@@ -212,6 +212,36 @@ class RemotelyAppliedLatchSource(self: CallMarshaller) extends LatchSource with 
         latched = true
         handlerOpt.foreach(_.handle())
       }
+    }
+  }
+}
+
+object RemoteBoundLatestSource {
+  sealed trait State[A]
+  case class Unbound[A](latestOpt: Option[A]) extends State[A]
+  case class Opened[A](handler: Handler[A]) extends State[A]
+}
+class RemoteBoundLatestSource[A](eventThread: CallMarshaller) extends Source[A] with Sink[A] with LazyLogging {
+  import RemoteBoundLatestSource._
+
+  private var state: State[A] = Unbound(Option.empty[A])
+
+  def bind(handler: Handler[A]): Unit = {
+    eventThread.marshal {
+      state match {
+        case Unbound(queue) =>
+          state = Opened(handler)
+          queue.foreach(handler.handle)
+        case Opened(_) =>
+          logger.error("Queued distributor bound twice")
+      }
+    }
+  }
+
+  def push(obj: A): Unit = {
+    state match {
+      case Unbound(_) => state = Unbound(Some(obj))
+      case Opened(handler) => handler.handle(obj)
     }
   }
 }

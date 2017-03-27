@@ -18,11 +18,11 @@
  */
 package io.greenbus.edge.channel2
 
-import io.greenbus.edge.flow.{ ReceiverChannel, SenderChannel }
+import io.greenbus.edge.flow.{ CloseObservable, ReceiverChannel, SenderChannel }
 
 import scala.concurrent.{ ExecutionContext, Future }
 
-trait ChannelClient {
+trait ChannelClient extends CloseObservable {
   def openSender[Message, Desc <: ChannelDescriptor[Message]](desc: Desc)(implicit ec: ExecutionContext): Future[(SenderChannel[Message, Boolean], ChannelDescriptor[Message])]
   def openReceiver[Message, Desc <: ChannelDescriptor[Message]](desc: Desc)(implicit ec: ExecutionContext): Future[(ReceiverChannel[Message, Boolean], ChannelDescriptor[Message])]
 }

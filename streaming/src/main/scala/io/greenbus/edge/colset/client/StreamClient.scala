@@ -21,18 +21,21 @@ package io.greenbus.edge.colset.client
 import java.util.UUID
 
 import io.greenbus.edge.channel2.ChannelClient
-import io.greenbus.edge.colset.channel.{ GatewayClientProxyChannelImpl, GatewayProxyChannelImpl, PeerLinkProxyChannelImpl }
 import io.greenbus.edge.colset._
+import io.greenbus.edge.colset.channel.{ GatewayProxyChannelImpl, PeerLinkProxyChannelImpl }
+import io.greenbus.edge.flow.{ CloseObservable, LatchSubscribable }
 
 import scala.concurrent.{ ExecutionContext, Future }
 
-trait ColsetClient {
+trait StreamClient extends CloseObservable {
   def openGatewayChannel(): Future[GatewayProxyChannel]
   def openPeerLinkClient(): Future[(PeerSessionId, PeerLinkProxyChannel)]
 }
 
-class MultiChannelColsetClientImpl(client: ChannelClient)(implicit val ex: ExecutionContext) extends ColsetClient {
+class MultiChannelStreamClientImpl(client: ChannelClient)(implicit val ex: ExecutionContext) extends StreamClient {
   import io.greenbus.edge.colset.channel.Channels._
+
+  def onClose: LatchSubscribable = client.onClose
 
   def openGatewayChannel(): Future[GatewayProxyChannel] = {
     val correlator = UUID.randomUUID().toString

@@ -24,7 +24,7 @@ import java.util.concurrent.{ ExecutorService, Executors }
 import io.greenbus.edge.amqp.AmqpService
 import io.greenbus.edge.amqp.channel.AmqpChannelHandler
 import io.greenbus.edge.colset.channel.ChannelHandler
-import io.greenbus.edge.colset.client.{ ColsetClient, MultiChannelColsetClientImpl }
+import io.greenbus.edge.colset.client.{ StreamClient, MultiChannelStreamClientImpl }
 import io.greenbus.edge.colset._
 import io.greenbus.edge.colset.gateway.GatewayRouteSource
 import io.greenbus.edge.colset.proto.provider.ProtoSerializationProvider
@@ -36,7 +36,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 
 object Common {
 
-  def client(service: AmqpService, host: String, port: Int): ColsetClient = {
+  def client(service: AmqpService, host: String, port: Int): StreamClient = {
 
     val connection = Await.result(service.connect(host, port, 5000), 5000.milliseconds)
 
@@ -46,7 +46,7 @@ object Common {
 
     val session = Await.result(connection.open(describer, responseParser, serialization), 5000.milliseconds)
 
-    new MultiChannelColsetClientImpl(session)
+    new MultiChannelStreamClientImpl(session)
   }
 }
 

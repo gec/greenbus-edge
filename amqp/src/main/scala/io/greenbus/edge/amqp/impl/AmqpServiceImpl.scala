@@ -24,18 +24,29 @@ import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.amqp.AmqpService
 import io.greenbus.edge.amqp.channel.{ AmqpChannelDescriber, AmqpClientResponseParser }
 import io.greenbus.edge.channel2.{ ChannelClient, ChannelSerializationProvider }
+import io.greenbus.edge.flow.{ CloseableComponent, LatchSubscribable, RemoteSubscribedLatch }
 import io.greenbus.edge.thread.CallMarshaller
 import org.apache.qpid.proton.Proton
 import org.apache.qpid.proton.engine._
 
 import scala.concurrent.{ Future, Promise }
 
-trait AmqpChannelClientSource {
+trait AmqpChannelClientSource extends CloseableComponent {
   def open(describer: AmqpChannelDescriber, responseParser: AmqpClientResponseParser, serialization: ChannelSerializationProvider): Future[ChannelClient]
 }
 
 class AmqpChannelClientSourceImpl(ioThread: CallMarshaller, c: Connection, promise: Promise[AmqpChannelClientSource]) extends AmqpChannelClientSource {
   private val children = new ResourceContainer
+
+  private val closeLatch = new RemoteSubscribedLatch(ioThread)
+  def onClose: LatchSubscribable = closeLatch
+
+  def close(): Unit = {
+    ioThread.marshal {
+      c.close()
+      closeLatch()
+    }
+  }
 
   def open(describer: AmqpChannelDescriber, responseParser: AmqpClientResponseParser, serialization: ChannelSerializationProvider): Future[ChannelClient] = {
     val promise = Promise[ChannelClient]

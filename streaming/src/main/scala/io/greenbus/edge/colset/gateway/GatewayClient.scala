@@ -299,6 +299,10 @@ object GatewayRouteSource {
     new SourceMgr(eventThread)
   }
 }
+
+trait GatewayConnectionObserver {
+  def connect(channel: GatewayProxyChannel): Unit
+}
 trait GatewayRouteSource {
   def route(route: TypeValue): RouteSourceHandle
   def connect(channel: GatewayProxyChannel): Unit
