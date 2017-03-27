@@ -25,8 +25,8 @@ import io.greenbus.edge.colset._
 import scala.collection.JavaConverters._
 
 object StreamConversions {
-  import io.greenbus.edge.proto.convert.ConversionUtil._
   import ValueTypeConversions._
+  import io.greenbus.edge.util.EitherUtil._
 
   def sessionFromProto(msg: proto.PeerSessionId): Either[String, colset.PeerSessionId] = {
     if (msg.hasPersistenceId) {
@@ -360,9 +360,9 @@ object StreamConversions {
 }
 
 object ProtocolConversions {
-  import io.greenbus.edge.proto.convert.ConversionUtil._
   import ValueTypeConversions._
   import StreamConversions._
+  import io.greenbus.edge.util.EitherUtil._
 
   def servReqFromProto(msg: proto.ServiceRequest): Either[String, colset.ServiceRequest] = {
     if (msg.hasRow && msg.hasValue && msg.hasCorrelation) {
@@ -475,7 +475,7 @@ object ProtocolConversions {
 }
 
 object ValueTypeConversions {
-  import io.greenbus.edge.proto.convert.ConversionUtil._
+  import io.greenbus.edge.util.EitherUtil._
 
   def fromProtoSimple(msg: proto.UUID): java.util.UUID = {
     new java.util.UUID(msg.getHigh, msg.getLow)

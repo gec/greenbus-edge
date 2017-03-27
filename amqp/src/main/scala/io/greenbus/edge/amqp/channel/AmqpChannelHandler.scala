@@ -22,9 +22,8 @@ import java.io.ByteArrayInputStream
 import java.util.UUID
 
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.amqp.AmqpChannelServer
 import io.greenbus.edge.amqp.channel.impl.{ ServerReceiverChannelImpl, ServerSenderChannelImpl }
-import io.greenbus.edge.amqp.impl.{ HandlerResource, ResourceRemoveObserver }
+import io.greenbus.edge.amqp.impl.{ AmqpChannelServer, HandlerResource, ResourceRemoveObserver }
 import io.greenbus.edge.channel2.{ ChannelDescriptor, ChannelSerializationProvider, ChannelServerHandler }
 import io.greenbus.edge.thread.CallMarshaller
 import org.apache.qpid.proton.amqp.{ Binary, Symbol => AmqpSymbol }
@@ -61,7 +60,7 @@ object AmqpChannelHandler {
 }
 class AmqpChannelHandler(ioThread: CallMarshaller, parser: AmqpChannelParser, provider: ChannelSerializationProvider, handler: ChannelServerHandler) extends AmqpChannelServer with LazyLogging {
   import AmqpChannelHandler._
-  import io.greenbus.edge.amqp.AmqpSerialization._
+  import io.greenbus.edge.amqp.impl.AmqpSerialization._
 
   private def handleSenderDescriptor[A](s: Sender, desc: ChannelDescriptor[A], parent: ResourceRemoveObserver): HandlerResource = {
     val serializer = provider.serializerFor(desc)

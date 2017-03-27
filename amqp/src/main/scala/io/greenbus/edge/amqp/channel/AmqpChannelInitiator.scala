@@ -38,7 +38,7 @@ object AmqpChannelInitiator {
 }
 class AmqpChannelInitiator(describer: AmqpChannelDescriber, provider: ChannelSerializationProvider) {
   import AmqpChannelInitiator._
-  import io.greenbus.edge.amqp.AmqpSerialization._
+  import io.greenbus.edge.amqp.impl.AmqpSerialization._
 
   private def linkCommon(l: Link, address: String, props: Map[String, AnyRef]): Unit = {
     val source = new Source

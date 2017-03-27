@@ -21,8 +21,8 @@ package io.greenbus.edge.amqp.colset
 import java.util.UUID
 import java.util.concurrent.{ ExecutorService, Executors }
 
+import io.greenbus.edge.amqp.AmqpService
 import io.greenbus.edge.amqp.channel.AmqpChannelHandler
-import io.greenbus.edge.amqp.impl2.AmqpService
 import io.greenbus.edge.colset.channel.ChannelHandler
 import io.greenbus.edge.colset.client.{ ColsetClient, MultiChannelColsetClientImpl }
 import io.greenbus.edge.colset._

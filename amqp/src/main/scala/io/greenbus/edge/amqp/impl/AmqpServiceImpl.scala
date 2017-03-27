@@ -18,20 +18,61 @@
  */
 package io.greenbus.edge.amqp.impl
 
+import java.nio.ByteBuffer
+
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.amqp.{ AmqpChannelServer, AmqpListener, AmqpService, ChannelSessionSource }
-import io.greenbus.edge.channel.{ Sender => _ }
+import io.greenbus.edge.amqp.AmqpService
+import io.greenbus.edge.amqp.channel.{ AmqpChannelDescriber, AmqpClientResponseParser }
+import io.greenbus.edge.channel2.{ ChannelClient, ChannelSerializationProvider }
 import io.greenbus.edge.thread.CallMarshaller
 import org.apache.qpid.proton.Proton
 import org.apache.qpid.proton.engine._
 
 import scala.concurrent.{ Future, Promise }
 
-class AmqpIoImpl(idOpt: Option[String] = None) extends AmqpService {
+trait AmqpChannelClientSource {
+  def open(describer: AmqpChannelDescriber, responseParser: AmqpClientResponseParser, serialization: ChannelSerializationProvider): Future[ChannelClient]
+}
+
+class AmqpChannelClientSourceImpl(ioThread: CallMarshaller, c: Connection, promise: Promise[AmqpChannelClientSource]) extends AmqpChannelClientSource {
+  private val children = new ResourceContainer
+
+  def open(describer: AmqpChannelDescriber, responseParser: AmqpClientResponseParser, serialization: ChannelSerializationProvider): Future[ChannelClient] = {
+    val promise = Promise[ChannelClient]
+    ioThread.marshal {
+      val sess = c.session()
+      val impl = new ChannelClientImpl(ioThread, sess, describer, responseParser, serialization, promise, children)
+      children.add(impl)
+      sess.setContext(impl.handler)
+      sess.open()
+    }
+    promise.future
+  }
+
+  private val self = this
+  val handler = new ConnectionContext {
+    def onSessionRemoteOpen(s: Session): Unit = {
+      // TODO: verify the protocol behavior here
+      //s.close()
+    }
+
+    def onOpen(c: Connection): Unit = {
+      promise.success(self)
+    }
+
+    def onRemoteClose(c: Connection): Unit = {
+      children.notifyOfClose()
+    }
+  }
+}
+
+class AmqpServiceImpl(idOpt: Option[String] = None) extends AmqpService {
   private val opQueue = new OperationQueue
   private val baseHandler = new ReactorHandler
   private val r = Proton.reactor(baseHandler)
-  r.getGlobalHandler.add(new UnhandledLogger(idOpt.getOrElse("AMQP")))
+  if (Option(System.getProperty("amqptrace")).map(_.toLowerCase).contains("true")) {
+    r.getGlobalHandler.add(new UnhandledLogger(idOpt.getOrElse("AMQP")))
+  }
 
   private val threadId = idOpt.map(id => s"AMQP reactor - $id").getOrElse("AMQP reactor")
   private val threadPump = new ThreadReactorPump(r, opQueue.handle, threadId)
@@ -45,15 +86,15 @@ class AmqpIoImpl(idOpt: Option[String] = None) extends AmqpService {
 
   def eventLoop: CallMarshaller = opQueue
 
-  def connect(host: String, port: Int, timeoutMs: Long): Future[ChannelSessionSource] = {
+  def connect(host: String, port: Int, timeoutMs: Long): Future[AmqpChannelClientSource] = {
     val hostname = s"$host:$port"
 
     val protonHandler = new ClientConnectionProtonHandler(hostname)
-    val promise = Promise[ChannelSessionSource]
+    val promise = Promise[AmqpChannelClientSource]
 
     opQueue.marshal {
       val conn = r.connectionToHost(host, port, protonHandler)
-      val impl = new ChannelSessionSourceImpl(opQueue, conn, promise)
+      val impl = new AmqpChannelClientSourceImpl(opQueue, conn, promise)
 
       r.schedule(timeoutMs.toInt, protonHandler)
       conn.setContext(impl.handler)
@@ -94,6 +135,13 @@ class AmqpIoImpl(idOpt: Option[String] = None) extends AmqpService {
   }
 }
 
+trait AmqpChannelServer {
+
+  def handleSender(s: Sender, parent: ResourceRemoveObserver): Option[HandlerResource]
+
+  def handleReceiver(r: Receiver, parent: ResourceRemoveObserver): Option[HandlerResource]
+}
+
 class UnhandledLogger(id: String) extends BaseHandler with LazyLogging {
   override def onUnhandled(event: Event): Unit = {
     logger.trace(s"$id UNHANDLED: " + event)
@@ -119,5 +167,16 @@ class ResourceContainer extends ResourceRemoveObserver {
 
   def notifyOfClose(): Unit = {
     children.foreach(_.handleParentClose())
+  }
+}
+
+class DeliverySequencer {
+  private var deliverySequence: Long = 0
+
+  def next(): Array[Byte] = {
+    val bb = ByteBuffer.allocate(java.lang.Long.BYTES)
+    bb.putLong(deliverySequence)
+    deliverySequence += 1
+    bb.array()
   }
 }

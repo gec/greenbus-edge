@@ -20,9 +20,9 @@ package io.greenbus.edge.peer
 
 import java.util.UUID
 
+import io.greenbus.edge.amqp.AmqpService
 import io.greenbus.edge.amqp.channel.AmqpChannelHandler
 import io.greenbus.edge.amqp.colset.ChannelParserImpl
-import io.greenbus.edge.amqp.impl2.AmqpService
 import io.greenbus.edge.colset.{ PeerChannelMachine, PeerSessionId }
 import io.greenbus.edge.colset.channel.ChannelHandler
 import io.greenbus.edge.colset.proto.provider.ProtoSerializationProvider

@@ -23,8 +23,8 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{ Executors, ThreadFactory }
 
 import com.typesafe.scalalogging.LazyLogging
+import io.greenbus.edge.amqp.AmqpService
 import io.greenbus.edge.amqp.colset.{ ChannelDescriberImpl, ClientResponseParser }
-import io.greenbus.edge.amqp.impl2.AmqpService
 import io.greenbus.edge.api._
 import io.greenbus.edge.api.stream._
 import io.greenbus.edge.api.stream.index.IndexProducer

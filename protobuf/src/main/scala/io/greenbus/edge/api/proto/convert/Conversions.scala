@@ -20,7 +20,7 @@ package io.greenbus.edge.api.proto.convert
 
 import com.google.protobuf.ByteString
 import io.greenbus.edge.api.proto
-import io.greenbus.edge.{ OutputSuccess, api }
+import io.greenbus.edge.api
 
 import scala.collection.JavaConversions._
 

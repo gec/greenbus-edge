@@ -207,7 +207,6 @@ class GenInitializedStreamFilter(cid: String, startInit: ResyncSession) extends 
 
 }
 
-
 trait SequenceCache {
   def sync(): Resync
 }

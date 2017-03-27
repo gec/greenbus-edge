@@ -18,7 +18,31 @@
  */
 package io.greenbus.edge.amqp.impl
 
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.qpid.proton.engine._
+
+import scala.concurrent.Promise
+import scala.util.{ Success, Try }
+
+class SentTransferDeliveryContext(promise: Promise[Boolean]) extends SenderDeliveryContext with LazyLogging {
+  def onDelivery(s: Sender, delivery: Delivery): Unit = {
+    logger.trace("Got delivery update: " + delivery)
+    if (!delivery.isSettled && delivery.remotelySettled()) {
+      delivery.settle()
+      promise.success(true)
+    }
+  }
+}
+
+class SentTransferDeliveryContextTry(handler: Try[Boolean] => Unit) extends SenderDeliveryContext with LazyLogging {
+  def onDelivery(s: Sender, delivery: Delivery): Unit = {
+    logger.trace("Got delivery update: " + delivery)
+    if (!delivery.isSettled && delivery.remotelySettled()) {
+      delivery.settle()
+      handler(Success(true))
+    }
+  }
+}
 
 trait AcceptorContext {
   def onConnectionRemoteOpen(c: Connection): Unit

@@ -18,23 +18,20 @@
  */
 package io.greenbus.edge.amqp
 
-import io.greenbus.edge.amqp.impl.AmqpIoImpl
+import io.greenbus.edge.amqp.impl.{ AmqpChannelClientSource, AmqpChannelServer, AmqpListener, AmqpServiceImpl }
 import io.greenbus.edge.thread.CallMarshaller
 
 import scala.concurrent.Future
 
-trait AmqpListener {
+trait AmqpService {
   def close(): Unit
+  def eventLoop: CallMarshaller
+  def connect(host: String, port: Int, timeoutMs: Long): Future[AmqpChannelClientSource]
+  def listen(host: String, port: Int, handler: AmqpChannelServer): Future[AmqpListener]
 }
 
 object AmqpService {
   def build(threadId: Option[String] = None): AmqpService = {
-    new AmqpIoImpl(threadId)
+    new AmqpServiceImpl(threadId)
   }
-}
-trait AmqpService {
-  def close(): Unit
-  def eventLoop: CallMarshaller
-  def connect(host: String, port: Int, timeoutMs: Long): Future[ChannelSessionSource]
-  def listen(host: String, port: Int, handler: AmqpChannelServer): Future[AmqpListener]
 }

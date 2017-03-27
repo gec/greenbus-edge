@@ -18,97 +18,84 @@
  */
 package io.greenbus.edge.amqp.impl
 
-import java.nio.ByteBuffer
-import java.util.UUID
-import java.util.concurrent.TimeoutException
-
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.amqp.{ ChannelSessionSource, EdgeAmqpChannelInitiator, EdgeChannelInitiatorImpl }
-import io.greenbus.edge.channel.{ Receiver => _, Sender => _, _ }
-import io.greenbus.edge.proto.provider.EdgeProtobufProvider
+import io.greenbus.edge.amqp.channel.impl.{ ClientReceiverChannelImpl, ClientSenderChannelImpl }
+import io.greenbus.edge.amqp.channel.{ AmqpChannelDescriber, AmqpChannelInitiator, AmqpClientResponseParser }
+import io.greenbus.edge.channel2.{ ChannelClient, ChannelDescriptor, ChannelSerializationProvider }
+import io.greenbus.edge.flow.{ ReceiverChannel, SenderChannel }
 import io.greenbus.edge.thread.CallMarshaller
-import io.greenbus.edge.{ ChannelDescriptor, EdgeChannelClient, channel }
-import org.apache.qpid.proton.engine.{ Receiver, _ }
+import org.apache.qpid.proton.engine._
 
-import scala.concurrent.{ Future, Promise }
-import scala.util.{ Success, Try }
-
-class DeliverySequencer {
-  private var deliverySequence: Long = 0
-
-  def next(): Array[Byte] = {
-    val bb = ByteBuffer.allocate(java.lang.Long.BYTES)
-    bb.putLong(deliverySequence)
-    deliverySequence += 1
-    bb.array()
-  }
-}
-
-class SentTransferDeliveryContext(promise: Promise[Boolean]) extends SenderDeliveryContext with LazyLogging {
-  def onDelivery(s: Sender, delivery: Delivery): Unit = {
-    logger.trace("Got delivery update: " + delivery)
-    if (!delivery.isSettled && delivery.remotelySettled()) {
-      delivery.settle()
-      promise.success(true)
-    }
-  }
-}
-
-class SentTransferDeliveryContextTry(handler: Try[Boolean] => Unit) extends SenderDeliveryContext with LazyLogging {
-  def onDelivery(s: Sender, delivery: Delivery): Unit = {
-    logger.trace("Got delivery update: " + delivery)
-    if (!delivery.isSettled && delivery.remotelySettled()) {
-      delivery.settle()
-      handler(Success(true))
-    }
-  }
-}
+import scala.concurrent.{ ExecutionContext, Future, Promise }
 
 class ChannelClientImpl(
     ioThread: CallMarshaller,
     session: Session,
-    promise: Promise[EdgeChannelClient],
-    parent: ResourceRemoveObserver) extends EdgeChannelClient with HandlerResource with LazyLogging {
+    describer: AmqpChannelDescriber,
+    responseParser: AmqpClientResponseParser,
+    serialization: ChannelSerializationProvider,
+    promise: Promise[ChannelClient],
+    parent: ResourceRemoveObserver) extends ChannelClient with HandlerResource with LazyLogging {
+
   private val children = new ResourceContainer
 
-  private val channelMapping: EdgeAmqpChannelInitiator = new EdgeChannelInitiatorImpl(new EdgeProtobufProvider)
+  private val initiator = new AmqpChannelInitiator(describer, serialization)
 
   def handleParentClose(): Unit = {
     children.notifyOfClose()
   }
 
-  def openSender[Message, Desc <: ChannelDescriptor[Message]](desc: Desc): Future[TransferChannelSender[Message, Boolean]] = {
-    val promise = Promise[TransferChannelSender[Message, Boolean]]
+  def openSender[Message, Desc <: ChannelDescriptor[Message]](desc: Desc)(implicit ec: ExecutionContext): Future[(SenderChannel[Message, Boolean], ChannelDescriptor[Message])] = {
+    val promise = Promise[(SenderChannel[Message, Boolean], ChannelDescriptor[Message])]
     ioThread.marshal {
-      channelMapping.sender(session, desc) match {
+      initiator.sender(session, desc) match {
         case None => promise.failure(throw new IllegalArgumentException("Channel type unrecognized"))
         case Some((s, serialize)) =>
-          val impl = new ClientSenderChannelImpl[Message](ioThread, s, serialize, promise, children)
+          val channelProm = Promise[SenderChannel[Message, Boolean]]
+          val impl = new ClientSenderChannelImpl[Message](ioThread, s, serialize, channelProm, children)
           s.setContext(impl.handler)
 
           children.add(impl)
 
           s.open()
+
+          channelProm.future.map { ch =>
+            responseParser.sender(desc, Option(s.getRemoteProperties)) match {
+              case None =>
+                ch.close()
+                promise.failure(new IllegalArgumentException("Did not recognize response descriptor"))
+              case Some(respDesc) => promise.success((ch, respDesc))
+            }
+          }
       }
     }
     promise.future
   }
 
-  def openReceiver[Message, Desc <: ChannelDescriptor[Message]](desc: Desc): Future[TransferChannelReceiver[Message, Boolean]] = {
-    val promise = Promise[TransferChannelReceiver[Message, Boolean]]
+  def openReceiver[Message, Desc <: ChannelDescriptor[Message]](desc: Desc)(implicit ec: ExecutionContext): Future[(ReceiverChannel[Message, Boolean], ChannelDescriptor[Message])] = {
+    val promise = Promise[(ReceiverChannel[Message, Boolean], ChannelDescriptor[Message])]
     ioThread.marshal {
-
-      channelMapping.receiver(session, desc) match {
+      initiator.receiver(session, desc) match {
         case None => promise.failure(throw new IllegalArgumentException("Channel type unrecognized"))
         case Some((r, deserialize)) =>
 
-          val impl = new ClientReceiverChannelImpl[Message](ioThread, r, deserialize, promise, children)
+          val channelProm = Promise[ReceiverChannel[Message, Boolean]]
+          val impl = new ClientReceiverChannelImpl[Message](ioThread, r, deserialize, channelProm, children)
           r.setContext(impl.handler)
 
           children.add(impl)
 
           r.open()
           r.flow(1024) // TODO: configurable
+
+          channelProm.future.map { ch =>
+            responseParser.receiver(desc, Option(r.getRemoteProperties)) match {
+              case None =>
+                ch.close()
+                promise.failure(new IllegalArgumentException("Did not recognize response descriptor to: " + desc))
+              case Some(respDesc) => promise.success((ch, respDesc))
+            }
+          }
       }
     }
     promise.future
@@ -135,38 +122,6 @@ class ChannelClientImpl(
     def onRemoteClose(s: Session): Unit = {
       children.notifyOfClose()
       parent.handleChildRemove(self)
-    }
-  }
-}
-
-class ChannelSessionSourceImpl(ioThread: CallMarshaller, c: Connection, promise: Promise[ChannelSessionSource]) extends ChannelSessionSource {
-  private val children = new ResourceContainer
-
-  def open(): Future[EdgeChannelClient] = {
-    val promise = Promise[EdgeChannelClient]
-    ioThread.marshal {
-      val sess = c.session()
-      val impl = new ChannelClientImpl(ioThread, sess, promise, children)
-      children.add(impl)
-      sess.setContext(impl.handler)
-      sess.open()
-    }
-    promise.future
-  }
-
-  private val self = this
-  val handler = new ConnectionContext {
-    def onSessionRemoteOpen(s: Session): Unit = {
-      // TODO: verify the protocol behavior here
-      //s.close()
-    }
-
-    def onOpen(c: Connection): Unit = {
-      promise.success(self)
-    }
-
-    def onRemoteClose(c: Connection): Unit = {
-      children.notifyOfClose()
     }
   }
 }
