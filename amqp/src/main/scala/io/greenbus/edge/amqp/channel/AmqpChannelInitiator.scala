@@ -21,7 +21,7 @@ package io.greenbus.edge.amqp.channel
 import java.util
 import java.util.UUID
 
-import io.greenbus.edge.channel2.{ ChannelDescriptor, ChannelSerializationProvider }
+import io.greenbus.edge.channel.{ ChannelDescriptor, ChannelSerializationProvider }
 import org.apache.qpid.proton.amqp.messaging.{ Source, Target }
 import org.apache.qpid.proton.engine.{ Link, Receiver, Sender, Session }
 

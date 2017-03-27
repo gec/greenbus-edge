@@ -24,7 +24,7 @@ import java.util.UUID
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.amqp.channel.impl.{ ServerReceiverChannelImpl, ServerSenderChannelImpl }
 import io.greenbus.edge.amqp.impl.{ AmqpChannelServer, HandlerResource, ResourceRemoveObserver }
-import io.greenbus.edge.channel2.{ ChannelDescriptor, ChannelSerializationProvider, ChannelServerHandler }
+import io.greenbus.edge.channel.{ ChannelDescriptor, ChannelSerializationProvider, ChannelServerHandler }
 import io.greenbus.edge.thread.CallMarshaller
 import org.apache.qpid.proton.amqp.{ Binary, Symbol => AmqpSymbol }
 import org.apache.qpid.proton.engine.{ Receiver, Sender }

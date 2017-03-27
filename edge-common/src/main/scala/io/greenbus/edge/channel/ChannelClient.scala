@@ -16,21 +16,13 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.channel2
+package io.greenbus.edge.channel
 
-import io.greenbus.edge.flow.{ ReceiverChannel, SenderChannel }
+import io.greenbus.edge.flow.{ CloseObservable, ReceiverChannel, SenderChannel }
 
-trait ChannelDescriptor[Message] {
-  type Sender = SenderChannel[Message, Boolean]
-  type Receiver = ReceiverChannel[Message, Boolean]
-}
+import scala.concurrent.{ ExecutionContext, Future }
 
-trait ChannelSerializationProvider {
-  def serializerFor[A](desc: ChannelDescriptor[A]): A => Array[Byte]
-  def deserializerFor[A](desc: ChannelDescriptor[A]): (Array[Byte], Int) => Either[String, A]
-}
-
-trait ChannelServerHandler {
-  def handleReceiver[Message](desc: ChannelDescriptor[Message], channel: ReceiverChannel[Message, Boolean]): Unit
-  def handleSender[Message](desc: ChannelDescriptor[Message], channel: SenderChannel[Message, Boolean]): Unit
+trait ChannelClient extends CloseObservable {
+  def openSender[Message, Desc <: ChannelDescriptor[Message]](desc: Desc)(implicit ec: ExecutionContext): Future[(SenderChannel[Message, Boolean], ChannelDescriptor[Message])]
+  def openReceiver[Message, Desc <: ChannelDescriptor[Message]](desc: Desc)(implicit ec: ExecutionContext): Future[(ReceiverChannel[Message, Boolean], ChannelDescriptor[Message])]
 }

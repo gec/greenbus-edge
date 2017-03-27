@@ -21,7 +21,7 @@ package io.greenbus.edge.colset.proto.provider
 import java.io.ByteArrayInputStream
 
 import com.google.protobuf.Message
-import io.greenbus.edge.channel2.{ ChannelDescriptor, ChannelSerializationProvider }
+import io.greenbus.edge.channel.{ ChannelDescriptor, ChannelSerializationProvider }
 import io.greenbus.edge.colset.proto
 import io.greenbus.edge.colset.proto.convert.ProtocolConversions
 

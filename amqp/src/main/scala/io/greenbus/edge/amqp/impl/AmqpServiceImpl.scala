@@ -23,7 +23,7 @@ import java.nio.ByteBuffer
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.amqp.AmqpService
 import io.greenbus.edge.amqp.channel.{ AmqpChannelDescriber, AmqpClientResponseParser }
-import io.greenbus.edge.channel2.{ ChannelClient, ChannelSerializationProvider }
+import io.greenbus.edge.channel.{ ChannelClient, ChannelSerializationProvider }
 import io.greenbus.edge.flow.{ CloseableComponent, LatchSubscribable, RemoteSubscribedLatch }
 import io.greenbus.edge.thread.CallMarshaller
 import org.apache.qpid.proton.Proton

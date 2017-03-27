@@ -18,7 +18,7 @@
  */
 package io.greenbus.edge.amqp.channel
 
-import io.greenbus.edge.channel2.ChannelDescriptor
+import io.greenbus.edge.channel.ChannelDescriptor
 import java.util
 
 trait AmqpClientResponseParser {

@@ -18,7 +18,7 @@
  */
 package io.greenbus.edge.colset.channel
 
-import io.greenbus.edge.channel2._
+import io.greenbus.edge.channel._
 import io.greenbus.edge.colset._
 import io.greenbus.edge.flow.{ ReceiverChannel, SenderChannel }
 

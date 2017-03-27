@@ -16,7 +16,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.channel2
+package io.greenbus.edge.channel
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.flow.{ Closeable, CloseableComponent, ReceiverChannel, SenderChannel }

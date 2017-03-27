@@ -21,7 +21,7 @@ package io.greenbus.edge.amqp.impl
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.amqp.channel.impl.{ ClientReceiverChannelImpl, ClientSenderChannelImpl }
 import io.greenbus.edge.amqp.channel.{ AmqpChannelDescriber, AmqpChannelInitiator, AmqpClientResponseParser }
-import io.greenbus.edge.channel2.{ ChannelClient, ChannelDescriptor, ChannelSerializationProvider }
+import io.greenbus.edge.channel.{ ChannelClient, ChannelDescriptor, ChannelSerializationProvider }
 import io.greenbus.edge.flow.{ Receiver => _, Sender => _, _ }
 import io.greenbus.edge.thread.CallMarshaller
 import org.apache.qpid.proton.engine._
