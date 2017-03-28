@@ -141,6 +141,7 @@ class Retrier[A <: CloseableComponent](logId: String,
   }
 
   private def onResultClose(sequence: Long): Unit = {
+    logger.debug(s"Result close: $sequence")
     state match {
       case Connected(currSeq, _, successTime) => {
         if (currSeq == sequence) {

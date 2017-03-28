@@ -19,6 +19,7 @@
 package io.greenbus.edge.amqp.impl
 
 import java.nio.ByteBuffer
+import java.util.concurrent.TimeoutException
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.amqp.AmqpService
@@ -37,6 +38,8 @@ trait AmqpChannelClientSource extends CloseableComponent {
 
 class AmqpChannelClientSourceImpl(ioThread: CallMarshaller, c: Connection, promise: Promise[AmqpChannelClientSource]) extends AmqpChannelClientSource {
   private val children = new ResourceContainer
+
+  private var opened = false
 
   private val closeLatch = new RemoteSubscribedLatch(ioThread)
   def onClose: LatchSubscribable = closeLatch
@@ -68,11 +71,15 @@ class AmqpChannelClientSourceImpl(ioThread: CallMarshaller, c: Connection, promi
     }
 
     def onOpen(c: Connection): Unit = {
+      opened = true
       promise.success(self)
     }
 
     def onRemoteClose(c: Connection): Unit = {
       closeLatch()
+      if (!opened) {
+        promise.failure(new TimeoutException(s"Transport closed"))
+      }
       children.notifyOfClose()
     }
   }
