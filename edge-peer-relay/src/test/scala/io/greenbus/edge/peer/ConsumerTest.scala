@@ -103,7 +103,7 @@ object ProducerTest extends LazyLogging {
 
     builder.setIndexes(Map(Path("endIndex1") -> ValueString("value 1")))
 
-    val series1 = builder.seriesDouble(Path("series-double-1"), KeyMetadata(indexes = Map(Path("index1") -> ValueString("value 1"))))
+    val series1 = builder.seriesValue(Path("series-double-1"), KeyMetadata(indexes = Map(Path("index1") -> ValueString("value 1"))))
     val kv1 = builder.latestKeyValue(Path("kv-1"), KeyMetadata(indexes = Map(Path("index1") -> ValueString("value 2"))))
     val event1 = builder.topicEventValue(Path("event-1"))
 
@@ -129,7 +129,7 @@ object ProducerTest extends LazyLogging {
     var i = 0
     while (true) {
       val now = System.currentTimeMillis()
-      series1.update(2.33 + i, now)
+      series1.update(ValueDouble(2.33 + i), now)
       kv1.update(ValueString("a value " + i))
       event1.update(Path(Seq("an", "event", "topic")), ValueString("an event string: " + i), now)
       buffer.flush()

@@ -34,11 +34,7 @@ trait EndpointBuilder {
   def setIndexes(paramIndexes: Map[Path, IndexableValue]): Unit
   def setMetadata(paramMetadata: Map[Path, Value]): Unit
 
-  def seriesBool(key: Path, metadata: KeyMetadata = KeyMetadata()): BoolSeriesHandle
-
-  def seriesLong(key: Path, metadata: KeyMetadata = KeyMetadata()): LongSeriesHandle
-
-  def seriesDouble(key: Path, metadata: KeyMetadata = KeyMetadata()): DoubleSeriesHandle
+  def seriesValue(key: Path, metadata: KeyMetadata = KeyMetadata()): SeriesValueHandle
 
   def latestKeyValue(key: Path, metadata: KeyMetadata = KeyMetadata()): LatestKeyValueHandle
 
@@ -72,25 +68,10 @@ class EndpointProducerBuilderImpl(endpointId: EndpointId, outputHandlerThread: C
     metadata = paramMetadata
   }
 
-  def seriesBool(key: Path, metadata: KeyMetadata = KeyMetadata()): BoolSeriesHandle = {
-    val desc = TimeSeriesValueDescriptor(metadata.indexes, metadata.metadata)
-    val handle = new BoolSeriesQueue
-    data += (key -> desc)
-    dataDescs += ProducerDataEntry(key, desc, handle)
-    handle
-  }
+  def seriesValue(key: Path, metadata: KeyMetadata = KeyMetadata()): SeriesValueHandle = {
 
-  def seriesLong(key: Path, metadata: KeyMetadata = KeyMetadata()): LongSeriesHandle = {
     val desc = TimeSeriesValueDescriptor(metadata.indexes, metadata.metadata)
-    val handle = new LongSeriesQueue
-    data += (key -> desc)
-    dataDescs += ProducerDataEntry(key, desc, handle)
-    handle
-  }
-
-  def seriesDouble(key: Path, metadata: KeyMetadata = KeyMetadata()): DoubleSeriesHandle = {
-    val desc = TimeSeriesValueDescriptor(metadata.indexes, metadata.metadata)
-    val handle = new DoubleSeriesQueue
+    val handle = new SeriesValueQueue
     data += (key -> desc)
     dataDescs += ProducerDataEntry(key, desc, handle)
     handle
@@ -154,14 +135,8 @@ trait OutputStatusHandle {
   def update(status: OutputKeyStatus): Unit
 }
 
-trait BoolSeriesHandle {
-  def update(value: Boolean, timeMs: Long): Unit
-}
-trait LongSeriesHandle {
-  def update(value: Long, timeMs: Long): Unit
-}
-trait DoubleSeriesHandle {
-  def update(value: Double, timeMs: Long): Unit
+trait SeriesValueHandle {
+  def update(value: SampleValue, timeMs: Long): Unit
 }
 trait TopicEventHandle {
   def update(topic: Path, value: Value, timeMs: Long): Unit
@@ -180,14 +155,8 @@ trait DataValueDistributor[A] {
 
 sealed trait DataValueQueue
 sealed trait SampleValueQueue extends DataValueQueue with DataValueDistributor[(SampleValue, Long)]
-class BoolSeriesQueue extends SampleValueQueue with BoolSeriesHandle {
-  def update(value: Boolean, timeMs: Long): Unit = queue.push((ValueBool(value), timeMs))
-}
-class LongSeriesQueue extends SampleValueQueue with LongSeriesHandle {
-  def update(value: Long, timeMs: Long): Unit = queue.push((ValueInt64(value), timeMs))
-}
-class DoubleSeriesQueue extends SampleValueQueue with DoubleSeriesHandle {
-  def update(value: Double, timeMs: Long): Unit = queue.push((ValueDouble(value), timeMs))
+class SeriesValueQueue extends DataValueDistributor[(SampleValue, Long)] with DataValueQueue with SeriesValueHandle {
+  def update(value: SampleValue, timeMs: Long): Unit = queue.push((value, timeMs))
 }
 class TopicEventQueue extends DataValueDistributor[(Path, Value, Long)] with DataValueQueue with TopicEventHandle {
   def update(topic: Path, value: Value, timeMs: Long): Unit = queue.push((topic, value, timeMs))
