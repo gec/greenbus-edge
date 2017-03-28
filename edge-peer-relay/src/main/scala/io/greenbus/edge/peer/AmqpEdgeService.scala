@@ -19,7 +19,7 @@
 package io.greenbus.edge.peer
 
 import io.greenbus.edge.amqp.AmqpService
-import io.greenbus.edge.thread.EventThreadService
+import io.greenbus.edge.thread.{ EventThreadService, SchedulableCallMarshaller }
 
 import scala.concurrent.ExecutionContext
 
@@ -30,6 +30,8 @@ trait EdgeServices {
 
   def consumer: ConsumerServices
   def producer: ProducerServices
+
+  def eventThread: SchedulableCallMarshaller
 }
 
 object AmqpEdgeService {
@@ -66,4 +68,6 @@ class AmqpEdgeService(host: String, port: Int, retryIntervalMs: Long)(implicit e
   def producer: ProducerServices = {
     producerServices
   }
+
+  override def eventThread: SchedulableCallMarshaller = exe
 }
