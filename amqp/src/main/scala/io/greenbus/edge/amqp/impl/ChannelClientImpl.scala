@@ -18,15 +18,17 @@
  */
 package io.greenbus.edge.amqp.impl
 
+import java.util.concurrent.TimeoutException
+
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.amqp.channel.impl.{ ClientReceiverChannelImpl, ClientSenderChannelImpl }
-import io.greenbus.edge.amqp.channel.{ AmqpChannelDescriber, AmqpChannelInitiator, AmqpClientResponseParser }
-import io.greenbus.edge.channel.{ ChannelClient, ChannelDescriptor, ChannelSerializationProvider }
-import io.greenbus.edge.flow.{ Receiver => _, Sender => _, _ }
+import io.greenbus.edge.amqp.channel.impl.{ClientReceiverChannelImpl, ClientSenderChannelImpl}
+import io.greenbus.edge.amqp.channel.{AmqpChannelDescriber, AmqpChannelInitiator, AmqpClientResponseParser}
+import io.greenbus.edge.channel.{ChannelClient, ChannelDescriptor, ChannelSerializationProvider}
+import io.greenbus.edge.flow.{Receiver => _, Sender => _, _}
 import io.greenbus.edge.thread.CallMarshaller
 import org.apache.qpid.proton.engine._
 
-import scala.concurrent.{ ExecutionContext, Future, Promise }
+import scala.concurrent.{ExecutionContext, Future, Promise}
 
 class ChannelClientImpl(
     ioThread: CallMarshaller,
@@ -42,6 +44,8 @@ class ChannelClientImpl(
   private val initiator = new AmqpChannelInitiator(describer, serialization)
 
   private val closeLatch = new RemoteSubscribedLatch(ioThread)
+
+  private var opened = false
 
   def onClose: LatchSubscribable = closeLatch
 
@@ -121,10 +125,14 @@ class ChannelClientImpl(
     }
 
     def onOpen(s: Session): Unit = {
+      opened = true
       promise.success(self)
     }
 
     def onRemoteClose(s: Session): Unit = {
+      if (!opened) {
+        promise.failure(new TimeoutException("Transport closed"))
+      }
       closeLatch()
       children.notifyOfClose()
       parent.handleChildRemove(self)
