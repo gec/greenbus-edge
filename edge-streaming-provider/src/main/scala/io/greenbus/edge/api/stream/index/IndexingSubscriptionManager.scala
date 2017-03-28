@@ -54,41 +54,21 @@ class IndexingSubscriptionManager(eventThread: CallMarshaller, observer: Descrip
     events.foreach { update =>
       if (update.key == peerManifestKey) {
         update.value match {
-          case up: MapUpdated =>
-            onRouteManifestUpdate(up.value)
-          case _ => logger.warn(s"Manifest data update was unexpected type: " + update)
+          case sync: ValueSync => handleManifestDataValueUpdate(sync.initial)
+          case delt: ValueDelta => handleManifestDataValueUpdate(delt.update)
+          case _ => logger.warn(s"Manifest Value status was unexpected type: " + update)
         }
       } else {
-
         update.key match {
           case RowSubKey(row) => {
             descSubscriptionSet.get(row).foreach { entry =>
               update.value match {
-                case up: Appended => {
-                  val descOpt: Option[EndpointDescriptor] = up.values.lastOption.flatMap { v =>
-                    EdgeCodecCommon.readEndpointDescriptor(v.value) match {
-                      case Left(err) =>
-                        logger.warn(s"Could not read endpoint descriptor: " + err); None
-                      case Right(desc) => Some(desc)
-                    }
-                  }
-
-                  (entry.desc, descOpt) match {
-                    case (None, None) =>
-                    case (Some(l), None) => observer.removed(entry.id)
-                    case (None, Some(r)) => observer.observed(entry.id, r)
-                    case (Some(l), Some(r)) =>
-                      if (l != r) {
-                        observer.observed(entry.id, r)
-                      }
-                  }
-
-                  descSubscriptionSet += (row -> entry.copy(desc = descOpt))
-                }
+                case sync: ValueSync => handleDataValueUpdate(row, entry, sync.initial)
+                case delt: ValueDelta => handleDataValueUpdate(row, entry, delt.update)
                 case ValueAbsent => observer.removed(entry.id)
                 case ValueUnresolved => observer.removed(entry.id)
                 case ValueDisconnected => observer.removed(entry.id)
-                case _ => logger.warn(s"Descriptor data update was unexpected type: " + update)
+                case _ => logger.warn(s"Value status was unexpected type: " + update)
               }
             }
           }
@@ -96,6 +76,41 @@ class IndexingSubscriptionManager(eventThread: CallMarshaller, observer: Descrip
         }
 
       }
+    }
+  }
+
+  private def handleManifestDataValueUpdate(v: DataValueUpdate) = {
+    v match {
+      case up: MapUpdated =>
+        onRouteManifestUpdate(up.value)
+      case _ => logger.warn(s"Manifest data update was unexpected type: " + v)
+    }
+  }
+
+  private def handleDataValueUpdate(row: RowId, entry: EndpointEntry, v: DataValueUpdate) = {
+    v match {
+      case up: Appended => {
+        val descOpt: Option[EndpointDescriptor] = up.values.lastOption.flatMap { v =>
+          EdgeCodecCommon.readEndpointDescriptor(v.value) match {
+            case Left(err) =>
+              logger.warn(s"Could not read endpoint descriptor: " + err); None
+            case Right(desc) => Some(desc)
+          }
+        }
+
+        (entry.desc, descOpt) match {
+          case (None, None) =>
+          case (Some(l), None) => observer.removed(entry.id)
+          case (None, Some(r)) => observer.observed(entry.id, r)
+          case (Some(l), Some(r)) =>
+            if (l != r) {
+              observer.observed(entry.id, r)
+            }
+        }
+
+        descSubscriptionSet += (row -> entry.copy(desc = descOpt))
+      }
+      case _ => logger.warn(s"Descriptor data update was unexpected type: " + v)
     }
   }
 
