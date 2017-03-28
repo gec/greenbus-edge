@@ -165,7 +165,7 @@ class RetryingConnector(eventThread: SchedulableCallMarshaller, service: AmqpSer
 
   private def peerLinkRetrier(seq: Long, observer: PeerLinkObserver, result: StreamClientResult): Retrier[PeerLinkResult] = {
     new Retrier[PeerLinkResult](
-      s"Gateway [$host:$port]",
+      s"Peer link [$host:$port]",
       eventThread,
       () => result.client.openPeerLinkClient().map { case (sess, ch) => PeerLinkResult(sess, ch) },
       peerLinkSuccess(seq, observer, _),

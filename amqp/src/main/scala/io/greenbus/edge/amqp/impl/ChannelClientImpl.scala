@@ -21,14 +21,14 @@ package io.greenbus.edge.amqp.impl
 import java.util.concurrent.TimeoutException
 
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.amqp.channel.impl.{ClientReceiverChannelImpl, ClientSenderChannelImpl}
-import io.greenbus.edge.amqp.channel.{AmqpChannelDescriber, AmqpChannelInitiator, AmqpClientResponseParser}
-import io.greenbus.edge.channel.{ChannelClient, ChannelDescriptor, ChannelSerializationProvider}
-import io.greenbus.edge.flow.{Receiver => _, Sender => _, _}
+import io.greenbus.edge.amqp.channel.impl.{ ClientReceiverChannelImpl, ClientSenderChannelImpl }
+import io.greenbus.edge.amqp.channel.{ AmqpChannelDescriber, AmqpChannelInitiator, AmqpClientResponseParser }
+import io.greenbus.edge.channel.{ ChannelClient, ChannelDescriptor, ChannelSerializationProvider }
+import io.greenbus.edge.flow.{ Receiver => _, Sender => _, _ }
 import io.greenbus.edge.thread.CallMarshaller
 import org.apache.qpid.proton.engine._
 
-import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.concurrent.{ ExecutionContext, Future, Promise }
 
 class ChannelClientImpl(
     ioThread: CallMarshaller,

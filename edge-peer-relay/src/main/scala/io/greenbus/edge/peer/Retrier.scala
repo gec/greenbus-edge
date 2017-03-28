@@ -60,7 +60,7 @@ class Retrier[A <: CloseableComponent](logId: String,
       case st: RetryPending => {
         if (sequence == st.sequence) {
 
-          logger.info(s"$logId attempting connection")
+          logger.info(s"$logId making attempt")
           val fut = attempt()
 
           fut.foreach { result => eventThread.marshal(onAttemptSuccess(sequence, result)) }
@@ -91,11 +91,11 @@ class Retrier[A <: CloseableComponent](logId: String,
         }
       }
       case RetryPending(_) => {
-        logger.debug(s"$logId got connected event while retry pending")
+        logger.debug(s"$logId got success event while retry pending")
         result.close()
       }
       case Connected(_, _, _) => {
-        logger.debug(s"$logId got connected event while already connected")
+        logger.debug(s"$logId got success event while already connected")
         result.close()
       }
       case Closed => {
@@ -108,24 +108,24 @@ class Retrier[A <: CloseableComponent](logId: String,
     state match {
       case st: AttemptPending => {
         if (st.sequence == sequence) {
-          logger.info(s"$logId connection failure: " + ex)
+          logger.info(s"$logId failure: " + ex)
 
           val nextSeq = st.sequence + 1
           state = RetryPending(nextSeq)
           issueOrScheduleRetry(nextSeq, st.attemptTime)
 
         } else {
-          logger.info(s"$logId delayed connection failure: " + ex)
+          logger.info(s"$logId delayed failure: " + ex)
         }
       }
       case st: RetryPending => {
-        logger.info(s"$logId connection failure while retry pending: " + ex)
+        logger.info(s"$logId failure while retry pending: " + ex)
       }
       case Connected(_, _, _) => {
-        logger.info(s"$logId connection failure while connected: " + ex)
+        logger.info(s"$logId failure while connected: " + ex)
       }
       case Closed => {
-        logger.info(s"$logId connection failure while closed: " + ex)
+        logger.info(s"$logId failure while closed: " + ex)
       }
     }
   }
@@ -151,7 +151,7 @@ class Retrier[A <: CloseableComponent](logId: String,
           issueOrScheduleRetry(nextSeq, successTime)
 
         } else {
-          logger.info(s"$logId delayed connection close")
+          logger.info(s"$logId delayed close")
         }
       }
       case st => {
