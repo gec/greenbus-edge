@@ -18,6 +18,31 @@
  */
 package io.greenbus.edge.api
 
-class Subscription {
+import io.greenbus.edge.flow.Source
 
+case class IndexSubscriptionParams(
+  endpointPrefixes: Seq[Path] = Seq(),
+  endpointIndexes: Seq[IndexSpecifier] = Seq(),
+  dataKeyIndexes: Seq[IndexSpecifier] = Seq(),
+  outputKeyIndexes: Seq[IndexSpecifier] = Seq())
+
+case class DataKeySubscriptionParams(
+  series: Seq[EndpointPath] = Seq(),
+  keyValues: Seq[EndpointPath] = Seq(),
+  topicEvent: Seq[EndpointPath] = Seq(),
+  activeSet: Seq[EndpointPath] = Seq())
+
+case class SubscriptionParams(
+  descriptors: Seq[EndpointId] = Seq(),
+  dataKeys: DataKeySubscriptionParams = DataKeySubscriptionParams(),
+  outputKeys: Seq[EndpointPath] = Seq(),
+  indexing: IndexSubscriptionParams = IndexSubscriptionParams())
+
+trait EdgeSubscription {
+  def updates: Source[Seq[IdentifiedEdgeUpdate]]
+  def close(): Unit
+}
+
+trait EdgeSubscriptionClient {
+  def subscribe(params: SubscriptionParams): EdgeSubscription
 }

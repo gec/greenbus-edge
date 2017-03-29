@@ -402,7 +402,7 @@ class BatchedSink[A](batchSink: Sink[Seq[A]]) {
 
 class EdgeUpdateQueueImpl(batchSink: Sink[Seq[IdentifiedEdgeUpdate]]) extends BatchedSink[IdentifiedEdgeUpdate](batchSink) with EdgeUpdateQueue
 
-object EdgeSubscription {
+object EdgeSubscriptionManager {
 
   private class EdgeSubscriptionImpl(source: Source[Seq[IdentifiedEdgeUpdate]], onClose: () => Unit) extends EdgeSubscription {
     def updates: Source[Seq[IdentifiedEdgeUpdate]] = source
@@ -410,19 +410,7 @@ object EdgeSubscription {
     def close(): Unit = onClose()
   }
 
-  def apply(source: Source[Seq[IdentifiedEdgeUpdate]], onClose: () => Unit): EdgeSubscription = {
-    new EdgeSubscriptionImpl(source, onClose)
-  }
 }
-trait EdgeSubscription {
-  def updates: Source[Seq[IdentifiedEdgeUpdate]]
-  def close(): Unit
-}
-
-trait EdgeSubscriptionClient {
-  def subscribe(params: SubscriptionParams): EdgeSubscription
-}
-
 class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: StreamDynamicSubscriptionManager) extends EdgeSubscriptionClient with LazyLogging {
 
   private val keyMap = mutable.Map.empty[SubscriptionKey, EdgeTypeSubMgr]
@@ -519,7 +507,7 @@ class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: StreamDynami
     }
 
     // TODO: pending for all rows?
-    EdgeSubscription(batchQueue, () => closeLatch())
+    new EdgeSubscriptionManager.EdgeSubscriptionImpl(batchQueue, () => closeLatch())
   }
 
   private def unsubscribed(queue: EdgeUpdateQueue, rows: Set[SubscriptionKey]): Unit = {
@@ -555,27 +543,6 @@ class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: StreamDynami
     dirtySet.foreach(_.flush())
   }
 }
-
-case class IndexSubscriptionParams(
-  endpointPrefixes: Seq[Path] = Seq(),
-  endpointIndexes: Seq[IndexSpecifier] = Seq(),
-  dataKeyIndexes: Seq[IndexSpecifier] = Seq(),
-  outputKeyIndexes: Seq[IndexSpecifier] = Seq())
-
-case class DataKeySubscriptionParams(
-  series: Seq[EndpointPath] = Seq(),
-  keyValues: Seq[EndpointPath] = Seq(),
-  topicEvent: Seq[EndpointPath] = Seq(),
-  activeSet: Seq[EndpointPath] = Seq())
-
-case class SubscriptionParams(
-  descriptors: Seq[EndpointId] = Seq(),
-  dataKeys: DataKeySubscriptionParams = DataKeySubscriptionParams(),
-  outputKeys: Seq[EndpointPath] = Seq(),
-  indexing: IndexSubscriptionParams = IndexSubscriptionParams())
-
-trait ServiceClient extends Sender[OutputRequest, OutputResult]
-trait ServiceClientChannel extends ServiceClient with CloseObservable
 
 class ServiceClientImpl(client: StreamServiceClient) extends ServiceClientChannel {
 

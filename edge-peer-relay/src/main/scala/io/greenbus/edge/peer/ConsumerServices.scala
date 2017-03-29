@@ -18,6 +18,7 @@
  */
 package io.greenbus.edge.peer
 
+import io.greenbus.edge.api.{ EdgeSubscriptionClient, ServiceClient, ServiceClientChannel }
 import io.greenbus.edge.api.stream._
 import io.greenbus.edge.colset.subscribe.{ DynamicSubscriptionManager, StreamServiceClientImpl }
 import io.greenbus.edge.colset.{ PeerLinkProxyChannel, PeerSessionId }

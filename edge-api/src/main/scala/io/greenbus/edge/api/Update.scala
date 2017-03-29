@@ -49,12 +49,6 @@ case class IdEndpointIndexUpdate(specifier: IndexSpecifier, data: EdgeDataStatus
 case class IdDataKeyIndexUpdate(specifier: IndexSpecifier, data: EdgeDataStatus[KeySetUpdate]) extends IdentifiedEdgeUpdate
 case class IdOutputKeyIndexUpdate(specifier: IndexSpecifier, data: EdgeDataStatus[KeySetUpdate]) extends IdentifiedEdgeUpdate
 
-/*
-Pending
-Unresolved
-ResolvedAbsent
-ResolvedValue
- */
 sealed trait EdgeDataStatus[+A]
 case object Pending extends EdgeDataStatus[Nothing]
 case object DataUnresolved extends EdgeDataStatus[Nothing]

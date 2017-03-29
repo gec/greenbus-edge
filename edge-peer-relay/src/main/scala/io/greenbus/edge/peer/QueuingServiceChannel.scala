@@ -18,8 +18,7 @@
  */
 package io.greenbus.edge.peer
 
-import io.greenbus.edge.api.stream.{ ServiceClient, ServiceClientChannel }
-import io.greenbus.edge.api.{ OutputRequest, OutputResult }
+import io.greenbus.edge.api.{ OutputRequest, OutputResult, ServiceClient, ServiceClientChannel }
 import io.greenbus.edge.thread.SchedulableCallMarshaller
 
 import scala.collection.mutable
