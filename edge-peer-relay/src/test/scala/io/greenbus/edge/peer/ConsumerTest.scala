@@ -27,7 +27,7 @@ import io.greenbus.edge.amqp.AmqpService
 import io.greenbus.edge.amqp.colset.{ ChannelDescriberImpl, ClientResponseParser }
 import io.greenbus.edge.api._
 import io.greenbus.edge.api.stream._
-import io.greenbus.edge.api.stream.index.IndexProducer
+import io.greenbus.edge.api.stream.index.{ IndexProducer, IndexingSubscriptionManager }
 import io.greenbus.edge.colset.client.{ MultiChannelStreamClientImpl, StreamClient }
 import io.greenbus.edge.colset.gateway.GatewayRouteSource
 import io.greenbus.edge.colset.proto.provider.ProtoSerializationProvider
@@ -51,19 +51,19 @@ object ConsumerTest extends LazyLogging {
 
     val outputKey = EndpointPath(EndpointId(Path("my-endpoint")), Path("out-1"))
 
-    val sub = SubscriptionBuilder.newBuilder
-      .series(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1")))
-      .keyValue(EndpointPath(EndpointId(Path("my-endpoint")), Path("kv-1")))
-      .topicEvent(EndpointPath(EndpointId(Path("my-endpoint")), Path("event-1")))
-      .outputStatus(outputKey)
-      .endpointSet(Path(Seq()))
-      .endpointIndex(IndexSpecifier(Path("endIndex1"), None))
-      .dataKeyIndex(IndexSpecifier(Path("index1"), None))
-      .outputKeyIndex(IndexSpecifier(Path("outIndex1"), None))
-      .build()
+    val params = SubscriptionParams(
+      dataKeys = DataKeySubscriptionParams(
+        series = Seq(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1"))),
+        keyValues = Seq(EndpointPath(EndpointId(Path("my-endpoint")), Path("kv-1"))),
+        topicEvent = Seq(EndpointPath(EndpointId(Path("my-endpoint")), Path("event-1")))),
+      outputKeys = Seq(outputKey),
+      indexing = IndexSubscriptionParams(
+        endpointPrefixes = Seq(Path(Seq())),
+        dataKeyIndexes = Seq(IndexSpecifier(Path("index1"), None)),
+        outputKeyIndexes = Seq(IndexSpecifier(Path("outIndex1"), None))))
 
     logger.debug("Subscribing...")
-    val subscription = subClient.subscribe(sub)
+    val subscription = subClient.subscribe(params)
 
     subscription.updates.bind { batch =>
       logger.info("Got batch: ")
