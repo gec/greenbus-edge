@@ -18,10 +18,6 @@
  */
 package io.greenbus.edge.api
 
-import io.greenbus.edge.flow.Sink
-
-trait EndpointDescSink extends Sink[EndpointDescriptor]
-
 case class EndpointDescSub(endpointId: EndpointId)
 
 class EndpointSubscription(endpointId: EndpointId, descOpt: Option[EndpointDescSub], dataKeys: Set[Path], outputKeys: Path)

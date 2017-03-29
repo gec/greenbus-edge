@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package greenbus.edge.data;
+package edge;
 
 
 option java_package = "io.greenbus.edge.api.proto";
