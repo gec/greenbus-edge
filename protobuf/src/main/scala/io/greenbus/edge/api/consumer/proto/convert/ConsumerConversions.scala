@@ -16,14 +16,12 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.api.consumer.proto
+package io.greenbus.edge.api.consumer.proto.convert
 
-import io.greenbus.edge.util.EitherUtil._
 import io.greenbus.edge.api
-import io.greenbus.edge.api.IndexableValue
 import io.greenbus.edge.api.consumer.proto
-import io.greenbus.edge.api.proto.EndpointDescriptor
 import io.greenbus.edge.api.proto.convert.{ Conversions, OutputConversions, ValueConversions }
+import io.greenbus.edge.util.EitherUtil._
 
 import scala.collection.JavaConversions._
 
@@ -276,34 +274,6 @@ object ConsumerConversions {
     }
   }
 
-  /*def toProto(obj: api.IdentifiedEdgeUpdate): proto.IdentifiedEdgeUpdate = {
-    val b = proto.IdentifiedEdgeUpdate.newBuilder()
-    obj match {
-      case up: api.IdEndpointUpdate => b.setEndpointUpdate(toProto(up))
-      case up: api.IdDataKeyUpdate => b.setSeriesUpdate(toProto(up))
-      case up: api.IdOutputKeyUpdate => b.setTopicEventUpdate(toProto(up))
-      case up: api.ActiveSetUpdate => b.setActiveSetUpdate(toProto(up))
-    }
-    b.build()
-  }
-  def fromProto(msg: proto.IdentifiedEdgeUpdate): Either[String, api.IdentifiedEdgeUpdate] = {
-    msg.getTypesCase match {
-      case proto.IdentifiedEdgeUpdate.TypesCase.KEY_VALUE_UPDATE => fromProto(msg.getKeyValueUpdate)
-      case proto.IdentifiedEdgeUpdate.TypesCase.SERIES_UPDATE => fromProto(msg.getSeriesUpdate)
-      case proto.IdentifiedEdgeUpdate.TypesCase.TOPIC_EVENT_UPDATE => fromProto(msg.getTopicEventUpdate)
-      case proto.IdentifiedEdgeUpdate.TypesCase.ACTIVE_SET_UPDATE => fromProto(msg.getActiveSetUpdate)
-    }
-  }*/
-
-  /*def updateToProto[A, Msg](obj: api.EdgeDataStatus[A], toProtoFun: A => Msg): (proto.StatusType, Option[Msg]) = {
-    obj match {
-      case api.Pending => (proto.StatusType.PENDING, None)
-      case api.DataUnresolved => (proto.StatusType.DATA_UNRESOLVED, None)
-      case api.ResolvedAbsent => (proto.StatusType.RESOLVED_ABSENT, None)
-      case v: api.ResolvedValue[A] => (proto.StatusType.RESOLVED_VALUE, Some(toProtoFun(v.value)))
-      case api.Disconnected => (proto.StatusType.DISCONNECTED, None)
-    }
-  }*/
   def updateToProto[A, B](obj: api.EdgeDataStatus[A]): (proto.StatusType, Option[A]) = {
     obj match {
       case api.Pending => (proto.StatusType.PENDING, None)
@@ -324,26 +294,6 @@ object ConsumerConversions {
       case proto.StatusType.UNRECOGNIZED => Left("Unrecognized status type")
     }
   }
-
-  /*
-
-sealed trait IdentifiedEdgeUpdate
-case class IdEndpointUpdate(id: EndpointId, data: EdgeDataStatus[EndpointDescriptor]) extends IdentifiedEdgeUpdate
-case class IdDataKeyUpdate(id: EndpointPath, data: EdgeDataStatus[DataKeyUpdate]) extends IdentifiedEdgeUpdate
-case class IdOutputKeyUpdate(id: EndpointPath, data: EdgeDataStatus[OutputKeyUpdate]) extends IdentifiedEdgeUpdate
-
-case class IdEndpointPrefixUpdate(prefix: Path, data: EdgeDataStatus[EndpointSetUpdate]) extends IdentifiedEdgeUpdate
-case class IdEndpointIndexUpdate(specifier: IndexSpecifier, data: EdgeDataStatus[EndpointSetUpdate]) extends IdentifiedEdgeUpdate
-case class IdDataKeyIndexUpdate(specifier: IndexSpecifier, data: EdgeDataStatus[KeySetUpdate]) extends IdentifiedEdgeUpdate
-case class IdOutputKeyIndexUpdate(specifier: IndexSpecifier, data: EdgeDataStatus[KeySetUpdate]) extends IdentifiedEdgeUpdate
-
-sealed trait EdgeDataStatus[+A]
-case object Pending extends EdgeDataStatus[Nothing]
-case object DataUnresolved extends EdgeDataStatus[Nothing]
-case object ResolvedAbsent extends EdgeDataStatus[Nothing]
-case class ResolvedValue[A](value: A) extends EdgeDataStatus[A]
-case object Disconnected extends EdgeDataStatus[Nothing]
-   */
 
   def toProto(obj: api.IdEndpointUpdate): proto.IdEndpointUpdate = {
     val b = proto.IdEndpointUpdate.newBuilder()
@@ -366,67 +316,184 @@ case object Disconnected extends EdgeDataStatus[Nothing]
         api.IdEndpointUpdate(id, status)
       }
     } else {
-      Left("MapKeyPair missing key")
+      Left("IdEndpointUpdate missing id")
     }
   }
-  /*
 
+  def toProto(obj: api.IdDataKeyUpdate): proto.IdDataKeyUpdate = {
+    val b = proto.IdDataKeyUpdate.newBuilder()
+    b.setId(ValueConversions.toProto(obj.id))
+    val (status, optV) = updateToProto(obj.data)
+    b.setType(status)
+    optV.map(toProto).foreach(b.setValue)
+    b.build()
+  }
+  def fromProto(msg: proto.IdDataKeyUpdate): Either[String, api.IdDataKeyUpdate] = {
+    if (msg.hasId) {
 
- message IdentifiedEdgeUpdate {
-    oneof type {
-        IdEndpointUpdate endpoint_update = 1;
-        IdDataKeyUpdate data_key_update = 2;
-        IdOutputKeyUpdate output_key_update = 3;
+      val vOptEith = if (msg.hasValue) fromProto(msg.getValue).map(r => Some(r)) else Right(None)
 
-        IdEndpointPrefixUpdate endpoint_prefix_update = 4;
-        IdEndpointIndexUpdate endpoint_index_update = 5;
-        IdDataKeyIndexUpdate data_key_index_update = 6;
-        IdOutputKeyIndexUpdate output_key_index_update = 7;
+      for {
+        id <- ValueConversions.fromProto(msg.getId)
+        vOpt <- vOptEith
+        status <- updateFromProto(msg.getType, vOpt)
+      } yield {
+        api.IdDataKeyUpdate(id, status)
+      }
+    } else {
+      Left("IdDataKeyUpdate missing id")
     }
-}
+  }
 
+  def toProto(obj: api.IdOutputKeyUpdate): proto.IdOutputKeyUpdate = {
+    val b = proto.IdOutputKeyUpdate.newBuilder()
+    b.setId(ValueConversions.toProto(obj.id))
+    val (status, optV) = updateToProto(obj.data)
+    b.setType(status)
+    optV.map(toProto).foreach(b.setValue)
+    b.build()
+  }
+  def fromProto(msg: proto.IdOutputKeyUpdate): Either[String, api.IdOutputKeyUpdate] = {
+    if (msg.hasId) {
 
-message IdEndpointUpdate {
-    edge.EndpointId id = 1;
-    StatusType type = 2;
-    edge.EndpointDescriptor value = 3;
-}
-message IdDataKeyUpdate {
-    edge.EndpointPath id = 1;
-    StatusType type = 2;
-    DataKeyUpdate value = 3;
-}
-message IdOutputKeyUpdate {
-    edge.EndpointPath id = 1;
-    StatusType type = 2;
-    OutputKeyUpdate value = 3;
-}
+      val vOptEith = if (msg.hasValue) fromProto(msg.getValue).map(r => Some(r)) else Right(None)
 
+      for {
+        id <- ValueConversions.fromProto(msg.getId)
+        vOpt <- vOptEith
+        status <- updateFromProto(msg.getType, vOpt)
+      } yield {
+        api.IdOutputKeyUpdate(id, status)
+      }
+    } else {
+      Left("IdOutputKeyUpdate missing id")
+    }
+  }
 
+  def toProto(obj: api.IdEndpointPrefixUpdate): proto.IdEndpointPrefixUpdate = {
+    val b = proto.IdEndpointPrefixUpdate.newBuilder()
+    b.setId(ValueConversions.toProto(obj.prefix))
+    val (status, optV) = updateToProto(obj.data)
+    b.setType(status)
+    optV.map(toProto).foreach(b.setValue)
+    b.build()
+  }
+  def fromProto(msg: proto.IdEndpointPrefixUpdate): Either[String, api.IdEndpointPrefixUpdate] = {
+    if (msg.hasId) {
 
+      val vOptEith = if (msg.hasValue) fromProto(msg.getValue).map(r => Some(r)) else Right(None)
 
-message IdEndpointPrefixUpdate {
-    edge.Path id = 1;
-    StatusType type = 2;
-    EndpointSetUpdate value = 3;
-}
-message IdEndpointIndexUpdate {
-    edge.Path id = 1;
-    StatusType type = 2;
-    EndpointSetUpdate value = 3;
-}
-message IdDataKeyIndexUpdate {
-    edge.IndexSpecifier id = 1;
-    StatusType type = 2;
-    KeySetUpdate value = 3;
-}
-message IdOutputKeyIndexUpdate {
-    edge.IndexSpecifier id = 1;
-    StatusType type = 2;
-    KeySetUpdate value = 3;
-}
+      for {
+        id <- ValueConversions.fromProto(msg.getId)
+        vOpt <- vOptEith
+        status <- updateFromProto(msg.getType, vOpt)
+      } yield {
+        api.IdEndpointPrefixUpdate(id, status)
+      }
+    } else {
+      Left("IdOutputKeyUpdate missing id")
+    }
+  }
 
+  def toProto(obj: api.IdEndpointIndexUpdate): proto.IdEndpointIndexUpdate = {
+    val b = proto.IdEndpointIndexUpdate.newBuilder()
+    b.setId(Conversions.toProto(obj.specifier))
+    val (status, optV) = updateToProto(obj.data)
+    b.setType(status)
+    optV.map(toProto).foreach(b.setValue)
+    b.build()
+  }
+  def fromProto(msg: proto.IdEndpointIndexUpdate): Either[String, api.IdEndpointIndexUpdate] = {
+    if (msg.hasId) {
 
-   */
+      val vOptEith = if (msg.hasValue) fromProto(msg.getValue).map(r => Some(r)) else Right(None)
+
+      for {
+        id <- Conversions.fromProto(msg.getId)
+        vOpt <- vOptEith
+        status <- updateFromProto(msg.getType, vOpt)
+      } yield {
+        api.IdEndpointIndexUpdate(id, status)
+      }
+    } else {
+      Left("IdOutputKeyUpdate missing id")
+    }
+  }
+
+  def toProto(obj: api.IdDataKeyIndexUpdate): proto.IdDataKeyIndexUpdate = {
+    val b = proto.IdDataKeyIndexUpdate.newBuilder()
+    b.setId(Conversions.toProto(obj.specifier))
+    val (status, optV) = updateToProto(obj.data)
+    b.setType(status)
+    optV.map(toProto).foreach(b.setValue)
+    b.build()
+  }
+  def fromProto(msg: proto.IdDataKeyIndexUpdate): Either[String, api.IdDataKeyIndexUpdate] = {
+    if (msg.hasId) {
+
+      val vOptEith = if (msg.hasValue) fromProto(msg.getValue).map(r => Some(r)) else Right(None)
+
+      for {
+        id <- Conversions.fromProto(msg.getId)
+        vOpt <- vOptEith
+        status <- updateFromProto(msg.getType, vOpt)
+      } yield {
+        api.IdDataKeyIndexUpdate(id, status)
+      }
+    } else {
+      Left("IdDataKeyIndexUpdate missing id")
+    }
+  }
+
+  def toProto(obj: api.IdOutputKeyIndexUpdate): proto.IdOutputKeyIndexUpdate = {
+    val b = proto.IdOutputKeyIndexUpdate.newBuilder()
+    b.setId(Conversions.toProto(obj.specifier))
+    val (status, optV) = updateToProto(obj.data)
+    b.setType(status)
+    optV.map(toProto).foreach(b.setValue)
+    b.build()
+  }
+  def fromProto(msg: proto.IdOutputKeyIndexUpdate): Either[String, api.IdOutputKeyIndexUpdate] = {
+    if (msg.hasId) {
+
+      val vOptEith = if (msg.hasValue) fromProto(msg.getValue).map(r => Some(r)) else Right(None)
+
+      for {
+        id <- Conversions.fromProto(msg.getId)
+        vOpt <- vOptEith
+        status <- updateFromProto(msg.getType, vOpt)
+      } yield {
+        api.IdOutputKeyIndexUpdate(id, status)
+      }
+    } else {
+      Left("IdOutputKeyIndexUpdate missing id")
+    }
+  }
+
+  def toProto(obj: api.IdentifiedEdgeUpdate): proto.IdentifiedEdgeUpdate = {
+    val b = proto.IdentifiedEdgeUpdate.newBuilder()
+    obj match {
+      case obj: api.IdEndpointUpdate => b.setEndpointUpdate(toProto(obj))
+      case obj: api.IdDataKeyUpdate => b.setDataKeyUpdate(toProto(obj))
+      case obj: api.IdOutputKeyUpdate => b.setOutputKeyUpdate(toProto(obj))
+      case obj: api.IdEndpointPrefixUpdate => b.setEndpointPrefixUpdate(toProto(obj))
+      case obj: api.IdEndpointIndexUpdate => b.setEndpointIndexUpdate(toProto(obj))
+      case obj: api.IdDataKeyIndexUpdate => b.setDataKeyIndexUpdate(toProto(obj))
+      case obj: api.IdOutputKeyIndexUpdate => b.setOutputKeyIndexUpdate(toProto(obj))
+    }
+    b.build()
+  }
+  def fromProto(msg: proto.IdentifiedEdgeUpdate): Either[String, api.IdentifiedEdgeUpdate] = {
+    msg.getTypeCase match {
+      case proto.IdentifiedEdgeUpdate.TypeCase.ENDPOINT_UPDATE => fromProto(msg.getEndpointUpdate)
+      case proto.IdentifiedEdgeUpdate.TypeCase.DATA_KEY_UPDATE => fromProto(msg.getDataKeyUpdate)
+      case proto.IdentifiedEdgeUpdate.TypeCase.OUTPUT_KEY_UPDATE => fromProto(msg.getOutputKeyUpdate)
+      case proto.IdentifiedEdgeUpdate.TypeCase.ENDPOINT_PREFIX_UPDATE => fromProto(msg.getEndpointPrefixUpdate)
+      case proto.IdentifiedEdgeUpdate.TypeCase.ENDPOINT_INDEX_UPDATE => fromProto(msg.getEndpointIndexUpdate)
+      case proto.IdentifiedEdgeUpdate.TypeCase.DATA_KEY_INDEX_UPDATE => fromProto(msg.getDataKeyIndexUpdate)
+      case proto.IdentifiedEdgeUpdate.TypeCase.OUTPUT_KEY_INDEX_UPDATE => fromProto(msg.getOutputKeyIndexUpdate)
+      case _ => Left(s"Unrecognized edge update type")
+    }
+  }
 }
 

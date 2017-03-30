@@ -250,15 +250,15 @@ object OutputConversions {
     }
   }
 
-  def toProto(obj: api.OutputParams): proto.OutputRequest = {
-    val b = proto.OutputRequest.newBuilder()
+  def toProto(obj: api.OutputParams): proto.OutputParams = {
+    val b = proto.OutputParams.newBuilder()
     obj.sessionOpt.map(ValueConversions.toProto).foreach(b.setSequenceSession)
     obj.sequenceOpt.map(ValueConversions.toOptionUInt64).foreach(b.setSequence)
     obj.compareValueOpt.map(ValueConversions.toProto).foreach(b.setCompareValue)
     obj.outputValueOpt.map(ValueConversions.toProto).foreach(b.setOutputValue)
     b.build()
   }
-  def fromProto(msg: proto.OutputRequest): Either[String, api.OutputParams] = {
+  def fromProto(msg: proto.OutputParams): Either[String, api.OutputParams] = {
     val sessOpt = if (msg.hasSequenceSession) Some(ValueConversions.fromProtoSimple(msg.getSequenceSession)) else None
     val compareEither = if (msg.hasCompareValue) ValueConversions.fromProto(msg.getCompareValue).map(r => Some(r)) else Right(None)
     val outputEither = if (msg.hasOutputValue) ValueConversions.fromProto(msg.getOutputValue).map(r => Some(r)) else Right(None)

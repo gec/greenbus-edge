@@ -154,7 +154,7 @@ trait DataValueDistributor[A] {
 }
 
 sealed trait DataValueQueue
-sealed trait SampleValueQueue extends DataValueQueue with DataValueDistributor[(SampleValue, Long)]
+
 class SeriesValueQueue extends DataValueDistributor[(SampleValue, Long)] with DataValueQueue with SeriesValueHandle {
   def update(value: SampleValue, timeMs: Long): Unit = queue.push((value, timeMs))
 }
@@ -203,7 +203,7 @@ object StreamProducerBinder {
 
   private def bindAppend(sink: AppendEventSink, queue: DataValueQueue): Unit = {
     queue match {
-      case q: SampleValueQueue => q.source.bind(obj => sink.append(EdgeCodecCommon.writeSampleValueSeries(obj)))
+      case q: SeriesValueQueue => q.source.bind(obj => sink.append(EdgeCodecCommon.writeSampleValueSeries(obj)))
       case q: LatestKeyValueQueue => q.source.bind(obj => sink.append(EdgeCodecCommon.writeValue(obj)))
       case q: TopicEventQueue => q.source.bind(obj => sink.append(EdgeCodecCommon.writeTopicEvent(obj)))
       case q: OutputKeyStatusQueue => q.source.bind(obj => sink.append(EdgeCodecCommon.writeOutputKeyStatus(obj)))

@@ -172,7 +172,7 @@ message OutputKeyStatus {
     Value value = 3;
 }
 
-message OutputRequest {
+message OutputParams {
     UUID sequence_session = 1; // optional
     OptionalUInt64 sequence = 2; // optional
     Value compare_value = 3; // optional

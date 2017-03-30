@@ -369,7 +369,7 @@ object EdgeCodecCommon {
   def readOutputRequest(v: TypeValue): Either[String, OutputParams] = {
     v match {
       case b: BytesVal =>
-        parse(b.v, proto.OutputRequest.parseFrom).flatMap { protoValue =>
+        parse(b.v, proto.OutputParams.parseFrom).flatMap { protoValue =>
           OutputConversions.fromProto(protoValue)
         }
       case _ => Left(s"Wrong value type for edge output request: " + v)

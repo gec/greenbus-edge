@@ -15,14 +15,18 @@ message ClientToServerMessage {
     repeated ClientOutputRequest output_requests = 5;
 }
 message ServerToClientMessage {
-    map<uint64, IdentifiedEdgeUpdate> subscription_notification = 1;
+    map<uint64, EdgeUpdateSet> subscription_notification = 1;
 
     map<uint64, edge.OutputResult> output_responses = 5;
 }
 
+message EdgeUpdateSet {
+    repeated IdentifiedEdgeUpdate updates = 1;
+}
+
 message ClientOutputRequest {
     edge.EndpointPath id = 1;
-    edge.OutputRequest request = 2;
+    edge.OutputParams request = 2;
     uint64 correlation = 3;
 }
 
@@ -129,7 +133,7 @@ message IdEndpointPrefixUpdate {
     EndpointSetUpdate value = 3;
 }
 message IdEndpointIndexUpdate {
-    edge.Path id = 1;
+    edge.IndexSpecifier id = 1;
     StatusType type = 2;
     EndpointSetUpdate value = 3;
 }
