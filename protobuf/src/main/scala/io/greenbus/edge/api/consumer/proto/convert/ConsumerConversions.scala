@@ -76,17 +76,17 @@ object ConsumerConversions {
   def toProto(obj: api.SubscriptionParams): proto.SubscriptionParams = {
     val b = proto.SubscriptionParams.newBuilder()
     obj.descriptors.map(ValueConversions.toProto).foreach(b.addDescriptors)
-    b.setDataKeys(toProto(obj.dataKeys))
+    b.setDataParams(toProto(obj.dataKeys))
     obj.outputKeys.map(ValueConversions.toProto).foreach(b.addOutputKeys)
-    b.setIndexing(toProto(obj.indexing))
+    b.setIndexParams(toProto(obj.indexing))
     b.build()
   }
   def fromProto(msg: proto.SubscriptionParams): Either[String, api.SubscriptionParams] = {
     for {
       descs <- rightSequence(msg.getDescriptorsList.map(ValueConversions.fromProto))
-      data <- if (msg.hasDataKeys) fromProto(msg.getDataKeys).map(r => Some(r)) else Right(None)
+      data <- if (msg.hasDataParams) fromProto(msg.getDataParams).map(r => Some(r)) else Right(None)
       outKeys <- rightSequence(msg.getOutputKeysList.map(ValueConversions.fromProto))
-      index <- if (msg.hasIndexing) fromProto(msg.getIndexing).map(r => Some(r)) else Right(None)
+      index <- if (msg.hasIndexParams) fromProto(msg.getIndexParams).map(r => Some(r)) else Right(None)
     } yield {
       api.SubscriptionParams(
         descriptors = descs,

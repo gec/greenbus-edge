@@ -44,9 +44,9 @@ message DataKeySubscriptionParams {
 }
 message SubscriptionParams {
     repeated edge.EndpointId descriptors = 1;
-    DataKeySubscriptionParams data_keys = 2;
+    DataKeySubscriptionParams data_params = 2;
     repeated EndpointPath output_keys = 3;
-    IndexSubscriptionParams indexing = 4;
+    IndexSubscriptionParams index_params = 4;
 }
 
 enum StatusType {
