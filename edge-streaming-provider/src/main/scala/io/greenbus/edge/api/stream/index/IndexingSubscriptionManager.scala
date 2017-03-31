@@ -27,6 +27,11 @@ import io.greenbus.edge.colset.gateway._
 import io.greenbus.edge.thread.CallMarshaller
 
 object IndexingSubscriptionManager {
+
+  case object ManifestSubKey extends PeerBasedSubKey {
+    def row(session: PeerSessionId): RowId = PeerRouteSource.peerRouteRow(session)
+  }
+
   case class EndpointEntry(id: EndpointId, desc: Option[EndpointDescriptor])
 }
 class IndexingSubscriptionManager(eventThread: CallMarshaller, observer: DescriptorObserver) extends LazyLogging {
@@ -34,7 +39,7 @@ class IndexingSubscriptionManager(eventThread: CallMarshaller, observer: Descrip
 
   private val subMgr = new DynamicSubscriptionManager(eventThread)
 
-  private val peerManifestKey: SubscriptionKey = PeerBasedSubKey(sess => PeerRouteSource.peerRouteRow(sess))
+  private val peerManifestKey: SubscriptionKey = ManifestSubKey
 
   private var observedRoutes = Set.empty[TypeValue]
   private var endpointRouteSet = Map.empty[TypeValue, EndpointId]

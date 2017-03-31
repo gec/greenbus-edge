@@ -44,14 +44,14 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
   private var serviceConnections = Vector.empty[EdgeServices]
 
   protected def services(): EdgeServices = {
-    val services = AmqpEdgeService.build("127.0.0.1", 50001, 10000)
+    val services = AmqpEdgeService.build("127.0.0.1", 50555, 10000)
     serviceConnections :+= services
     services
   }
 
   override protected def beforeEach(): Unit = {
     val sessionId = PeerSessionId(UUID.randomUUID(), 0)
-    val server = Await.result(PeerRelayServer.runRelay(sessionId, "127.0.0.1", 50001), 5000.milliseconds)
+    val server = Await.result(PeerRelayServer.runRelay(sessionId, "127.0.0.1", 50555), 5000.milliseconds)
     serverOpt = Some(server)
   }
 

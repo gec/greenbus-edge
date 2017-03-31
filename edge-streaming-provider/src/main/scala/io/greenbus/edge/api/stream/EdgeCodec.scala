@@ -422,12 +422,24 @@ object EdgeCodecCommon {
     }
   }
 
+  case class IndexSubKey(spec: IndexSpecifier, table: String) extends PeerBasedSubKey {
+    def row(session: PeerSessionId): RowId = {
+      RowId(IndexProducer.routeForSession(session), table, writeIndexSpecifier(spec))
+    }
+  }
+
+  case class EndpointPrefixSubKey(path: Path) extends PeerBasedSubKey {
+    def row(session: PeerSessionId): RowId = {
+      RowId(IndexProducer.routeForSession(session), EdgeTables.endpointPrefixTable, writePath(path))
+    }
+  }
+
   private def indexSubKey(spec: IndexSpecifier, table: String): SubscriptionKey = {
-    PeerBasedSubKey(sess => RowId(IndexProducer.routeForSession(sess), table, writeIndexSpecifier(spec)))
+    IndexSubKey(spec, table)
   }
 
   def endpointPrefixToSubKey(path: Path): SubscriptionKey = {
-    PeerBasedSubKey(sess => RowId(IndexProducer.routeForSession(sess), EdgeTables.endpointPrefixTable, writePath(path)))
+    EndpointPrefixSubKey(path)
   }
   def endpointIndexSpecToSubKey(spec: IndexSpecifier): SubscriptionKey = {
     indexSubKey(spec, EdgeTables.endpointIndexTable)

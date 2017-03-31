@@ -458,14 +458,14 @@ class DynamicSubscriptionManager(eventThread: CallMarshaller) extends StreamDyna
   private def computeRowSet(session: PeerSessionId, set: Set[SubscriptionKey]): Set[RowId] = {
     set.map {
       case RowSubKey(row) => row
-      case PeerBasedSubKey(f) => f(session)
+      case key: PeerBasedSubKey => key.row(session)
     }
   }
 
   private def rowMappings(session: PeerSessionId, set: Set[SubscriptionKey]): Map[SubscriptionKey, RowId] = {
     set.map {
       case k @ RowSubKey(row) => k -> row
-      case k @ PeerBasedSubKey(f) => k -> f(session)
+      case k: PeerBasedSubKey => k -> k.row(session)
     }.toMap
   }
 
@@ -506,11 +506,13 @@ object KeyRowMapping {
 }
 case class KeyRowMapping(keyToRow: Map[SubscriptionKey, RowId], rowToKeys: Map[RowId, Seq[SubscriptionKey]]) {
   def rows: Set[RowId] = rowToKeys.keySet.toSet
-  def keys: Set[SubscriptionKey] = keyToRow.keySet.toSet
+  def keys: Set[SubscriptionKey] = keyToRow.keySet
 }
 
 sealed trait SubscriptionKey
 case class RowSubKey(row: RowId) extends SubscriptionKey
-case class PeerBasedSubKey(rowFun: PeerSessionId => RowId) extends SubscriptionKey
+trait PeerBasedSubKey extends SubscriptionKey {
+  def row(session: PeerSessionId): RowId
+}
 
 case class KeyedUpdate(key: SubscriptionKey, value: ValueUpdate)

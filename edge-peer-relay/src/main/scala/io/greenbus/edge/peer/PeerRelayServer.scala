@@ -55,6 +55,6 @@ object PeerRelayServer {
     val serialization = new ProtoSerializationProvider
     val amqpHandler = new AmqpChannelHandler(service.eventLoop, new ChannelParserImpl(sessionId, serialization), serialization, channelHandler)
 
-    service.listen("127.0.0.1", 50001, amqpHandler)
+    service.listen(host, port, amqpHandler)
   }
 }
