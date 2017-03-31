@@ -36,25 +36,7 @@ trait EdgeUpdateQueue {
   def flush(): Unit
 }
 
-/*trait EdgeUpdateSubjectImpl extends EdgeTypeSubMgr {
-  protected type Data
-
-  private var observerSet = Set.empty[EdgeUpdateQueue]
-
-  protected def current(): EdgeDataStatus[Data]
-
-  def observers: Set[EdgeUpdateQueue] = observerSet
-  def addObserver(buffer: EdgeUpdateQueue): Unit = {
-    observerSet += buffer
-  }
-  def removeObserver(buffer: EdgeUpdateQueue): Unit = {
-    observerSet -= buffer
-  }
-}*/
-
 trait ObservedEdgeTypeSubMgr extends EdgeTypeSubMgr {
-
-  //protected def getCurrent(): Option[IdentifiedEdgeUpdate]
 
   private var observerSet = Set.empty[EdgeUpdateQueue]
   def observers: Set[EdgeUpdateQueue] = observerSet
@@ -77,26 +59,16 @@ trait EdgeTypeSubMgr {
 trait EdgeSubCodec {
 
   def simpleToUpdate(v: EdgeDataStatus[Nothing]): IdentifiedEdgeUpdate
-  //def updateFor(v: DataValueUpdate, metaOpt: Option[TypeValue]): (Seq[IdentifiedEdgeUpdate], Option[IdentifiedEdgeUpdate])
 
   def updateFor(v: DataValueUpdate, metaOpt: Option[TypeValue]): Seq[IdentifiedEdgeUpdate]
 }
 
 class GenEdgeTypeSubMgrComp(logId: String, val codec: EdgeSubCodec) extends ObservedEdgeTypeSubMgr with LazyLogging {
 
-  //private var last = Option.empty[IdentifiedEdgeUpdate]
-
-  /*protected def getCurrent(): Option[IdentifiedEdgeUpdate] = {
-    last
-  }*/
-
   def handle(update: ValueUpdate): Set[EdgeUpdateQueue] = {
     update match {
       case vs: ValueSync =>
         val updates = codec.updateFor(vs.initial, vs.metadata)
-        /*nextLastOpt.foreach { next =>
-          last = Some(next)
-        }*/
         if (updates.nonEmpty) {
           observers.foreach(obs => updates.foreach(up => obs.enqueue(up)))
           observers
@@ -105,9 +77,6 @@ class GenEdgeTypeSubMgrComp(logId: String, val codec: EdgeSubCodec) extends Obse
         }
       case vd: ValueDelta =>
         val updates = codec.updateFor(vd.update, None)
-        /*nextLastOpt.foreach { next =>
-          last = Some(next)
-        }*/
         if (updates.nonEmpty) {
           observers.foreach(obs => updates.foreach(up => obs.enqueue(up)))
           observers
@@ -116,17 +85,14 @@ class GenEdgeTypeSubMgrComp(logId: String, val codec: EdgeSubCodec) extends Obse
         }
       case ValueAbsent =>
         val up = codec.simpleToUpdate(ResolvedAbsent)
-        //last = Some(up)
         observers.foreach(_.enqueue(up))
         observers
       case ValueUnresolved =>
         val up = codec.simpleToUpdate(DataUnresolved)
-        //last = Some(up)
         observers.foreach(_.enqueue(up))
         observers
       case ValueDisconnected =>
         val up = codec.simpleToUpdate(Disconnected)
-        //last = Some(up)
         observers.foreach(_.enqueue(up))
         observers
       case _ => Set()
@@ -136,15 +102,9 @@ class GenEdgeTypeSubMgrComp(logId: String, val codec: EdgeSubCodec) extends Obse
 
 class AppendDataKeySubCodec(logId: String, id: EndpointPath, codec: AppendDataKeyCodec) extends EdgeSubCodec with LazyLogging {
 
-  //private var descOpt = Option.empty[DataKeyDescriptor]
-
   def simpleToUpdate(v: EdgeDataStatus[Nothing]): IdentifiedEdgeUpdate = {
     IdDataKeyUpdate(id, v)
   }
-
-  /*def current(): Option[IdentifiedEdgeUpdate] = {
-
-  }*/
 
   def updateFor(dataValueUpdate: DataValueUpdate, metaOpt: Option[TypeValue]): Seq[IdentifiedEdgeUpdate] = {
 
@@ -168,10 +128,6 @@ class AppendDataKeySubCodec(logId: String, id: EndpointPath, codec: AppendDataKe
             case Right(value) => Some(value)
           }
         }
-
-        /*descUpdateOpt.foreach { desc =>
-          descOpt = Some(desc)
-        }*/
 
         if (readValues.nonEmpty) {
           val head = readValues.head
@@ -467,11 +423,8 @@ class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: StreamDynami
 
   private def syncAndObserve(mgr: EdgeTypeSubMgr, updateQueue: EdgeUpdateQueue, key: SubscriptionKey): Unit = {
     mgr.addObserver(updateQueue)
-    logger.debug("RESYNC ATTEMPT: " + key)
     subImpl.sync(key).map { up =>
-      logger.debug("RESYNC: " + up)
       val result = mgr.codec.updateFor(up.initial, up.metadata)
-      logger.debug("UPDATE: " + result)
       result
     }.foreach(_.foreach(updateQueue.enqueue))
   }
@@ -568,9 +521,6 @@ class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: StreamDynami
         }
       }
     }
-
-    logger.trace(s"Prev set: " + prevRowSet)
-    logger.trace(s"new key map: " + keyMap)
 
     if (keyMap.keySet != prevRowSet) {
       subImpl.update(keyMap.keySet.toSet)

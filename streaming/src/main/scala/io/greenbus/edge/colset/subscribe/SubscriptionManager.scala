@@ -44,7 +44,6 @@ trait UpdateSynthesizer {
   def delta(delta: Delta): Option[DataValueUpdate]
   def resync(resync: Resync): Option[DataValueUpdate]
   def get(): DataValueUpdate
-  //def convertResync(resync: Resync): DataValueUpdate
 }
 
 class SetUpdateSynthesizer(orig: Set[TypeValue]) extends UpdateSynthesizer with LazyLogging {
@@ -97,13 +96,6 @@ class SetUpdateSynthesizer(orig: Set[TypeValue]) extends UpdateSynthesizer with 
         None
     }
   }
-
-  /*def convertResync(resync: Resync): Option[DataValueUpdate] = {
-    resync.snapshot match {
-      case d: SetSnapshot =>
-        SetUpdated(d.snapshot, Set(), Set())
-    }
-  }*/
 }
 class MapUpdateSynthesizer(orig: Map[TypeValue, TypeValue]) extends UpdateSynthesizer with LazyLogging {
 
@@ -183,7 +175,6 @@ class AppendUpdateSynthesizer extends UpdateSynthesizer with LazyLogging {
   }
 
   def delta(delta: Delta): Option[DataValueUpdate] = {
-
     val values = delta.diffs.flatMap { seqDiff =>
       diffToAppend(seqDiff.diff)
     }
@@ -219,10 +210,9 @@ class AppendUpdateSynthesizer extends UpdateSynthesizer with LazyLogging {
 class ConsumerUpdateFilter(cid: String, resync: ResyncSession, updates: UpdateSynthesizer) {
 
   private val filter = new GenInitializedStreamFilter(cid, resync)
-  //private val cache = new RetailStreamCache(cid, resync)
+  updates.resync(resync.resync) // TODO: manage the cache states better to not have to "warm this up"
 
   def handle(event: AppendEvent): Option[DataValueUpdate] = {
-    //cache.handle(event)
     filter.handle(event).flatMap {
       case sd: StreamDelta => updates.delta(sd.update)
       case rs: ResyncSnapshot => updates.resync(rs.resync)
@@ -263,7 +253,8 @@ class RowFilterImpl extends RowFilter with LazyLogging {
 
   def sync(): Option[ValueSync] = {
     activeFilterOpt match {
-      case None => logger.warn(s"Filter sync had no active filter"); None
+      case None =>
+        logger.warn(s"Filter sync had no active filter"); None
       case Some(filt) =>
         Some(filt.sync())
     }
@@ -411,7 +402,7 @@ trait StreamDynamicSubscriptionManager {
   def sync(key: SubscriptionKey): Option[ValueSync]
 }
 
-class DynamicSubscriptionManager(eventThread: CallMarshaller) extends StreamDynamicSubscriptionManager {
+class DynamicSubscriptionManager(eventThread: CallMarshaller) extends StreamDynamicSubscriptionManager with LazyLogging {
 
   private val dist = new RemoteBoundQueuedDistributor[Seq[RowUpdate]](eventThread)
   private val filters = new SubscriptionFilterMap(dist)
@@ -452,8 +443,6 @@ class DynamicSubscriptionManager(eventThread: CallMarshaller) extends StreamDyna
   }
 
   def sync(key: SubscriptionKey): Option[ValueSync] = {
-    println("submgr sync " + key)
-    println("submgr sync " + keyRowMap.keyToRow.get(key))
     keyRowMap.keyToRow.get(key).flatMap(filters.sync)
   }
 

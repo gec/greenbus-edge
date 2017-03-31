@@ -23,13 +23,26 @@ import java.util.UUID
 import io.greenbus.edge.amqp.AmqpService
 import io.greenbus.edge.amqp.channel.AmqpChannelHandler
 import io.greenbus.edge.amqp.colset.ChannelParserImpl
+import io.greenbus.edge.amqp.impl.AmqpListener
 import io.greenbus.edge.colset.{ PeerChannelMachine, PeerSessionId }
 import io.greenbus.edge.colset.channel.ChannelHandler
 import io.greenbus.edge.colset.proto.provider.ProtoSerializationProvider
 
+import scala.concurrent.Future
+
 object PeerRelayServer {
 
   def main(args: Array[String]): Unit = {
+
+    val sessionId = PeerSessionId(UUID.randomUUID(), 0)
+
+    runRelay(sessionId, "127.0.0.1", 50001)
+
+    System.in.read()
+
+  }
+
+  def runRelay(sessionId: PeerSessionId, host: String, port: Int): Future[AmqpListener] = {
 
     val sessionId = PeerSessionId(UUID.randomUUID(), 0)
 
@@ -43,8 +56,5 @@ object PeerRelayServer {
     val amqpHandler = new AmqpChannelHandler(service.eventLoop, new ChannelParserImpl(sessionId, serialization), serialization, channelHandler)
 
     service.listen("127.0.0.1", 50001, amqpHandler)
-
-    System.in.read()
-
   }
 }

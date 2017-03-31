@@ -89,6 +89,42 @@ object ConsumerTest extends LazyLogging {
   }
 }
 
+object DoubleConsumerTest extends LazyLogging {
+
+  def main(args: Array[String]): Unit = {
+
+    val services = AmqpEdgeService.build("127.0.0.1", 50001, 10000)
+    services.start()
+    val consumerServices = services.consumer
+
+    val subClient = consumerServices.subscriptionClient
+
+    val outputKey = EndpointPath(EndpointId(Path("my-endpoint")), Path("out-1"))
+
+    val params = SubscriptionParams(
+      dataKeys = DataKeySubscriptionParams(
+        series = Seq(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1")))))
+
+    logger.debug("Subscribing...")
+    val subscription = subClient.subscribe(params)
+
+    subscription.updates.bind { batch =>
+      logger.info("Got batch: ")
+      batch.foreach(up => logger.info("\t" + up))
+    }
+
+    Thread.sleep(2000)
+
+    val sub2 = subClient.subscribe(params)
+    sub2.updates.bind { batch =>
+      logger.info(s"BATCH TWO: ")
+      batch.foreach(up => logger.info("\t" + up))
+    }
+
+    System.in.read()
+  }
+}
+
 object ProducerTest extends LazyLogging {
 
   def main(args: Array[String]): Unit = {
