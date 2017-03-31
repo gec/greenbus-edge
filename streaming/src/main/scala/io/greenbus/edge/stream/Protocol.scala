@@ -16,24 +16,11 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.peer.indexer
+package io.greenbus.edge.stream
 
-import io.greenbus.edge.api.stream.index.IndexProducer
-import io.greenbus.edge.stream.{ GatewayProxyChannel, PeerLinkProxyChannel, PeerSessionId }
-import io.greenbus.edge.stream.gateway.GatewayRouteSource
-import io.greenbus.edge.peer.{ GatewayLinkObserver, PeerLinkObserver }
-import io.greenbus.edge.thread.CallMarshaller
+case class SubscriptionSetUpdate(rows: Set[RowId])
+case class EventBatch(events: Seq[StreamEvent])
+case class ServiceRequestBatch(requests: Seq[ServiceRequest])
+case class ServiceResponseBatch(responses: Seq[ServiceResponse])
 
-class ObservingIndexMgr(exe: CallMarshaller) extends PeerLinkObserver with GatewayLinkObserver {
-
-  private val gatewaySource = GatewayRouteSource.build(exe)
-  private val producer = new IndexProducer(exe, gatewaySource)
-
-  def connected(session: PeerSessionId, channel: PeerLinkProxyChannel): Unit = {
-    producer.connected(session, channel)
-  }
-
-  def connected(channel: GatewayProxyChannel): Unit = {
-    gatewaySource.connect(channel)
-  }
-}
+case class GatewayClientEvents(routesUpdate: Option[Set[TypeValue]], events: Seq[StreamEvent])

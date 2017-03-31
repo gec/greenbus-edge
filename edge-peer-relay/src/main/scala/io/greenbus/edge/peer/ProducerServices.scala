@@ -20,8 +20,8 @@ package io.greenbus.edge.peer
 
 import io.greenbus.edge.api.EndpointId
 import io.greenbus.edge.api.stream.{ EndpointBuilder, EndpointProducerBuilderImpl, ProducerBinder, StreamProducerBinder }
-import io.greenbus.edge.colset.GatewayProxyChannel
-import io.greenbus.edge.colset.gateway.GatewayRouteSource
+import io.greenbus.edge.stream.GatewayProxyChannel
+import io.greenbus.edge.stream.gateway.GatewayRouteSource
 import io.greenbus.edge.thread.SchedulableCallMarshaller
 
 trait ProducerServices {

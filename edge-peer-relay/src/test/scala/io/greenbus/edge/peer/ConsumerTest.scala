@@ -24,13 +24,13 @@ import java.util.concurrent.{ Executors, ThreadFactory }
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.amqp.AmqpService
-import io.greenbus.edge.amqp.colset.{ ChannelDescriberImpl, ClientResponseParser }
+import io.greenbus.edge.amqp.stream.{ ChannelDescriberImpl, ClientResponseParser }
 import io.greenbus.edge.api._
 import io.greenbus.edge.api.stream._
 import io.greenbus.edge.api.stream.index.{ IndexProducer, IndexingSubscriptionManager }
-import io.greenbus.edge.colset.client.{ MultiChannelStreamClientImpl, StreamClient }
-import io.greenbus.edge.colset.gateway.GatewayRouteSource
-import io.greenbus.edge.colset.proto.provider.ProtoSerializationProvider
+import io.greenbus.edge.stream.client.{ MultiChannelStreamClientImpl, StreamClient }
+import io.greenbus.edge.stream.gateway.GatewayRouteSource
+import io.greenbus.edge.stream.proto.provider.ProtoSerializationProvider
 import io.greenbus.edge.flow.Responder
 import io.greenbus.edge.thread.CallMarshaller
 

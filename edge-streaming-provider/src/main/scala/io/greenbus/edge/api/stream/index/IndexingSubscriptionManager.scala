@@ -21,9 +21,9 @@ package io.greenbus.edge.api.stream.index
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.api.{ EndpointDescriptor, EndpointId, EndpointPath }
 import io.greenbus.edge.api.stream.{ EdgeCodecCommon, EdgeTables }
-import io.greenbus.edge.colset.subscribe._
-import io.greenbus.edge.colset._
-import io.greenbus.edge.colset.gateway._
+import io.greenbus.edge.stream.subscribe._
+import io.greenbus.edge.stream._
+import io.greenbus.edge.stream.gateway._
 import io.greenbus.edge.thread.CallMarshaller
 
 object IndexingSubscriptionManager {

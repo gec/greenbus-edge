@@ -20,8 +20,8 @@ package io.greenbus.edge.peer
 
 import io.greenbus.edge.api.{ EdgeSubscriptionClient, ServiceClient, ServiceClientChannel }
 import io.greenbus.edge.api.stream._
-import io.greenbus.edge.colset.subscribe.{ DynamicSubscriptionManager, StreamServiceClientImpl }
-import io.greenbus.edge.colset.{ PeerLinkProxyChannel, PeerSessionId }
+import io.greenbus.edge.stream.subscribe.{ DynamicSubscriptionManager, StreamServiceClientImpl }
+import io.greenbus.edge.stream.{ PeerLinkProxyChannel, PeerSessionId }
 import io.greenbus.edge.flow.{ RemoteBoundLatestSource, Source }
 import io.greenbus.edge.thread.SchedulableCallMarshaller
 

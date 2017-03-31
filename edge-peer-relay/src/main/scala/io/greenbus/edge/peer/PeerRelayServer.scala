@@ -22,11 +22,11 @@ import java.util.UUID
 
 import io.greenbus.edge.amqp.AmqpService
 import io.greenbus.edge.amqp.channel.AmqpChannelHandler
-import io.greenbus.edge.amqp.colset.ChannelParserImpl
+import io.greenbus.edge.amqp.stream.ChannelParserImpl
 import io.greenbus.edge.amqp.impl.AmqpListener
-import io.greenbus.edge.colset.{ PeerChannelMachine, PeerSessionId }
-import io.greenbus.edge.colset.channel.ChannelHandler
-import io.greenbus.edge.colset.proto.provider.ProtoSerializationProvider
+import io.greenbus.edge.stream.{ PeerChannelMachine, PeerSessionId }
+import io.greenbus.edge.stream.channel.ChannelHandler
+import io.greenbus.edge.stream.proto.provider.ProtoSerializationProvider
 
 import scala.concurrent.Future
 

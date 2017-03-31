@@ -24,8 +24,8 @@ import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.amqp.impl.AmqpListener
 import io.greenbus.edge.api.stream.KeyMetadata
 import io.greenbus.edge.api._
-import io.greenbus.edge.colset.PeerSessionId
-import io.greenbus.edge.colset.subscribe.ValueSync
+import io.greenbus.edge.stream.PeerSessionId
+import io.greenbus.edge.stream.subscribe.ValueSync
 import io.greenbus.edge.peer.DoubleConsumerTest.logger
 import io.greenbus.edge.peer.TestHelpers.TypedEventQueue
 import org.junit.runner.RunWith

@@ -19,10 +19,10 @@
 package io.greenbus.edge.peer
 
 import io.greenbus.edge.amqp.AmqpService
-import io.greenbus.edge.amqp.colset.{ ChannelDescriberImpl, ClientResponseParser }
-import io.greenbus.edge.colset.client.{ MultiChannelStreamClientImpl, StreamClient }
-import io.greenbus.edge.colset.proto.provider.ProtoSerializationProvider
-import io.greenbus.edge.colset.{ GatewayProxyChannel, PeerLinkProxyChannel, PeerSessionId }
+import io.greenbus.edge.amqp.stream.{ ChannelDescriberImpl, ClientResponseParser }
+import io.greenbus.edge.stream.client.{ MultiChannelStreamClientImpl, StreamClient }
+import io.greenbus.edge.stream.proto.provider.ProtoSerializationProvider
+import io.greenbus.edge.stream.{ GatewayProxyChannel, PeerLinkProxyChannel, PeerSessionId }
 import io.greenbus.edge.flow.{ Closeable, CloseableComponent, LatchSubscribable }
 import io.greenbus.edge.thread.SchedulableCallMarshaller
 

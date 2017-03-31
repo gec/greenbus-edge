@@ -20,10 +20,10 @@ package io.greenbus.edge.api.stream
 
 import io.greenbus.edge.api._
 import io.greenbus.edge.api.proto.convert.{ Conversions, OutputConversions, ValueConversions }
-import io.greenbus.edge.colset._
+import io.greenbus.edge.stream._
 import io.greenbus.edge.api.proto
 import io.greenbus.edge.api.stream.index.IndexProducer
-import io.greenbus.edge.colset.subscribe.{ MapUpdated, PeerBasedSubKey, SetUpdated, SubscriptionKey }
+import io.greenbus.edge.stream.subscribe.{ MapUpdated, PeerBasedSubKey, SetUpdated, SubscriptionKey }
 import io.greenbus.edge.util.EitherUtil
 
 object EdgeTables {

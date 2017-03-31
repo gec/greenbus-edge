@@ -23,8 +23,8 @@ import io.greenbus.edge.api._
 import io.greenbus.edge.api.stream.AppendDataKeyCodec.{ LatestKeyValueCodec, SeriesCodec, TopicEventCodec }
 import io.greenbus.edge.api.stream.KeyedSetDataKeyCodec.ActiveSetCodec
 import io.greenbus.edge.api.stream.SetCodec.EndpointIdSetCodec
-import io.greenbus.edge.colset._
-import io.greenbus.edge.colset.subscribe._
+import io.greenbus.edge.stream._
+import io.greenbus.edge.stream.subscribe._
 import io.greenbus.edge.flow._
 import io.greenbus.edge.thread.CallMarshaller
 

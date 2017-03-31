@@ -16,24 +16,24 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.peer.indexer
+package io.greenbus.edge.stream
 
-import io.greenbus.edge.api.stream.index.IndexProducer
-import io.greenbus.edge.stream.{ GatewayProxyChannel, PeerLinkProxyChannel, PeerSessionId }
-import io.greenbus.edge.stream.gateway.GatewayRouteSource
-import io.greenbus.edge.peer.{ GatewayLinkObserver, PeerLinkObserver }
-import io.greenbus.edge.thread.CallMarshaller
+import java.util.UUID
 
-class ObservingIndexMgr(exe: CallMarshaller) extends PeerLinkObserver with GatewayLinkObserver {
+import io.greenbus.edge.collection.MapSetBuilder
 
-  private val gatewaySource = GatewayRouteSource.build(exe)
-  private val producer = new IndexProducer(exe, gatewaySource)
+case class PeerSessionId(persistenceId: UUID, instanceId: Long)
 
-  def connected(session: PeerSessionId, channel: PeerLinkProxyChannel): Unit = {
-    producer.connected(session, channel)
+object RowId {
+  def setToRouteMap(rows: Set[RowId]): Map[TypeValue, Set[TableRow]] = {
+    val b = MapSetBuilder.newBuilder[TypeValue, TableRow]
+    rows.foreach { row => b += (row.routingKey -> row.tableRow) }
+    b.result()
   }
-
-  def connected(channel: GatewayProxyChannel): Unit = {
-    gatewaySource.connect(channel)
-  }
+}
+case class RowId(routingKey: TypeValue, table: String, rowKey: TypeValue) {
+  def tableRow: TableRow = TableRow(table, rowKey)
+}
+case class TableRow(table: String, rowKey: TypeValue) {
+  def toRowId(routingKey: TypeValue): RowId = RowId(routingKey, table, rowKey)
 }
