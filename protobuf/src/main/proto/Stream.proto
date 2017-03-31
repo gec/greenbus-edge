@@ -2,7 +2,7 @@
 
 syntax = "proto3";
 
-package colset.data;
+package stream.data;
 
 option java_package = "io.greenbus.edge.stream.proto";
 option java_multiple_files = true;

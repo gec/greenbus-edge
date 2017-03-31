@@ -497,7 +497,6 @@ object ValueTypeConversions {
     val b = proto.SequencedTypeValue.newBuilder()
     obj match {
       case v: stream.Int64Val => b.setSint64Value(v.v)
-      //case v: colset.TupleValue => b.setTupleValue(tupleToProto(v))
       case _ => throw new IllegalArgumentException(s"Unrecognized SequencedTypeValue: $obj")
     }
     b.build()
