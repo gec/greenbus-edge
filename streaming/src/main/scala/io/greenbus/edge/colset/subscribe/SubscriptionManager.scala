@@ -43,11 +43,17 @@ case class RowUpdate(row: RowId, update: ValueUpdate)
 trait UpdateSynthesizer {
   def delta(delta: Delta): Option[DataValueUpdate]
   def resync(resync: Resync): Option[DataValueUpdate]
+  def get(): DataValueUpdate
+  //def convertResync(resync: Resync): DataValueUpdate
 }
 
 class SetUpdateSynthesizer(orig: Set[TypeValue]) extends UpdateSynthesizer with LazyLogging {
 
   private var current: Set[TypeValue] = orig
+
+  def get(): DataValueUpdate = {
+    SetUpdated(current, Set(), Set())
+  }
 
   def delta(delta: Delta): Option[DataValueUpdate] = {
 
@@ -91,10 +97,21 @@ class SetUpdateSynthesizer(orig: Set[TypeValue]) extends UpdateSynthesizer with 
         None
     }
   }
+
+  /*def convertResync(resync: Resync): Option[DataValueUpdate] = {
+    resync.snapshot match {
+      case d: SetSnapshot =>
+        SetUpdated(d.snapshot, Set(), Set())
+    }
+  }*/
 }
 class MapUpdateSynthesizer(orig: Map[TypeValue, TypeValue]) extends UpdateSynthesizer with LazyLogging {
 
   private var current: Map[TypeValue, TypeValue] = orig
+
+  def get(): DataValueUpdate = {
+    MapUpdated(current, Set(), Set(), Set())
+  }
 
   def delta(delta: Delta): Option[DataValueUpdate] = {
 
@@ -159,6 +176,12 @@ object AppendUpdateSynthesizer {
 class AppendUpdateSynthesizer extends UpdateSynthesizer with LazyLogging {
   import AppendUpdateSynthesizer._
 
+  private var lastOpt = Option.empty[AppendValue]
+
+  def get(): DataValueUpdate = {
+    Appended(lastOpt.map(Seq(_)).getOrElse(Seq()))
+  }
+
   def delta(delta: Delta): Option[DataValueUpdate] = {
 
     val values = delta.diffs.flatMap { seqDiff =>
@@ -166,6 +189,7 @@ class AppendUpdateSynthesizer extends UpdateSynthesizer with LazyLogging {
     }
 
     if (values.nonEmpty) {
+      lastOpt = Some(values.last)
       Some(Appended(values))
     } else {
       None
@@ -179,6 +203,7 @@ class AppendUpdateSynthesizer extends UpdateSynthesizer with LazyLogging {
         val all = snapToAppends(v)
 
         if (all.nonEmpty) {
+          lastOpt = Some(all.last)
           Some(Appended(all))
         } else {
           None
@@ -194,13 +219,19 @@ class AppendUpdateSynthesizer extends UpdateSynthesizer with LazyLogging {
 class ConsumerUpdateFilter(cid: String, resync: ResyncSession, updates: UpdateSynthesizer) {
 
   private val filter = new GenInitializedStreamFilter(cid, resync)
+  //private val cache = new RetailStreamCache(cid, resync)
 
   def handle(event: AppendEvent): Option[DataValueUpdate] = {
+    //cache.handle(event)
     filter.handle(event).flatMap {
       case sd: StreamDelta => updates.delta(sd.update)
       case rs: ResyncSnapshot => updates.resync(rs.resync)
       case rss: ResyncSession => updates.resync(rss.resync)
     }
+  }
+
+  def sync(): ValueSync = {
+    ValueSync(resync.context.userMetadata, updates.get())
   }
 }
 
@@ -229,6 +260,14 @@ class RowFilterImpl extends RowFilter with LazyLogging {
       }
     }
   }
+
+  def sync(): Option[ValueSync] = {
+    activeFilterOpt match {
+      case None => logger.warn(s"Filter sync had no active filter"); None
+      case Some(filt) =>
+        Some(filt.sync())
+    }
+  }
 }
 
 /*
@@ -241,6 +280,7 @@ class RowFilterImpl extends RowFilter with LazyLogging {
 
 trait RowFilter {
   def handle(event: AppendEvent): Option[ValueUpdate]
+  def sync(): Option[ValueSync]
 }
 
 class SubscriptionFilterMap(sink: Sink[Seq[RowUpdate]]) extends LazyLogging {
@@ -250,6 +290,8 @@ class SubscriptionFilterMap(sink: Sink[Seq[RowUpdate]]) extends LazyLogging {
   private def lookup(rowId: RowId): Option[RowFilter] = {
     map.get(rowId.routingKey).flatMap(_.get(rowId.tableRow))
   }
+
+  def sync(rowId: RowId): Option[ValueSync] = lookup(rowId).flatMap(_.sync())
 
   def handle(sevs: Seq[StreamEvent]): Unit = {
     logger.debug(s"Filter map handling: " + sevs)
@@ -366,6 +408,7 @@ trait StreamSubscriptionManager {
 trait StreamDynamicSubscriptionManager {
   def update(set: Set[SubscriptionKey]): Unit
   def source: Source[Seq[KeyedUpdate]]
+  def sync(key: SubscriptionKey): Option[ValueSync]
 }
 
 class DynamicSubscriptionManager(eventThread: CallMarshaller) extends StreamDynamicSubscriptionManager {
@@ -406,6 +449,12 @@ class DynamicSubscriptionManager(eventThread: CallMarshaller) extends StreamDyna
       proxy.subscriptions.push(activeRows)
       subscribedRows = activeRows
     }
+  }
+
+  def sync(key: SubscriptionKey): Option[ValueSync] = {
+    println("submgr sync " + key)
+    println("submgr sync " + keyRowMap.keyToRow.get(key))
+    keyRowMap.keyToRow.get(key).flatMap(filters.sync)
   }
 
   def update(set: Set[SubscriptionKey]): Unit = {
