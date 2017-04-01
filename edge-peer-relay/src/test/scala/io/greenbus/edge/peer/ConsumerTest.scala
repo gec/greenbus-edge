@@ -89,42 +89,6 @@ object ConsumerTest extends LazyLogging {
   }
 }
 
-object DoubleConsumerTest extends LazyLogging {
-
-  def main(args: Array[String]): Unit = {
-
-    val services = AmqpEdgeService.build("127.0.0.1", 50001, 10000)
-    services.start()
-    val consumerServices = services.consumer
-
-    val subClient = consumerServices.subscriptionClient
-
-    val outputKey = EndpointPath(EndpointId(Path("my-endpoint")), Path("out-1"))
-
-    val params = SubscriptionParams(
-      dataKeys = DataKeySubscriptionParams(
-        series = Seq(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1")))))
-
-    logger.debug("Subscribing...")
-    val subscription = subClient.subscribe(params)
-
-    subscription.updates.bind { batch =>
-      logger.info("Got batch: ")
-      batch.foreach(up => logger.info("\t" + up))
-    }
-
-    Thread.sleep(2000)
-
-    val sub2 = subClient.subscribe(params)
-    sub2.updates.bind { batch =>
-      logger.info(s"BATCH TWO: ")
-      batch.foreach(up => logger.info("\t" + up))
-    }
-
-    System.in.read()
-  }
-}
-
 object ProducerTest extends LazyLogging {
 
   def main(args: Array[String]): Unit = {
@@ -139,7 +103,8 @@ object ProducerTest extends LazyLogging {
 
     builder.setIndexes(Map(Path("endIndex1") -> ValueString("value 1")))
 
-    val series1 = builder.seriesValue(Path("series-double-1"), KeyMetadata(indexes = Map(Path("index1") -> ValueString("value 1"))))
+    val series1 = builder.seriesValue(Path("series-double-1"), KeyMetadata(indexes = Map(Path("index1") -> ValueString("value 1"), Path("gridValueType") -> ValueString("outputPower"))))
+    val series2 = builder.seriesValue(Path("series-double-2"), KeyMetadata(indexes = Map(Path("index1") -> ValueString("value 1"), Path("gridValueType") -> ValueString("outputPower"))))
     val kv1 = builder.latestKeyValue(Path("kv-1"), KeyMetadata(indexes = Map(Path("index1") -> ValueString("value 2"))))
     val event1 = builder.topicEventValue(Path("event-1"))
 
@@ -166,6 +131,7 @@ object ProducerTest extends LazyLogging {
     while (true) {
       val now = System.currentTimeMillis()
       series1.update(ValueDouble(2.33 + i), now)
+      series2.update(ValueDouble(3.17 + i), now)
       kv1.update(ValueString("a value " + i))
       event1.update(Path(Seq("an", "event", "topic")), ValueString("an event string: " + i), now)
       buffer.flush()

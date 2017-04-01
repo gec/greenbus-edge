@@ -68,6 +68,9 @@ abstract class TypedIndexDb[A, Key](cache: DescriptorCache) extends LazyLogging 
   }
 
   def addSubscription(specifier: IndexSpecifier, target: Key): Set[A] = {
+
+    logger.debug(s"Adding subscription for $specifier")
+
     queryToTarget.get(specifier) match {
       case None =>
         queryToTarget += (specifier -> Set(target))
@@ -113,6 +116,7 @@ abstract class TypedIndexDb[A, Key](cache: DescriptorCache) extends LazyLogging 
 
   private def buildIndex(specifier: IndexSpecifier): Set[A] = {
 
+    logger.debug(s"Building index for $specifier")
     val elemMatchSet = Set.newBuilder[A]
 
     cache.descriptors.foreach {
