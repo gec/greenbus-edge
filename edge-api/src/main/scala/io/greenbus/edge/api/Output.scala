@@ -20,6 +20,8 @@ package io.greenbus.edge.api
 
 import java.util.UUID
 
+import io.greenbus.edge.data.Value
+
 case class SessionId(persistenceId: UUID, instanceId: Long)
 
 sealed trait OutputResult

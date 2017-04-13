@@ -20,7 +20,9 @@ package io.greenbus.edge.api.consumer.proto.convert
 
 import io.greenbus.edge.api
 import io.greenbus.edge.api.consumer.proto
-import io.greenbus.edge.api.proto.convert.{ Conversions, OutputConversions, ValueConversions }
+import io.greenbus.edge.api.proto.convert.{ Conversions, OutputConversions }
+import io.greenbus.edge.data.proto.convert.ValueConversions
+import io.greenbus.edge.data.{ IndexableValue, Value }
 import io.greenbus.edge.util.EitherUtil._
 
 import scala.collection.JavaConversions._
@@ -29,7 +31,7 @@ object ConsumerConversions {
 
   def toProto(obj: api.IndexSubscriptionParams): proto.IndexSubscriptionParams = {
     val b = proto.IndexSubscriptionParams.newBuilder()
-    obj.endpointPrefixes.map(ValueConversions.toProto).foreach(b.addEndpointPrefixes)
+    obj.endpointPrefixes.map(Conversions.toProto).foreach(b.addEndpointPrefixes)
     obj.endpointIndexes.map(Conversions.toProto).foreach(b.addEndpointIndex)
     obj.dataKeyIndexes.map(Conversions.toProto).foreach(b.addDataKeyIndexes)
     obj.outputKeyIndexes.map(Conversions.toProto).foreach(b.addOutputKeyIndexes)
@@ -37,7 +39,7 @@ object ConsumerConversions {
   }
   def fromProto(msg: proto.IndexSubscriptionParams): Either[String, api.IndexSubscriptionParams] = {
     for {
-      prefixes <- rightSequence(msg.getEndpointPrefixesList.map(ValueConversions.fromProto))
+      prefixes <- rightSequence(msg.getEndpointPrefixesList.map(Conversions.fromProto))
       endIndexes <- rightSequence(msg.getEndpointIndexList.map(Conversions.fromProto))
       dataIndexes <- rightSequence(msg.getDataKeyIndexesList.map(Conversions.fromProto))
       outputIndexes <- rightSequence(msg.getOutputKeyIndexesList.map(Conversions.fromProto))
@@ -52,18 +54,18 @@ object ConsumerConversions {
 
   def toProto(obj: api.DataKeySubscriptionParams): proto.DataKeySubscriptionParams = {
     val b = proto.DataKeySubscriptionParams.newBuilder()
-    obj.series.map(ValueConversions.toProto).foreach(b.addSeries)
-    obj.keyValues.map(ValueConversions.toProto).foreach(b.addKeyValues)
-    obj.topicEvent.map(ValueConversions.toProto).foreach(b.addTopicEvents)
-    obj.activeSet.map(ValueConversions.toProto).foreach(b.addActiveSets)
+    obj.series.map(Conversions.toProto).foreach(b.addSeries)
+    obj.keyValues.map(Conversions.toProto).foreach(b.addKeyValues)
+    obj.topicEvent.map(Conversions.toProto).foreach(b.addTopicEvents)
+    obj.activeSet.map(Conversions.toProto).foreach(b.addActiveSets)
     b.build()
   }
   def fromProto(msg: proto.DataKeySubscriptionParams): Either[String, api.DataKeySubscriptionParams] = {
     for {
-      ser <- rightSequence(msg.getSeriesList.map(ValueConversions.fromProto))
-      end <- rightSequence(msg.getKeyValuesList.map(ValueConversions.fromProto))
-      data <- rightSequence(msg.getTopicEventsList.map(ValueConversions.fromProto))
-      out <- rightSequence(msg.getActiveSetsList.map(ValueConversions.fromProto))
+      ser <- rightSequence(msg.getSeriesList.map(Conversions.fromProto))
+      end <- rightSequence(msg.getKeyValuesList.map(Conversions.fromProto))
+      data <- rightSequence(msg.getTopicEventsList.map(Conversions.fromProto))
+      out <- rightSequence(msg.getActiveSetsList.map(Conversions.fromProto))
     } yield {
       api.DataKeySubscriptionParams(
         series = ser,
@@ -75,17 +77,17 @@ object ConsumerConversions {
 
   def toProto(obj: api.SubscriptionParams): proto.SubscriptionParams = {
     val b = proto.SubscriptionParams.newBuilder()
-    obj.descriptors.map(ValueConversions.toProto).foreach(b.addDescriptors)
+    obj.descriptors.map(Conversions.toProto).foreach(b.addDescriptors)
     b.setDataParams(toProto(obj.dataKeys))
-    obj.outputKeys.map(ValueConversions.toProto).foreach(b.addOutputKeys)
+    obj.outputKeys.map(Conversions.toProto).foreach(b.addOutputKeys)
     b.setIndexParams(toProto(obj.indexing))
     b.build()
   }
   def fromProto(msg: proto.SubscriptionParams): Either[String, api.SubscriptionParams] = {
     for {
-      descs <- rightSequence(msg.getDescriptorsList.map(ValueConversions.fromProto))
+      descs <- rightSequence(msg.getDescriptorsList.map(Conversions.fromProto))
       data <- if (msg.hasDataParams) fromProto(msg.getDataParams).map(r => Some(r)) else Right(None)
-      outKeys <- rightSequence(msg.getOutputKeysList.map(ValueConversions.fromProto))
+      outKeys <- rightSequence(msg.getOutputKeysList.map(Conversions.fromProto))
       index <- if (msg.hasIndexParams) fromProto(msg.getIndexParams).map(r => Some(r)) else Right(None)
     } yield {
       api.SubscriptionParams(
@@ -133,7 +135,7 @@ object ConsumerConversions {
 
   def toProto(obj: api.TopicEventUpdate): proto.TopicEventUpdate = {
     val b = proto.TopicEventUpdate.newBuilder()
-    b.setTopic(ValueConversions.toProto(obj.topic))
+    b.setTopic(Conversions.toProto(obj.topic))
     b.setValue(ValueConversions.toProto(obj.value))
     b.setTime(obj.time)
     b.build()
@@ -141,7 +143,7 @@ object ConsumerConversions {
   def fromProto(msg: proto.TopicEventUpdate): Either[String, api.TopicEventUpdate] = {
     if (msg.hasValue && msg.hasTopic) {
       for {
-        path <- ValueConversions.fromProto(msg.getTopic)
+        path <- Conversions.fromProto(msg.getTopic)
         value <- ValueConversions.fromProto(msg.getValue)
       } yield {
         api.TopicEventUpdate(path, value, msg.getTime)
@@ -151,13 +153,13 @@ object ConsumerConversions {
     }
   }
 
-  def toProto(obj: (api.IndexableValue, api.Value)): proto.MapKeyPair = {
+  def toProto(obj: (IndexableValue, Value)): proto.MapKeyPair = {
     val b = proto.MapKeyPair.newBuilder()
     b.setKey(ValueConversions.toProto(obj._1))
     b.setValue(ValueConversions.toProto(obj._2))
     b.build()
   }
-  def fromProto(msg: proto.MapKeyPair): Either[String, (api.IndexableValue, api.Value)] = {
+  def fromProto(msg: proto.MapKeyPair): Either[String, (IndexableValue, Value)] = {
     if (msg.hasKey && msg.hasValue) {
       for {
         key <- ValueConversions.fromProto(msg.getKey)
@@ -191,16 +193,16 @@ object ConsumerConversions {
 
   def toProto(obj: api.EndpointSetUpdate): proto.EndpointSetUpdate = {
     val b = proto.EndpointSetUpdate.newBuilder()
-    obj.set.map(ValueConversions.toProto).foreach(b.addValue)
-    obj.removes.map(ValueConversions.toProto).foreach(b.addRemoves)
-    obj.adds.map(ValueConversions.toProto).foreach(b.addAdds)
+    obj.set.map(Conversions.toProto).foreach(b.addValue)
+    obj.removes.map(Conversions.toProto).foreach(b.addRemoves)
+    obj.adds.map(Conversions.toProto).foreach(b.addAdds)
     b.build()
   }
   def fromProto(msg: proto.EndpointSetUpdate): Either[String, api.EndpointSetUpdate] = {
     for {
-      value <- rightSequence(msg.getValueList.map(ValueConversions.fromProto))
-      removes <- rightSequence(msg.getRemovesList.map(ValueConversions.fromProto))
-      adds <- rightSequence(msg.getAddsList.map(ValueConversions.fromProto))
+      value <- rightSequence(msg.getValueList.map(Conversions.fromProto))
+      removes <- rightSequence(msg.getRemovesList.map(Conversions.fromProto))
+      adds <- rightSequence(msg.getAddsList.map(Conversions.fromProto))
     } yield {
       api.EndpointSetUpdate(value.toSet, removes.toSet, adds.toSet)
     }
@@ -208,16 +210,16 @@ object ConsumerConversions {
 
   def toProto(obj: api.KeySetUpdate): proto.KeySetUpdate = {
     val b = proto.KeySetUpdate.newBuilder()
-    obj.set.map(ValueConversions.toProto).foreach(b.addValue)
-    obj.removes.map(ValueConversions.toProto).foreach(b.addRemoves)
-    obj.adds.map(ValueConversions.toProto).foreach(b.addAdds)
+    obj.set.map(Conversions.toProto).foreach(b.addValue)
+    obj.removes.map(Conversions.toProto).foreach(b.addRemoves)
+    obj.adds.map(Conversions.toProto).foreach(b.addAdds)
     b.build()
   }
   def fromProto(msg: proto.KeySetUpdate): Either[String, api.KeySetUpdate] = {
     for {
-      value <- rightSequence(msg.getValueList.map(ValueConversions.fromProto))
-      removes <- rightSequence(msg.getRemovesList.map(ValueConversions.fromProto))
-      adds <- rightSequence(msg.getAddsList.map(ValueConversions.fromProto))
+      value <- rightSequence(msg.getValueList.map(Conversions.fromProto))
+      removes <- rightSequence(msg.getRemovesList.map(Conversions.fromProto))
+      adds <- rightSequence(msg.getAddsList.map(Conversions.fromProto))
     } yield {
       api.KeySetUpdate(value.toSet, removes.toSet, adds.toSet)
     }
@@ -297,7 +299,7 @@ object ConsumerConversions {
 
   def toProto(obj: api.IdEndpointUpdate): proto.IdEndpointUpdate = {
     val b = proto.IdEndpointUpdate.newBuilder()
-    b.setId(ValueConversions.toProto(obj.id))
+    b.setId(Conversions.toProto(obj.id))
     val (status, optV) = updateToProto(obj.data)
     b.setType(status)
     optV.map(Conversions.toProto).foreach(b.setValue)
@@ -309,7 +311,7 @@ object ConsumerConversions {
       val vOptEith = if (msg.hasValue) Conversions.fromProto(msg.getValue).map(r => Some(r)) else Right(None)
 
       for {
-        id <- ValueConversions.fromProto(msg.getId)
+        id <- Conversions.fromProto(msg.getId)
         vOpt <- vOptEith
         status <- updateFromProto(msg.getType, vOpt)
       } yield {
@@ -322,7 +324,7 @@ object ConsumerConversions {
 
   def toProto(obj: api.IdDataKeyUpdate): proto.IdDataKeyUpdate = {
     val b = proto.IdDataKeyUpdate.newBuilder()
-    b.setId(ValueConversions.toProto(obj.id))
+    b.setId(Conversions.toProto(obj.id))
     val (status, optV) = updateToProto(obj.data)
     b.setType(status)
     optV.map(toProto).foreach(b.setValue)
@@ -334,7 +336,7 @@ object ConsumerConversions {
       val vOptEith = if (msg.hasValue) fromProto(msg.getValue).map(r => Some(r)) else Right(None)
 
       for {
-        id <- ValueConversions.fromProto(msg.getId)
+        id <- Conversions.fromProto(msg.getId)
         vOpt <- vOptEith
         status <- updateFromProto(msg.getType, vOpt)
       } yield {
@@ -347,7 +349,7 @@ object ConsumerConversions {
 
   def toProto(obj: api.IdOutputKeyUpdate): proto.IdOutputKeyUpdate = {
     val b = proto.IdOutputKeyUpdate.newBuilder()
-    b.setId(ValueConversions.toProto(obj.id))
+    b.setId(Conversions.toProto(obj.id))
     val (status, optV) = updateToProto(obj.data)
     b.setType(status)
     optV.map(toProto).foreach(b.setValue)
@@ -359,7 +361,7 @@ object ConsumerConversions {
       val vOptEith = if (msg.hasValue) fromProto(msg.getValue).map(r => Some(r)) else Right(None)
 
       for {
-        id <- ValueConversions.fromProto(msg.getId)
+        id <- Conversions.fromProto(msg.getId)
         vOpt <- vOptEith
         status <- updateFromProto(msg.getType, vOpt)
       } yield {
@@ -372,7 +374,7 @@ object ConsumerConversions {
 
   def toProto(obj: api.IdEndpointPrefixUpdate): proto.IdEndpointPrefixUpdate = {
     val b = proto.IdEndpointPrefixUpdate.newBuilder()
-    b.setId(ValueConversions.toProto(obj.prefix))
+    b.setId(Conversions.toProto(obj.prefix))
     val (status, optV) = updateToProto(obj.data)
     b.setType(status)
     optV.map(toProto).foreach(b.setValue)
@@ -384,7 +386,7 @@ object ConsumerConversions {
       val vOptEith = if (msg.hasValue) fromProto(msg.getValue).map(r => Some(r)) else Right(None)
 
       for {
-        id <- ValueConversions.fromProto(msg.getId)
+        id <- Conversions.fromProto(msg.getId)
         vOpt <- vOptEith
         status <- updateFromProto(msg.getType, vOpt)
       } yield {

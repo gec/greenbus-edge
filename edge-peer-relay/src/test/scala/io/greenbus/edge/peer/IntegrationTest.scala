@@ -24,6 +24,7 @@ import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.amqp.impl.AmqpListener
 import io.greenbus.edge.api.stream.KeyMetadata
 import io.greenbus.edge.api._
+import io.greenbus.edge.data.{ ValueDouble, ValueString }
 import io.greenbus.edge.stream.PeerSessionId
 import io.greenbus.edge.stream.subscribe.ValueSync
 import io.greenbus.edge.peer.TestHelpers.TypedEventQueue
@@ -33,7 +34,6 @@ import org.scalatest.junit.JUnitRunner
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
-
 import scala.concurrent.ExecutionContext.Implicits.global
 
 @RunWith(classOf[JUnitRunner])

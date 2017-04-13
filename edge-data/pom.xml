@@ -9,7 +9,7 @@
         <relativePath>../</relativePath>
     </parent>
 
-    <artifactId>greenbus-edge-api</artifactId>
+    <artifactId>greenbus-edge-data</artifactId>
     <packaging>jar</packaging>
 
     <build>
@@ -25,11 +25,6 @@
     </build>
 
     <dependencies>
-        <dependency>
-            <groupId>io.greenbus.edge</groupId>
-            <artifactId>greenbus-edge-data</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
-        </dependency>
         <dependency>
             <groupId>io.greenbus.edge</groupId>
             <artifactId>greenbus-edge-common</artifactId>

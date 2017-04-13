@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package edge;
 
+import "Value.proto";
 
 option java_package = "io.greenbus.edge.api.proto";
 option java_multiple_files = true;
@@ -39,11 +40,11 @@ message OutputKeyDescriptor {
 
 message IndexKeyValue {
     Path key = 1;
-    IndexableValue value = 2;
+    edge.data.IndexableValue value = 2;
 }
 message MetadataKeyValue {
     Path key = 1;
-    Value value = 2;
+    edge.data.Value value = 2;
 }
 message DataKeyValue {
     Path key = 1;
@@ -100,7 +101,7 @@ message UUID {
     fixed64 high = 2;
 }
 
-message AnnotatedBytesValue {
+/*message AnnotatedBytesValue {
     bytes value = 1;
     OptionalString mime_type = 2;
     OptionalBool is_text = 3;
@@ -164,23 +165,23 @@ message Value {
         ArrayValue array_value = 15;
         ObjectValue object_value = 16;
     }
-}
+}*/
 
 message OutputKeyStatus {
     UUID sequence_session = 1;
     uint64 sequence = 2;
-    Value value = 3;
+    edge.data.Value value = 3;
 }
 
 message OutputParams {
     UUID sequence_session = 1; // optional
     OptionalUInt64 sequence = 2; // optional
-    Value compare_value = 3; // optional
-    Value output_value = 4; // optional
+    edge.data.Value compare_value = 3; // optional
+    edge.data.Value output_value = 4; // optional
 }
 
 message OutputSuccess {
-    Value result = 1; // optional
+    edge.data.Value result = 1; // optional
 }
 message OutputFailure {
     string message = 1;
@@ -195,5 +196,5 @@ message OutputResult {
 
 message IndexSpecifier {
     Path key = 1;
-    IndexableValue value = 2;
+    edge.data.IndexableValue value = 2;
 }

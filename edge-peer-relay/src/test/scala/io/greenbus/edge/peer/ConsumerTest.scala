@@ -28,6 +28,7 @@ import io.greenbus.edge.amqp.stream.{ ChannelDescriberImpl, ClientResponseParser
 import io.greenbus.edge.api._
 import io.greenbus.edge.api.stream._
 import io.greenbus.edge.api.stream.index.{ IndexProducer, IndexingSubscriptionManager }
+import io.greenbus.edge.data.{ ValueDouble, ValueString }
 import io.greenbus.edge.stream.client.{ MultiChannelStreamClientImpl, StreamClient }
 import io.greenbus.edge.stream.gateway.GatewayRouteSource
 import io.greenbus.edge.stream.proto.provider.ProtoSerializationProvider

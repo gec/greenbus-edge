@@ -3,7 +3,7 @@ syntax = "proto3";
 package edge.consumer;
 
 import "LogicalModel.proto";
-
+import "Value.proto";
 
 option java_package = "io.greenbus.edge.api.consumer.proto";
 option java_multiple_files = true;
@@ -103,26 +103,26 @@ message IdOutputKeyUpdate {
 
 
 message KeyValueUpdate {
-    edge.Value value = 1;
+    edge.data.Value value = 1;
 }
 message SeriesUpdate {
-    edge.SampleValue value = 1;
+    edge.data.SampleValue value = 1;
     uint64 time = 2;
 }
 message TopicEventUpdate {
     edge.Path topic = 1;
-    edge.Value value = 2;
+    edge.data.Value value = 2;
     uint64 time = 3;
 }
 
 message MapKeyPair {
-    edge.IndexableValue key = 1;
-    edge.Value value = 2;
+    edge.data.IndexableValue key = 1;
+    edge.data.Value value = 2;
 }
 
 message ActiveSetUpdate {
     repeated MapKeyPair value = 1;
-    repeated edge.IndexableValue removes = 2;
+    repeated edge.data.IndexableValue removes = 2;
     repeated MapKeyPair adds = 3;
     repeated MapKeyPair modifies = 4;
 }

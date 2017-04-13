@@ -16,46 +16,10 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.api
+package io.greenbus.edge.data
 
 import java.util
 import java.util.UUID
-
-/*sealed trait EndpointId
-case class NamedEndpointId(name: Path) extends EndpointId
-case class UuidEndpointId(uuid: UUID, display: Path) extends EndpointId*/
-
-case class EndpointId(path: Path)
-
-case class EndpointPath(endpoint: EndpointId, key: Path)
-
-object Path {
-  def isPrefixOf(l: Path, r: Path): Boolean = {
-    val lIter = l.parts.iterator
-    val rIter = r.parts.iterator
-    var okay = true
-    var continue = true
-    while (continue) {
-      (lIter.hasNext, rIter.hasNext) match {
-        case (true, true) =>
-          if (lIter.next() != rIter.next()) {
-            okay = false
-            continue = false
-          }
-        case (false, true) => continue = false
-        case (true, false) =>
-          okay = false; continue = false
-        case (false, false) => continue = false
-      }
-    }
-    okay
-  }
-
-  def apply(part: String): Path = {
-    Path(Seq(part))
-  }
-}
-case class Path(parts: Seq[String])
 
 sealed trait Value
 
@@ -120,8 +84,6 @@ case class ValueBool(v: Boolean) extends NumericConvertible with SampleValue {
 }
 case class ValueString(v: String) extends IndexableValue
 case class ValueUuid(v: UUID) extends IndexableValue
-case class ValuePath(v: Path) extends Value
-case class ValueEndpointPath(v: EndpointPath) extends Value
 case class ValueText(v: String, mimeType: Option[String] = None) extends Value
 
 case class ValueArray(seq: IndexedSeq[Value]) extends Value

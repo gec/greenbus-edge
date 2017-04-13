@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package edge.data;
+
+option java_package = "io.greenbus.edge.data.proto";
+option java_multiple_files = true;
+
+
+message Value {
+    oneof value_types {
+        float float_value = 1;
+        double double_value = 2;
+        sint32 sint32_value = 3;
+        uint32 uint32_value = 4;
+        sint64 sint64_value = 5;
+        uint64 uint64_value = 6;
+        bool bool_value = 7;
+        string string_value = 8;
+        bytes bytes_value = 9;
+
+        //repeated float float_array = 10;
+
+
+        //TextValue text_value = 10;
+        //AnnotatedBytesValue bytes_annotated_value = 11;
+        //UUID uuid_value = 12;
+        //Path path_value = 13;
+        //EndpointPath endpoint_path_value = 14;
+
+        ListValue list_value = 15;
+        MapValue map_value = 16;
+    }
+}
+
+message ListValue {
+    repeated Value element = 1;
+}
+message MapValue {
+    map<string, Value> fields = 1;
+}
+
+message SampleValue {
+    oneof value_types {
+        float float_value = 1;
+        double double_value = 2;
+        sint32 sint32_value = 3;
+        uint32 uint32_value = 4;
+        sint64 sint64_value = 5;
+        uint64 uint64_value = 6;
+        bool bool_value = 7;
+    }
+}
+
+message IndexableValue {
+    oneof value_types {
+        sint32 sint32_value = 3;
+        uint32 uint32_value = 4;
+        sint64 sint64_value = 5;
+        uint64 uint64_value = 6;
+        bool bool_value = 7;
+        string string_value = 8;
+        bytes bytes_value = 9;
+        //UUID uuid_value = 10;
+    }
+}

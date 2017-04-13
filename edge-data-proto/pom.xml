@@ -9,7 +9,7 @@
         <relativePath>../</relativePath>
     </parent>
 
-    <artifactId>greenbus-edge-protobuf</artifactId>
+    <artifactId>greenbus-edge-data-proto</artifactId>
     <packaging>jar</packaging>
 
     <build>
@@ -30,12 +30,12 @@
                     <protoSourceRoot>src/main/proto</protoSourceRoot>
                     <checkStaleness>true</checkStaleness>
                     <outputDirectory>${project.build.directory}/generated-sources/java</outputDirectory>
-                    <additionalProtoPathElements>
+                    <!--<additionalProtoPathElements>
                         <additionalProtoPathElement>
-                            ${project.basedir}/../edge-data-proto/src/main/proto
+                            proto-include/
                         </additionalProtoPathElement>
                     </additionalProtoPathElements>
-                    <!--<plugins>
+                    <plugins>
                         <plugin>
                             <name>msgscala</name>
                             <outputDirectory>${project.build.directory}/generated-sources/scala</outputDirectory>
@@ -63,17 +63,7 @@
     <dependencies>
         <dependency>
             <groupId>io.greenbus.edge</groupId>
-            <artifactId>greenbus-edge-api</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
-        </dependency>
-        <dependency>
-            <groupId>io.greenbus.edge</groupId>
-            <artifactId>greenbus-edge-data-proto</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
-        </dependency>
-        <dependency>
-            <groupId>io.greenbus.edge</groupId>
-            <artifactId>greenbus-edge-streaming</artifactId>
+            <artifactId>greenbus-edge-data</artifactId>
             <version>0.0.1-SNAPSHOT</version>
         </dependency>
         <dependency>
@@ -82,9 +72,10 @@
             <version>3.1.0</version>
         </dependency>
         <dependency>
-            <groupId>com.google.protobuf</groupId>
-            <artifactId>protobuf-java-util</artifactId>
-            <version>3.1.0</version>
+            <groupId>org.scalatest</groupId>
+            <artifactId>scalatest_${scala.annotation}</artifactId>
+            <version>${scalatest.version}</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 

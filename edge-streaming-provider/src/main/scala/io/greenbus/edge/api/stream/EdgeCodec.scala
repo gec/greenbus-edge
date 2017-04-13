@@ -19,10 +19,13 @@
 package io.greenbus.edge.api.stream
 
 import io.greenbus.edge.api._
-import io.greenbus.edge.api.proto.convert.{ Conversions, OutputConversions, ValueConversions }
+import io.greenbus.edge.api.proto.convert.{ Conversions, OutputConversions }
 import io.greenbus.edge.stream._
 import io.greenbus.edge.api.proto
+import io.greenbus.edge.data.{ proto => vproto }
 import io.greenbus.edge.api.stream.index.IndexProducer
+import io.greenbus.edge.data.proto.convert.ValueConversions
+import io.greenbus.edge.data.{ IndexableValue, SampleValue, Value }
 import io.greenbus.edge.stream.subscribe.{ MapUpdated, PeerBasedSubKey, SetUpdated, SubscriptionKey }
 import io.greenbus.edge.util.EitherUtil
 
@@ -231,7 +234,7 @@ object EdgeCodecCommon {
   def readSampleValue(v: TypeValue): Either[String, SampleValue] = {
     v match {
       case b: BytesVal =>
-        parse(b.v, proto.SampleValue.parseFrom).flatMap { protoValue =>
+        parse(b.v, vproto.SampleValue.parseFrom).flatMap { protoValue =>
           ValueConversions.fromProto(protoValue)
         }
       case _ => Left(s"Wrong value type for edge value: " + v)
@@ -244,7 +247,7 @@ object EdgeCodecCommon {
   def readIndexableValue(v: TypeValue): Either[String, IndexableValue] = {
     v match {
       case b: BytesVal =>
-        parse(b.v, proto.IndexableValue.parseFrom).flatMap { protoValue =>
+        parse(b.v, vproto.IndexableValue.parseFrom).flatMap { protoValue =>
           ValueConversions.fromProto(protoValue)
         }
       case _ => Left(s"Wrong value type for edge value: " + v)
@@ -257,7 +260,7 @@ object EdgeCodecCommon {
   def readValue(v: TypeValue): Either[String, Value] = {
     v match {
       case b: BytesVal =>
-        parse(b.v, proto.Value.parseFrom).flatMap { protoValue =>
+        parse(b.v, vproto.Value.parseFrom).flatMap { protoValue =>
           ValueConversions.fromProto(protoValue)
         }
       case _ => Left(s"Wrong value type for edge value: " + v)
@@ -397,26 +400,26 @@ object EdgeCodecCommon {
   }
 
   def writeEndpointPath(id: EndpointPath): TypeValue = {
-    BytesVal(ValueConversions.toProto(id).toByteArray)
+    BytesVal(Conversions.toProto(id).toByteArray)
   }
   def readEndpointPath(v: TypeValue): Either[String, EndpointPath] = {
     v match {
       case b: BytesVal =>
         parse(b.v, proto.EndpointPath.parseFrom).flatMap { protoValue =>
-          ValueConversions.fromProto(protoValue)
+          Conversions.fromProto(protoValue)
         }
       case _ => Left(s"Wrong value type for EndpointPath: " + v)
     }
   }
 
   def writeEndpointIdProto(id: EndpointId): TypeValue = {
-    BytesVal(ValueConversions.toProto(id).toByteArray)
+    BytesVal(Conversions.toProto(id).toByteArray)
   }
   def readEndpointIdProto(v: TypeValue): Either[String, EndpointId] = {
     v match {
       case b: BytesVal =>
         parse(b.v, proto.EndpointId.parseFrom).flatMap { protoValue =>
-          ValueConversions.fromProto(protoValue)
+          Conversions.fromProto(protoValue)
         }
       case _ => Left(s"Wrong value type for EndpointId: " + v)
     }

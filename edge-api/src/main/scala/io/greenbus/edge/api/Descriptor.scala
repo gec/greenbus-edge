@@ -18,6 +18,8 @@
  */
 package io.greenbus.edge.api
 
+import io.greenbus.edge.data.{ IndexableValue, Value }
+
 trait KeyDescriptor {
   def indexes: Map[Path, IndexableValue]
   def metadata: Map[Path, Value]

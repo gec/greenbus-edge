@@ -21,6 +21,7 @@ package io.greenbus.edge.api.stream.index
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.api._
 import io.greenbus.edge.collection.MapSetBuilder
+import io.greenbus.edge.data.IndexableValue
 
 case class IndexUpdate[A, Key](specifier: IndexSpecifier, state: Set[A], added: Set[A], removed: Set[A], targets: Set[Key])
 
