@@ -42,6 +42,7 @@
         <module>streaming</module>
         <module>edge-data</module>
         <module>edge-data-proto</module>
+        <module>edge-data-xml</module>
         <module>edge-api</module>
         <module>edge-streaming-provider</module>
         <module>protobuf</module>
