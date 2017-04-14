@@ -19,7 +19,7 @@
 package io.greenbus.edge.data.proto.convert
 
 import com.google.protobuf.ByteString
-import io.greenbus.edge.data.proto
+import io.greenbus.edge.data.{ ValueMap, proto }
 import io.greenbus.edge.data
 
 import scala.collection.JavaConverters._
@@ -28,26 +28,49 @@ object ValueConversions {
 
   import io.greenbus.edge.util.EitherUtil._
 
-  def fromProto(msg: proto.ListValue): Either[String, data.ValueArray] = {
-    rightSequence(msg.getElementList.asScala.map(fromProto).toVector).map(s => data.ValueArray(s.toIndexedSeq))
+  def fromProto(msg: proto.ListValue): Either[String, data.ValueList] = {
+    rightSequence(msg.getElementList.asScala.map(fromProto).toVector).map(s => data.ValueList(s.toIndexedSeq))
   }
-  def toProto(obj: data.ValueArray): proto.ListValue = {
+  def toProto(obj: data.ValueList): proto.ListValue = {
     val b = proto.ListValue.newBuilder()
-    obj.seq.foreach(v => b.addElement(toProto(v)))
+    obj.value.foreach(v => b.addElement(toProto(v)))
     b.build()
   }
 
-  def fromProto(msg: proto.MapValue): Either[String, data.ValueObject] = {
-    val fields = msg.getFieldsMap.asScala.toVector.map { case (k, v) => fromProto(v).map(ve => (k, ve)) }
-    rightSequence(fields).map { all =>
-      data.ValueObject(all.toMap)
+  def fromProtoAlways(msg: proto.MapValue): data.ValueMap = {
+
+    val eitherSeq = msg.getFieldsList.asScala.map { kvp =>
+      if (kvp.hasKey && kvp.hasValue) {
+        for {
+          kr <- fromProto(kvp.getKey)
+          vr <- fromProto(kvp.getValue)
+        } yield {
+          (kr, vr)
+        }
+      } else {
+        Left(s"Map must have key and value")
+      }
     }
+
+    val map = eitherSeq.map(_.right).flatMap(_.toOption).toMap
+
+    data.ValueMap(map)
   }
-  def toProto(obj: data.ValueObject): proto.MapValue = {
+
+  def fromProto(msg: proto.MapValue): Either[String, data.ValueMap] = {
+    Right(fromProtoAlways(msg))
+  }
+  def toProto(obj: data.ValueMap): proto.MapValue = {
     val b = proto.MapValue.newBuilder()
-    obj.map.foreach {
+    obj.value.foreach {
       case (k, v) =>
-        b.putFields(k, toProto(v))
+
+        val kvp = proto.KeyValuePair.newBuilder()
+          .setKey(toProto(k))
+          .setValue(toProto(v))
+          .build()
+
+        b.addFields(kvp)
     }
     b.build()
   }
@@ -81,8 +104,8 @@ object ValueConversions {
       case data.ValueInt64(v) => proto.Value.newBuilder().setSint64Value(v).build()
       case data.ValueUInt64(v) => proto.Value.newBuilder().setUint64Value(v).build()
       case data.ValueString(v) => proto.Value.newBuilder().setStringValue(v).build()
-      case v: data.ValueArray => proto.Value.newBuilder().setListValue(toProto(v)).build()
-      case v: data.ValueObject => proto.Value.newBuilder().setMapValue(toProto(v)).build()
+      case v: data.ValueList => proto.Value.newBuilder().setListValue(toProto(v)).build()
+      case v: data.ValueMap => proto.Value.newBuilder().setMapValue(toProto(v)).build()
       case other => throw new IllegalArgumentException(s"Conversion not implemented for $other")
     }
   }
@@ -109,8 +132,8 @@ object ValueConversions {
       case data.ValueUInt32(v) => proto.IndexableValue.newBuilder().setUint32Value(v.toInt).build()
       case data.ValueInt64(v) => proto.IndexableValue.newBuilder().setSint64Value(v).build()
       case data.ValueUInt64(v) => proto.IndexableValue.newBuilder().setUint64Value(v).build()
-      case v: data.ValueString => proto.IndexableValue.newBuilder().setStringValue(v.v).build()
-      case v: data.ValueBytes => proto.IndexableValue.newBuilder().setBytesValue(ByteString.copyFrom(v.v)).build()
+      case v: data.ValueString => proto.IndexableValue.newBuilder().setStringValue(v.value).build()
+      case v: data.ValueBytes => proto.IndexableValue.newBuilder().setBytesValue(ByteString.copyFrom(v.value)).build()
       case other => throw new IllegalArgumentException(s"Conversion not implemented for $other")
     }
   }

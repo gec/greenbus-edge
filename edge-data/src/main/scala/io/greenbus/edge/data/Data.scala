@@ -23,7 +23,11 @@ import java.util.UUID
 
 sealed trait Value
 
-sealed trait IndexableValue extends Value
+case class TaggedValue(tag: String, value: BasicValue) extends Value
+
+sealed trait BasicValue extends Value
+
+sealed trait IndexableValue extends BasicValue
 
 sealed trait NumericConvertible extends IndexableValue {
   def toDouble: Double
@@ -38,80 +42,82 @@ object IntegerValue {
     Some(v.toLong)
   }
 }
-sealed trait IntegerValue extends NumericConvertible
+sealed trait IntegerValue extends NumericConvertible {
+  def toInt: Int
+  def toLong: Long
+}
 
 object FloatingPointValue {
   def unapply(v: FloatingPointValue): Option[Double] = {
     Some(v.toDouble)
   }
 }
-sealed trait FloatingPointValue extends NumericConvertible
+sealed trait FloatingPointValue extends NumericConvertible {
+  def toFloat: Float
+  def toDouble: Double
+}
 
-case class ValueFloat(v: Float) extends FloatingPointValue with SampleValue {
-  def toDouble: Double = v.toDouble
-  def toLong: Long = v.toLong
-  def toBoolean: Boolean = v != 0.0
+case class ValueFloat(value: Float) extends FloatingPointValue with SampleValue {
+  def toFloat: Float = value.toFloat
+  def toDouble: Double = value.toDouble
+  def toLong: Long = value.toLong
+  def toBoolean: Boolean = value != 0.0
 }
-case class ValueDouble(v: Double) extends FloatingPointValue with SampleValue {
-  def toDouble: Double = v
-  def toLong: Long = v.toLong
-  def toBoolean: Boolean = v != 0.0
+case class ValueDouble(value: Double) extends FloatingPointValue with SampleValue {
+  def toFloat: Float = value.toFloat
+  def toDouble: Double = value
+  def toLong: Long = value.toLong
+  def toBoolean: Boolean = value != 0.0
 }
-case class ValueInt32(v: Int) extends IntegerValue with SampleValue {
-  def toDouble: Double = v.toDouble
-  def toLong: Long = v.toLong
-  def toBoolean: Boolean = v != 0
+case class ValueInt32(value: Int) extends IntegerValue with SampleValue {
+  def toDouble: Double = value.toDouble
+  def toInt: Int = value.toInt
+  def toLong: Long = value.toLong
+  def toBoolean: Boolean = value != 0
 }
-case class ValueUInt32(v: Long) extends IntegerValue with SampleValue {
-  def toDouble: Double = v.toDouble
-  def toLong: Long = v.toLong
-  def toBoolean: Boolean = v != 0
+case class ValueUInt32(value: Long) extends IntegerValue with SampleValue {
+  def toDouble: Double = value.toDouble
+  def toInt: Int = value.toInt
+  def toLong: Long = value.toLong
+  def toBoolean: Boolean = value != 0
 }
-case class ValueInt64(v: Long) extends IntegerValue with SampleValue {
-  def toDouble: Double = v.toDouble
-  def toLong: Long = v.toLong
-  def toBoolean: Boolean = v != 0
+case class ValueInt64(value: Long) extends IntegerValue with SampleValue {
+  def toDouble: Double = value.toDouble
+  def toInt: Int = value.toInt
+  def toLong: Long = value.toLong
+  def toBoolean: Boolean = value != 0
 }
-case class ValueUInt64(v: Long) extends IntegerValue with SampleValue {
-  def toDouble: Double = v.toDouble
-  def toLong: Long = v.toLong
-  def toBoolean: Boolean = v != 0
+case class ValueUInt64(value: Long) extends IntegerValue with SampleValue {
+  def toDouble: Double = value.toDouble
+  def toInt: Int = value.toInt
+  def toLong: Long = value.toLong
+  def toBoolean: Boolean = value != 0
 }
-case class ValueBool(v: Boolean) extends NumericConvertible with SampleValue {
-  def toDouble: Double = if (v) 1.0 else 0.0
-  def toLong: Long = if (v) 1 else 0
-  def toBoolean: Boolean = v
+case class ValueBool(value: Boolean) extends NumericConvertible with SampleValue {
+  def toDouble: Double = if (value) 1.0 else 0.0
+  def toLong: Long = if (value) 1 else 0
+  def toBoolean: Boolean = value
 }
-case class ValueString(v: String) extends IndexableValue
-case class ValueUuid(v: UUID) extends IndexableValue
-case class ValueText(v: String, mimeType: Option[String] = None) extends Value
+case class ValueByte(value: Byte) extends NumericConvertible with SampleValue {
+  def toDouble: Double = value.toDouble
+  def toLong: Long = value.toLong
+  def toBoolean: Boolean = value != 0
+}
+case class ValueString(value: String) extends IndexableValue
 
-case class ValueArray(seq: IndexedSeq[Value]) extends Value
-case class ValueObject(map: Map[String, Value]) extends Value
+case class ValueList(value: Seq[Value]) extends BasicValue
+case class ValueMap(value: Map[Value, Value]) extends BasicValue
 
-case class ValueBytes(v: Array[Byte]) extends IndexableValue {
+case class ValueBytes(value: Array[Byte]) extends IndexableValue {
 
   override def equals(r: Any): Boolean = {
     r match {
-      case rv: ValueBytes => util.Arrays.equals(v, rv.v)
+      case rv: ValueBytes => util.Arrays.equals(value, rv.value)
       case _ => false
     }
   }
 
   override def hashCode(): Int = {
-    util.Arrays.hashCode(v)
-  }
-}
-case class ValueAnnotatedBytes(v: Array[Byte], mimeType: Option[String] = None, isText: Option[Boolean] = None) extends Value {
-
-  override def equals(r: Any): Boolean = {
-    r match {
-      case rv: ValueAnnotatedBytes => util.Arrays.equals(v, rv.v) && rv.mimeType == mimeType && rv.isText == isText
-      case _ => false
-    }
-  }
-
-  override def hashCode(): Int = {
-    util.Arrays.hashCode(v) * mimeType.hashCode() * isText.hashCode()
+    util.Arrays.hashCode(value)
   }
 }
