@@ -95,7 +95,8 @@ object Gen {
 
     pw.println(s"package $pkg")
     pw.println()
-    pw.println("import io.greenbus.edge.tag._")
+    pw.println("import io.greenbus.edge.data.mapping._")
+    pw.println("import io.greenbus.edge.data._")
     pw.println()
 
     objs.foreach {
@@ -186,14 +187,14 @@ object Gen {
       case t: TExt => s"${t.tag}.write"
       case t =>
         typ match {
-          case TBool => "VBool"
-          case TInt32 => "VInt32"
-          case TUInt32 => "VUInt32"
-          case TInt64 => "VInt64"
-          case TUInt64 => "VUInt64"
-          case TFloat => "VFloat"
-          case TDouble => "VDouble"
-          case TString => "VString"
+          case TBool => "ValueBool"
+          case TInt32 => "ValueInt32"
+          case TUInt32 => "ValueUInt32"
+          case TInt64 => "ValueInt64"
+          case TUInt64 => "ValueUInt64"
+          case TFloat => "ValueFloat"
+          case TDouble => "ValueDouble"
+          case TString => "ValueString"
           case _ => throw new IllegalArgumentException(s"Type unhandled: $typ")
         }
     }
@@ -202,16 +203,16 @@ object Gen {
   def inputSignatureFor(typ: ValueType): String = {
     typ match {
       case t: TExt => s"${t.tag}"
-      case t: TList => "VList"
-      case t: TMap => "VMap"
-      case TBool => "VBool"
-      case TInt32 => "VInt32"
-      case TUInt32 => "VUInt32"
-      case TInt64 => "VInt64"
-      case TUInt64 => "VUInt64"
-      case TFloat => "VFloat"
-      case TDouble => "VDouble"
-      case TString => "VString"
+      case t: TList => "ValueList"
+      case t: TMap => "ValueMap"
+      case TBool => "ValueBool"
+      case TInt32 => "ValueInt32"
+      case TUInt32 => "ValueUInt32"
+      case TInt64 => "ValueInt64"
+      case TUInt64 => "ValueUInt64"
+      case TFloat => "ValueFloat"
+      case TDouble => "ValueDouble"
+      case TString => "ValueString"
       case _ => throw new IllegalArgumentException(s"Type unhandled: $typ")
     }
   }
@@ -228,7 +229,7 @@ object Gen {
       case TagTypeDef(tag) => tag
     }
 
-    pw.println(tab(1) + s"def read(element: ValueElement, ctx: ReaderContext): Either[String, $name] = {")
+    pw.println(tab(1) + s"def read(element: Value, ctx: ReaderContext): Either[String, $name] = {")
     pw.println(tab(2) + s"element match {")
     pw.println(tab(3) + s"case data: $typeSignature =>")
     wrapper.field.typ match {
@@ -274,9 +275,9 @@ object Gen {
     pw.println(s"object $name {")
     pw.println()
 
-    pw.println(tab(1) + s"def read(element: ValueElement, ctx: ReaderContext): Either[String, $name] = {")
+    pw.println(tab(1) + s"def read(element: Value, ctx: ReaderContext): Either[String, $name] = {")
     pw.println(tab(2) + s"element match {")
-    pw.println(tab(3) + s"case data: VMap =>")
+    pw.println(tab(3) + s"case data: ValueMap =>")
     objDef.fields.foreach { fd =>
       val name = fd.name
       fd.typ match {
@@ -311,15 +312,15 @@ object Gen {
     pw.println(tab(5) + s"""Left(Seq($leftJoin).flatten.mkString(", "))""")
     pw.println(tab(4) + "}")
     pw.println()
-    pw.println(tab(3) + s"""case _ => Left("$name must be VMap type")""")
+    pw.println(tab(3) + s"""case _ => Left("$name must be ValueMap type")""")
     pw.println(tab(2) + s"}")
     pw.println(tab(1) + "}")
     pw.println()
 
     pw.println(tab(1) + s"def write(obj: $name): TaggedValue = {")
-    pw.println(tab(2) + "val built = VMap(Map(")
+    pw.println(tab(2) + "val built = ValueMap(Map(")
     val buildList = objDef.fields.map { d =>
-      s"""(VString("${d.name}"), ${writeCallFor(d.typ, s"obj.${d.name}")})"""
+      s"""(ValueString("${d.name}"), ${writeCallFor(d.typ, s"obj.${d.name}")})"""
     }.mkString(tab(3), ",\n" + tab(3), "")
     pw.println(buildList)
     pw.println(tab(2) + "))")
