@@ -75,7 +75,28 @@ object ValueConversions {
     b.build()
   }
 
+  def fromProto(msg: proto.TaggedValue): Either[String, data.TaggedValue] = {
+    if (msg.hasValue) {
+      fromProtoBasic(msg.getValue).map(v => data.TaggedValue(msg.getTag, v))
+    } else {
+      Left(s"Tagged value must have tag")
+    }
+  }
+  def toProto(obj: data.TaggedValue): proto.TaggedValue = {
+    proto.TaggedValue.newBuilder()
+      .setTag(obj.tag)
+      .setValue(toProto(obj.value))
+      .build()
+  }
+
   def fromProto(msg: proto.Value): Either[String, data.Value] = {
+    import proto.Value.ValueTypesCase
+    msg.getValueTypesCase match {
+      case ValueTypesCase.TAGGED_VALUE => fromProto(msg.getTaggedValue)
+      case other => fromProtoBasic(msg)
+    }
+  }
+  def fromProtoBasic(msg: proto.Value): Either[String, data.BasicValue] = {
     import proto.Value.ValueTypesCase
     msg.getValueTypesCase match {
       case ValueTypesCase.BOOL_VALUE => Right(data.ValueBool(msg.getBoolValue))
@@ -106,6 +127,7 @@ object ValueConversions {
       case data.ValueString(v) => proto.Value.newBuilder().setStringValue(v).build()
       case v: data.ValueList => proto.Value.newBuilder().setListValue(toProto(v)).build()
       case v: data.ValueMap => proto.Value.newBuilder().setMapValue(toProto(v)).build()
+      case v: data.TaggedValue => proto.Value.newBuilder().setTaggedValue(toProto(v)).build()
       case other => throw new IllegalArgumentException(s"Conversion not implemented for $other")
     }
   }
