@@ -20,11 +20,10 @@ package io.greenbus.edge.data.codegen
 
 import java.io.PrintWriter
 
+import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.data.schema._
 
-object Gen {
-
-  case class TypeDefFrag(code: String)
+object Gen extends LazyLogging {
 
   sealed trait FieldTypeDef
   case class SimpleTypeDef(typ: ValueType) extends FieldTypeDef
@@ -36,6 +35,7 @@ object Gen {
   sealed trait ObjDef
   case class StructDef(fields: Seq[FieldDef]) extends ObjDef
   case class WrapperDef(field: FieldDef) extends ObjDef
+  case class UnionDef(tags: Seq[String]) extends ObjDef
 
   def objDefForExtType(typ: TExt): ObjDef = {
 
@@ -200,11 +200,12 @@ object Gen {
     }
   }
 
-  def inputSignatureFor(typ: ValueType): String = {
+  def inputSignatureFor(typ: ValueType, containerTag: String): String = {
     typ match {
-      case t: TExt => s"${t.tag}"
+      case t: TExt => t.tag
       case t: TList => "ValueList"
       case t: TMap => "ValueMap"
+      case t: TUnion => containerTag
       case TBool => "ValueBool"
       case TInt32 => "ValueInt32"
       case TUInt32 => "ValueUInt32"
@@ -220,12 +221,13 @@ object Gen {
   def tab(n: Int): String = Range(0, n).map(_ => "  ").mkString("")
 
   def writeWrapperStatic(name: String, wrapper: WrapperDef, pw: PrintWriter): Unit = {
+    logger.debug(s"Writing $name")
     pw.println(s"object $name {")
     pw.println()
 
     val typeSignature = wrapper.field.typ match {
-      case SimpleTypeDef(typ) => inputSignatureFor(typ)
-      case ParamTypeDef(typ) => inputSignatureFor(typ)
+      case SimpleTypeDef(typ) => inputSignatureFor(typ, name)
+      case ParamTypeDef(typ) => inputSignatureFor(typ, name)
       case TagTypeDef(tag) => tag
     }
 

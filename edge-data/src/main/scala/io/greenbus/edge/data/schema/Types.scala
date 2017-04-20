@@ -46,3 +46,6 @@ case class StructFieldDef(name: String, typ: VTValueElem, number: Int)
 case class TStruct(fields: Seq[StructFieldDef]) extends BasicValueType
 case class TList(paramType: VTValueElem) extends BasicValueType
 case class TMap(keyType: VTValueElem, valueType: VTValueElem) extends BasicValueType
+
+case class EnumDef(label: String, value: Int)
+case class TEnum(enumDefs: Seq[EnumDef]) extends BasicValueType
