@@ -44,11 +44,20 @@ object OptionTest {
 
   val transformDescriptor = TExt("TransformDescriptor", TUnion(Set(typeCast, linearTransform)))
 
+  val seriesType = TExt("SeriesType", TEnum(Seq(
+    EnumDef("AnalogStatus", 0),
+    EnumDef("AnalogSample", 1),
+    EnumDef("CounterStatus", 2),
+    EnumDef("CounterSample", 3),
+    EnumDef("BooleanStatus", 4),
+    EnumDef("IntegerEnum", 5))))
+
   val frontendDataKey = TExt("FrontendDataKey", TStruct(Vector(
     StructFieldDef("gatewayKey", TString, 0),
     StructFieldDef("transforms", transformDescriptor, 1),
     StructFieldDef("indexSet", indexSet, 2),
-    StructFieldDef("unit", TOption(TString), 3))))
+    StructFieldDef("unit", TOption(TString), 3),
+    StructFieldDef("seriesType", seriesType, 4))))
 
   def main(args: Array[String]): Unit = {
     val all = Gen.collectObjDefs(frontendDataKey, Map())
@@ -72,7 +81,7 @@ object OptionTest {
 /*
 object ReadWriteTest {
 
-  val ex = FrontendDataKey("myGateway", TypeCast("myTarget"), IndexSet(Seq(IndexRange(0, 10), IndexRange(20, 29))), None)
+  val ex = FrontendDataKey("myGateway", TypeCast("myTarget"), IndexSet(Seq(IndexRange(0, 10), IndexRange(20, 29))), None, SeriesType.IntegerEnum)
 
   def main(args: Array[String]): Unit = {
 
@@ -99,62 +108,3 @@ object ReadWriteTest {
   }
 }
 */
-
-/*
-
-
-case class IndexDescriptor(key: Path, value: IndexableValue)
-case class MetadataDescriptor(key: Path, value: IndexableValue)
-
-case class FrontendDataKey(
-  gatewayKey: String,
-  path: Path,
-  seriesDescriptor: SeriesDescriptor,
-  transforms: Seq[TransformDescriptor],
-  filter: FilterDescriptor,
-  indexes: Map[Path, IndexableValue],
-  metadata: Map[Path, Value])
-
-case class FrontendEndpointConfiguration(
-  endpointId: EndpointId,
-  dataKeys: Seq[FrontendDataKey])
-
-sealed trait SampleType
-object SampleType {
-  case object Float extends SampleType
-  case object Double extends SampleType
-  case object Int32 extends SampleType
-  case object UInt32 extends SampleType
-  case object Int64 extends SampleType
-  case object UInt64 extends SampleType
-  case object Bool extends SampleType
-  case object Byte extends SampleType
-}
-
-sealed trait SeriesType
-object SeriesType {
-  case object AnalogStatus extends SeriesType
-  case object AnalogSample extends SeriesType
-  case object CounterStatus extends SeriesType
-  case object CounterSample extends SeriesType
-  case object BooleanStatus extends SeriesType
-  case object IntegerEnum extends SeriesType
-}
-
-sealed trait TransformDescriptor
-case class TypeCast(target: SampleType) extends TransformDescriptor
-case class LinearTransform(scale: Double, offset: Double) extends TransformDescriptor
-case object Negate extends TransformDescriptor
-
-case class FilterDescriptor(suppressDuplicates: Option[Boolean], deadband: Option[Double])
-
-case class BooleanLabels(trueLabel: String, falseLabel: String)
-
-case class SeriesDescriptor(
-  seriesType: SeriesType,
-  unit: Option[String],
-  decimalPoints: Option[Int],
-  labeledInteger: Option[Map[Long, String]],
-  labeledBoolean: Option[BooleanLabels])
-
- */ 

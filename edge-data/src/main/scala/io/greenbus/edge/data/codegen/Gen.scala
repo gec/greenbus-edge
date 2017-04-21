@@ -36,6 +36,7 @@ object Gen extends LazyLogging {
   case class StructDef(fields: Seq[FieldDef]) extends ObjDef
   case class WrapperDef(field: FieldDef) extends ObjDef
   case class UnionDef(tags: Seq[String]) extends ObjDef
+  case class EnumTypeDef(enum: TEnum) extends ObjDef
 
   def objDefForExtType(typ: TExt): ObjDef = {
 
@@ -71,6 +72,7 @@ object Gen extends LazyLogging {
       }
       case either: TEither => singleParam(either)
       case option: TOption => singleParam(option)
+      case enum: TEnum => EnumTypeDef(enum)
       case basic => WrapperDef(FieldDef("value", SimpleTypeDef(basic)))
     }
   }
@@ -128,6 +130,7 @@ object Gen extends LazyLogging {
           case d: StructDef => writeStatic(tag, d, superMap.get(tag), pw)
           case d: WrapperDef => writeWrapperStatic(tag, d, superMap.get(tag), pw)
           case d: UnionDef => writeUnionStatic(tag, d, pw)
+          case d: EnumTypeDef => writeEnumStatic(tag, d, pw)
         }
     }
 
@@ -247,6 +250,57 @@ object Gen extends LazyLogging {
   }
 
   def tab(n: Int): String = Range(0, n).map(_ => "  ").mkString("")
+
+  def writeEnumStatic(name: String, enumDef: EnumTypeDef, pw: PrintWriter): Unit = {
+    logger.debug(s"Writing $name")
+
+    pw.println(s"object $name {")
+    pw.println()
+
+    val itemDefs = enumDef.enum.enumDefs
+
+    itemDefs.foreach { ed =>
+      pw.println(tab(1) + s"""case object ${ed.label} extends $name("${ed.label}", ${ed.value})""")
+    }
+    pw.println()
+
+    pw.println(tab(1) + s"def read(element: Value, ctx: ReaderContext): Either[String, $name] = {")
+    pw.println(tab(2) + s"element match {")
+    pw.println(tab(3) + s"case data: IntegerValue => readInteger(data, ctx)")
+    pw.println(tab(3) + s"case data: ValueString => readString(data, ctx)")
+    pw.println(tab(3) + s"case tagged: TaggedValue =>")
+    pw.println(tab(4) + s"tagged.value match {")
+    pw.println(tab(5) + s"case data: IntegerValue => readInteger(data, ctx)")
+    pw.println(tab(5) + s"case data: ValueString => readString(data, ctx)")
+    pw.println(tab(5) + s"""case other => Left("Type $name did not recognize value type " + other)""")
+    pw.println(tab(4) + "}")
+    pw.println(tab(3) + s"""case other => Left("Type $name did not recognize value type " + other)""")
+    pw.println(tab(2) + "}")
+    pw.println(tab(1) + "}")
+
+    pw.println(tab(1) + s"def readInteger(element: IntegerValue, ctx: ReaderContext): Either[String, $name] = {")
+    pw.println(tab(2) + s"element.toInt match {")
+    itemDefs.foreach(ed => pw.println(tab(3) + s"""case ${ed.value} => Right(${ed.label})"""))
+    pw.println(tab(3) + s"""case other => Left("Enum $name did not recognize integer value " + other)""")
+    pw.println(tab(2) + "}")
+    pw.println(tab(1) + "}")
+
+    pw.println(tab(1) + s"def readString(element: ValueString, ctx: ReaderContext): Either[String, $name] = {")
+    pw.println(tab(2) + s"element.value match {")
+    itemDefs.foreach(ed => pw.println(tab(3) + s"""case "${ed.label}" => Right(${ed.label})"""))
+    pw.println(tab(3) + s"""case other => Left("Enum $name did not recognize string value " + other)""")
+    pw.println(tab(2) + "}")
+    pw.println(tab(1) + "}")
+
+    pw.println(tab(1) + s"def write(obj: $name): TaggedValue = {")
+    pw.println(tab(2) + s"""TaggedValue("$name", ValueUInt32(obj.value))""")
+    pw.println(tab(1) + "}")
+
+    pw.println("}")
+
+    pw.println(s"""sealed abstract class $name(val name: String, val value: Int)""")
+    pw.println()
+  }
 
   def writeUnionStatic(name: String, unionDef: UnionDef, pw: PrintWriter): Unit = {
     logger.debug(s"Writing $name")
