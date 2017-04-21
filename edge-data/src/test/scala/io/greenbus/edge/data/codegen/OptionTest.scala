@@ -18,80 +18,13 @@
  */
 package io.greenbus.edge.data.codegen
 
-import java.io.{ File, FileOutputStream, PrintWriter }
+import java.io._
 
 import com.google.common.io.Files
-import io.greenbus.edge.data.{ TaggedValue, ValueMap }
-import io.greenbus.edge.data.mapping.{ RootCtx, SimpleReaderContext }
 import io.greenbus.edge.data.schema._
 
-/*
-object Schema {
+object OptionTest {
 
-  val linkLayer: TExt = {
-    TExt("LinkLayer", TStruct(Vector(
-      StructFieldDef("isMaster", TBool, 0),
-      StructFieldDef("localAddress", TUInt32, 1),
-      StructFieldDef("remoteAddress", TUInt32, 2),
-      StructFieldDef("userConfirmations", TBool, 3),
-      StructFieldDef("ackTimeoutMs", TUInt64, 4),
-      StructFieldDef("numRetries", TUInt32, 5))))
-  }
-  val appLayer: TExt = {
-    TExt("AppLayer", TStruct(Vector(
-      StructFieldDef("timeoutMs", TUInt64, 0),
-      StructFieldDef("maxFragSize", TUInt32, 1),
-      StructFieldDef("numRetries", TUInt32, 2))))
-  }
-  val stackConfig: TExt = {
-    TExt("StackConfig", TStruct(Vector(
-      StructFieldDef("linkLayer", linkLayer, 0),
-      StructFieldDef("appLayer", appLayer, 1))))
-  }
-  val masterSettings: TExt = {
-    TExt("MasterSettings", TStruct(Vector(
-      StructFieldDef("allowTimeSync", TBool, 0),
-      StructFieldDef("taskRetryMs", TUInt64, 1),
-      StructFieldDef("integrityPeriodMs", TUInt64, 2))))
-  }
-  val scan: TExt = {
-    TExt("Scan", TStruct(Vector(
-      StructFieldDef("enableClass1", TBool, 0),
-      StructFieldDef("enableClass2", TBool, 1),
-      StructFieldDef("enableClass3", TBool, 2),
-      StructFieldDef("periodMs", TUInt64, 3))))
-  }
-  val unsol: TExt = {
-    TExt("Unsol", TStruct(Vector(
-      StructFieldDef("doTask", TBool, 0),
-      StructFieldDef("enable", TBool, 1),
-      StructFieldDef("enableClass1", TBool, 2),
-      StructFieldDef("enableClass2", TBool, 3),
-      StructFieldDef("enableClass3", TBool, 4))))
-  }
-
-  val master: TExt = {
-    TExt("Master", TStruct(Vector(
-      StructFieldDef("stack", stackConfig, 0),
-      StructFieldDef("masterSettings", masterSettings, 1),
-      StructFieldDef("scanList", TList(scan), 2),
-      StructFieldDef("unsol", unsol, 3))))
-  }
-
-  def all = Seq(linkLayer, appLayer, stackConfig, masterSettings, scan, unsol, master)
-}
-
-object DnpGatewaySchema {
-
-  val tcpClient: TExt = {
-    TExt("TCPClient", TStruct(Vector(
-      StructFieldDef("host", TString, 0),
-      StructFieldDef("port", TUInt32, 1),
-      StructFieldDef("retryMs", TUInt64, 2))))
-  }
-  val selectIndex: TExt = {
-    TExt("IndexSelect", TUInt32)
-  }
   val selectRange: TExt = {
     TExt("IndexRange", TStruct(Vector(
       StructFieldDef("start", TUInt32, 0),
@@ -101,35 +34,6 @@ object DnpGatewaySchema {
     //TExt("IndexSet", TList(TUnion(Set(selectIndex, selectRange))))
     TExt("IndexSet", TList(selectRange))
   }
-
-  val inputModel: TExt = {
-    TExt("InputModel", TStruct(Vector(
-      StructFieldDef("binaryInputs", indexSet, 0),
-      StructFieldDef("analogInputs", indexSet, 1),
-      StructFieldDef("counterInputs", indexSet, 2),
-      StructFieldDef("binaryOutputs", indexSet, 3),
-      StructFieldDef("analogOutputs", indexSet, 4))))
-  }
-
-  val outputModel: TExt = {
-    TExt("OutputModel", TStruct(Vector(
-      StructFieldDef("binaries", indexSet, 0),
-      StructFieldDef("setpoints", indexSet, 1))))
-  }
-
-  val gateway: TExt = {
-    TExt("DNP3Gateway", TStruct(Vector(
-      StructFieldDef("master", Schema.master, 0),
-      StructFieldDef("client", tcpClient, 1),
-      StructFieldDef("inputModel", inputModel, 2),
-      StructFieldDef("outputModel", outputModel, 3))))
-  }
-
-  def all = Seq(tcpClient, selectIndex, selectRange, indexSet, inputModel, outputModel, gateway)
-}
-
- */
-object OptionTest {
 
   val typeCast = TExt("TypeCast", TStruct(Vector(
     StructFieldDef("target", TString, 0))))
@@ -142,7 +46,8 @@ object OptionTest {
 
   val frontendDataKey = TExt("FrontendDataKey", TStruct(Vector(
     StructFieldDef("gatewayKey", TString, 0),
-    StructFieldDef("transforms", transformDescriptor, 1))))
+    StructFieldDef("transforms", transformDescriptor, 1),
+    StructFieldDef("indexSet", indexSet, 2))))
 
   def main(args: Array[String]): Unit = {
     val all = Gen.collectObjDefs(frontendDataKey, Map())
@@ -163,10 +68,9 @@ object OptionTest {
   }
 }
 
-/*
-object ReadWriteTest {
+/*object ReadWriteTest {
 
-  val ex = FrontendDataKey("myGateway", TypeCast("myTarget"))
+  val ex = FrontendDataKey("myGateway", TypeCast("myTarget"), IndexSet(Seq(IndexRange(0, 10), IndexRange(20, 29))))
 
   def main(args: Array[String]): Unit = {
 
@@ -191,8 +95,7 @@ object ReadWriteTest {
     }
 
   }
-}
-*/
+}*/
 
 /*
 

@@ -50,11 +50,11 @@ object MappingLibrary {
   }
 
   def readFieldSubStruct[A](fieldName: String, element: Value, tag: String, read: (Value, ReaderContext) => Either[String, A], ctx: ReaderContext): Either[String, A] = {
-
-    element match {
+    read(element, ctx.structField(tag, fieldName))
+    /*element match {
       case v: TaggedValue => read(v.value, ctx.structField(tag, fieldName))
       case other => read(other, ctx.structField(tag, fieldName))
-    }
+    }*/
   }
 
   def readBool(elem: Value, ctx: ReaderContext): Either[String, Boolean] = {

@@ -267,7 +267,6 @@ object Gen extends LazyLogging {
     unionDef.tags.foreach(tag => pw.println(tab(3) + s"case data: $tag => $tag.write(data)"))
     pw.println(tab(3) + s"""case other => throw new IllegalArgumentException("Type $name did not recognize " + other)""")
     pw.println(tab(2) + s"}")
-    //pw.println(tab(2) + s"""TaggedValue("$name", built)""")
     pw.println(tab(1) + "}")
 
     pw.println("}")
@@ -288,36 +287,41 @@ object Gen extends LazyLogging {
 
     pw.println(tab(1) + s"def read(element: Value, ctx: ReaderContext): Either[String, $name] = {")
     pw.println(tab(2) + s"element match {")
-    pw.println(tab(3) + s"case data: $typeSignature =>")
+    pw.println(tab(3) + s"case data: $typeSignature => readRepr(data, ctx)")
+    pw.println(tab(3) + s"case tagged: TaggedValue =>")
+    pw.println(tab(4) + s"tagged.value match {")
+    pw.println(tab(5) + s"case data: $typeSignature => readRepr(data, ctx)")
+    pw.println(tab(5) + s"""case other => Left("Type $name did not recognize value type " + other)""")
+    pw.println(tab(4) + "}")
+    pw.println(tab(3) + s"""case other => Left("Type $name did not recognize value type " + other)""")
+    pw.println(tab(2) + "}")
+    pw.println(tab(1) + "}")
+
+    pw.println(tab(1) + s"def readRepr(element: $typeSignature, ctx: ReaderContext): Either[String, $name] = {")
     wrapper.field.typ match {
       case std: SimpleTypeDef => {
         val readFun = readFuncForSimpleTyp(std.typ)
-        pw.println(tab(4) + "" + s"""$readFun(data, ctx).map(result => $name(result))""")
+        pw.println(tab(2) + "" + s"""$readFun(element, ctx).map(result => $name(result))""")
       }
       case ptd: ParamTypeDef => {
         ptd.typ match {
           case typ: TList => {
             val paramRead = readFuncForTypeParam(typ.paramType)
             val paramSig = fieldSignatureFor(typ.paramType)
-            pw.println(tab(4) + "" + s"""$utilKlass.readList[$paramSig](data, $utilKlass.readTup[$paramSig](_, _, $paramRead), ctx).map(result => $name(result))""")
+            pw.println(tab(2) + "" + s"""$utilKlass.readList[$paramSig](element, $utilKlass.readTup[$paramSig](_, _, $paramRead), ctx).map(result => $name(result))""")
           }
           case other => throw new IllegalArgumentException(s"Parameterized type not handled: $other")
         }
       }
       case ttd: TagTypeDef => {
         val tagName = ttd.tag
-        pw.println(tab(4) + "" + s"""$utilKlass.readFieldSubStruct("$name", data, "$tagName", $tagName.read, ctx).map(result => $name(result))""")
+        pw.println(tab(2) + "" + s"""$utilKlass.readFieldSubStruct("$name", element, "$tagName", $tagName.read, ctx).map(result => $name(result))""")
       }
     }
-    pw.println(tab(3) + s"""case _ => Left("$name must be $typeSignature type")""")
-    pw.println(tab(2) + s"}")
     pw.println(tab(1) + "}")
 
     pw.println(tab(1) + s"def write(obj: $name): TaggedValue = {")
-
     pw.println(tab(2) + "val built = " + writeCallFor(wrapper.field.typ, s"obj.${wrapper.field.name}"))
-
-    //pw.println(tab(2) + "))")
     pw.println()
     pw.println(tab(2) + s"""TaggedValue("$name", built)""")
     pw.println(tab(1) + "}")
@@ -336,43 +340,49 @@ object Gen extends LazyLogging {
 
     pw.println(tab(1) + s"def read(element: Value, ctx: ReaderContext): Either[String, $name] = {")
     pw.println(tab(2) + s"element match {")
-    pw.println(tab(3) + s"case data: ValueMap =>")
+    pw.println(tab(3) + s"case data: ValueMap => readMap(data, ctx)")
+    pw.println(tab(3) + s"case tagged: TaggedValue =>")
+    pw.println(tab(4) + s"tagged.value match {")
+    pw.println(tab(5) + s"case data: ValueMap => readMap(data, ctx)")
+    pw.println(tab(5) + s"""case other => Left("Type $name did not recognize value type " + other)""")
+    pw.println(tab(4) + "}")
+    pw.println(tab(3) + s"""case other => Left("Type $name did not recognize value type " + other)""")
+    pw.println(tab(2) + "}")
+    pw.println(tab(1) + "}")
+
+    pw.println(tab(1) + s"def readMap(element: ValueMap, ctx: ReaderContext): Either[String, $name] = {")
     objDef.fields.foreach { fd =>
       val name = fd.name
       fd.typ match {
         case std: SimpleTypeDef => {
           val readFun = readFuncForSimpleTyp(std.typ)
-          pw.println(tab(4) + "" + s"""val $name = $utilKlass.getMapField("$name", data).flatMap(elem => $readFun(elem, ctx))""")
+          pw.println(tab(2) + "" + s"""val $name = $utilKlass.getMapField("$name", element).flatMap(elem => $readFun(elem, ctx))""")
         }
         case ptd: ParamTypeDef => {
           ptd.typ match {
             case typ: TList => {
               val paramRead = readFuncForTypeParam(typ.paramType)
               val paramSig = fieldSignatureFor(typ.paramType)
-              pw.println(tab(4) + "" + s"""val $name = $utilKlass.getMapField("$name", data).flatMap(elem => $utilKlass.readList[$paramSig](elem, $utilKlass.readTup[$paramSig](_, _, $paramRead), ctx))""")
+              pw.println(tab(2) + "" + s"""val $name = $utilKlass.getMapField("$name", element).flatMap(elem => $utilKlass.readList[$paramSig](elem, $utilKlass.readTup[$paramSig](_, _, $paramRead), ctx))""")
             }
             case other => throw new IllegalArgumentException(s"Parameterized type not handled: $other")
           }
         }
         case ttd: TagTypeDef => {
           val tagName = ttd.tag
-          pw.println(tab(4) + "" + s"""val $name = $utilKlass.getMapField("$name", data).flatMap(elem => $utilKlass.readFieldSubStruct("$name", elem, "$tagName", $tagName.read, ctx))""")
+          pw.println(tab(2) + "" + s"""val $name = $utilKlass.getMapField("$name", element).flatMap(elem => $utilKlass.readFieldSubStruct("$name", elem, "$tagName", $tagName.read, ctx))""")
         }
       }
     }
     pw.println()
-
     val isRightJoin = objDef.fields.map(f => f.name + ".isRight").mkString(" && ")
-    pw.println(tab(4) + s"if ($isRightJoin) {")
+    pw.println(tab(2) + s"if ($isRightJoin) {")
     val rightGetJoin = objDef.fields.map(_.name + ".right.get").mkString(", ")
-    pw.println(tab(5) + s"Right($name($rightGetJoin))")
-    pw.println(tab(4) + "} else {")
+    pw.println(tab(3) + s"Right($name($rightGetJoin))")
+    pw.println(tab(2) + "} else {")
     val leftJoin = objDef.fields.map(_.name + ".left.toOption").mkString(", ")
-    pw.println(tab(5) + s"""Left(Seq($leftJoin).flatten.mkString(", "))""")
-    pw.println(tab(4) + "}")
-    pw.println()
-    pw.println(tab(3) + s"""case _ => Left("$name must be ValueMap type")""")
-    pw.println(tab(2) + s"}")
+    pw.println(tab(3) + s"""Left(Seq($leftJoin).flatten.mkString(", "))""")
+    pw.println(tab(2) + "}")
     pw.println(tab(1) + "}")
     pw.println()
 
