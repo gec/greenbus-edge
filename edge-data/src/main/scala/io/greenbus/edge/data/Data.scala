@@ -121,3 +121,5 @@ case class ValueBytes(value: Array[Byte]) extends IndexableValue {
     util.Arrays.hashCode(value)
   }
 }
+
+case object ValueNone extends BasicValue

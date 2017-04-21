@@ -45,6 +45,10 @@ object MappingLibrary {
     }
   }
 
+  def optMapField(name: String, map: ValueMap): Option[Value] = {
+    map.value.get(ValueString(name))
+  }
+
   def getMapField(name: String, map: ValueMap): Either[String, Value] = {
     map.value.get(ValueString(name)).map(r => Right(r)).getOrElse(Left(s"Struct map did not contain field $name"))
   }
@@ -113,6 +117,13 @@ object MappingLibrary {
       case v: TaggedValue => readTup(v.value, ctx, read)
       case v: ValueMap => read(v, ctx)
       case _ => Left(s"${ctx.context} error: expected tuple value, saw ${descName(elem)}")
+    }
+  }
+
+  def asOption(elem: Value): Option[Value] = {
+    elem match {
+      case ValueNone => None
+      case other => Some(other)
     }
   }
 

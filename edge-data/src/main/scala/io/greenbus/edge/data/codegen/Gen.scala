@@ -163,6 +163,7 @@ object Gen extends LazyLogging {
       case TDouble => "Double"
       case TString => "String"
       case t: TList => s"Seq[${fieldSignatureFor(t.paramType)}]"
+      case t: TOption => s"Option[${fieldSignatureFor(t.paramType)}]"
       //case t: TUnion => "Any"
       case t: TExt => t.tag
       case t => throw new IllegalArgumentException(s"Type signature unhandled: $t")
@@ -190,6 +191,9 @@ object Gen extends LazyLogging {
         t match {
           case list: TList => {
             s"$utilKlass.writeList($paramDeref, ${writeFuncFor(list.paramType)})"
+          }
+          case opt: TOption => {
+            s"$paramDeref.map(p => " + writeFuncFor(opt.paramType) + s"(p)" + ").getOrElse(ValueNone)"
           }
           case _ => throw new IllegalArgumentException(s"Unhandled parameterized type def")
         }
@@ -364,6 +368,11 @@ object Gen extends LazyLogging {
               val paramRead = readFuncForTypeParam(typ.paramType)
               val paramSig = fieldSignatureFor(typ.paramType)
               pw.println(tab(2) + "" + s"""val $name = $utilKlass.getMapField("$name", element).flatMap(elem => $utilKlass.readList[$paramSig](elem, $utilKlass.readTup[$paramSig](_, _, $paramRead), ctx))""")
+            }
+            case optTyp: TOption => {
+              val paramRead = readFuncForTypeParam(optTyp.paramType)
+              pw.println(tab(2) + "" + s"""val $name = $utilKlass.optMapField("$name", element).flatMap(elem => $utilKlass.asOption(elem)).map(elem => $paramRead(elem, ctx).map(r => Some(r))).getOrElse(Right(None))""")
+
             }
             case other => throw new IllegalArgumentException(s"Parameterized type not handled: $other")
           }

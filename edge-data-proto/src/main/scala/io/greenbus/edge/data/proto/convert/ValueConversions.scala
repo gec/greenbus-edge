@@ -19,7 +19,7 @@
 package io.greenbus.edge.data.proto.convert
 
 import com.google.protobuf.ByteString
-import io.greenbus.edge.data.{ ValueMap, proto }
+import io.greenbus.edge.data.{ ValueMap, ValueNone, proto }
 import io.greenbus.edge.data
 
 import scala.collection.JavaConverters._
@@ -128,6 +128,7 @@ object ValueConversions {
       case v: data.ValueList => proto.Value.newBuilder().setListValue(toProto(v)).build()
       case v: data.ValueMap => proto.Value.newBuilder().setMapValue(toProto(v)).build()
       case v: data.TaggedValue => proto.Value.newBuilder().setTaggedValue(toProto(v)).build()
+      case ValueNone => proto.Value.newBuilder().build()
       case other => throw new IllegalArgumentException(s"Conversion not implemented for $other")
     }
   }

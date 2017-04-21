@@ -47,7 +47,8 @@ object OptionTest {
   val frontendDataKey = TExt("FrontendDataKey", TStruct(Vector(
     StructFieldDef("gatewayKey", TString, 0),
     StructFieldDef("transforms", transformDescriptor, 1),
-    StructFieldDef("indexSet", indexSet, 2))))
+    StructFieldDef("indexSet", indexSet, 2),
+    StructFieldDef("unit", TOption(TString), 3))))
 
   def main(args: Array[String]): Unit = {
     val all = Gen.collectObjDefs(frontendDataKey, Map())
@@ -68,9 +69,10 @@ object OptionTest {
   }
 }
 
-/*object ReadWriteTest {
+/*
+object ReadWriteTest {
 
-  val ex = FrontendDataKey("myGateway", TypeCast("myTarget"), IndexSet(Seq(IndexRange(0, 10), IndexRange(20, 29))))
+  val ex = FrontendDataKey("myGateway", TypeCast("myTarget"), IndexSet(Seq(IndexRange(0, 10), IndexRange(20, 29))), None)
 
   def main(args: Array[String]): Unit = {
 
@@ -95,7 +97,8 @@ object OptionTest {
     }
 
   }
-}*/
+}
+*/
 
 /*
 
