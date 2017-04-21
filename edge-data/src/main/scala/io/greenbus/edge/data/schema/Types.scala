@@ -38,6 +38,8 @@ case object TDouble extends PrimitiveValueType
 
 case object TString extends BasicValueType
 
+//case object TAbstract extends BasicValueType
+
 case class TUnion(unionTypes: Set[VTValueElem]) extends BasicValueType
 case class TOption(paramType: VTValueElem) extends BasicValueType
 case class TEither(leftType: VTValueElem, rightType: VTValueElem) extends BasicValueType

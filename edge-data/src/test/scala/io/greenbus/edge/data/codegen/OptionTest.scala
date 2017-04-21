@@ -21,6 +21,8 @@ package io.greenbus.edge.data.codegen
 import java.io.{ File, FileOutputStream, PrintWriter }
 
 import com.google.common.io.Files
+import io.greenbus.edge.data.{ TaggedValue, ValueMap }
+import io.greenbus.edge.data.mapping.{ RootCtx, SimpleReaderContext }
 import io.greenbus.edge.data.schema._
 
 /*
@@ -147,7 +149,7 @@ object OptionTest {
 
     println(all)
 
-    val f = new File("target/generated-sources/scala/io/greenbus/edge/data/codegen/test/Model.scala")
+    val f = new File("edge-data/target/generated-sources/scala/io/greenbus/edge/data/codegen/test/Model.scala")
     Files.createParentDirs(f)
     if (!f.exists()) {
       f.createNewFile()
@@ -160,6 +162,37 @@ object OptionTest {
 
   }
 }
+
+/*
+object ReadWriteTest {
+
+  val ex = FrontendDataKey("myGateway", TypeCast("myTarget"))
+
+  def main(args: Array[String]): Unit = {
+
+    val written = FrontendDataKey.write(ex)
+    println(written)
+
+    val readEither = written match {
+      case t: TaggedValue =>
+        t.value match {
+          case tt: ValueMap => FrontendDataKey.read(tt, SimpleReaderContext(Vector(RootCtx("DNP3Gateway"))))
+          case _ => throw new IllegalArgumentException(s"Written was not a tagged tuple type")
+        }
+      case _ => throw new IllegalArgumentException(s"Written was not a tagged tuple type")
+    }
+
+    readEither match {
+      case Left(err) => println("ERROR: " + err)
+      case Right(read) =>
+        println(ex)
+        println(read)
+        println(ex == read)
+    }
+
+  }
+}
+*/
 
 /*
 

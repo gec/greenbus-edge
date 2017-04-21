@@ -62,7 +62,13 @@ object Gen extends LazyLogging {
       }
       case list: TList => singleParam(list)
       case map: TMap => singleParam(map)
-      case union: TUnion => singleParam(union)
+      case union: TUnion => {
+        val tags = union.unionTypes.map {
+          case t: TExt => t.tag
+          case other => throw new IllegalArgumentException(s"Union type must be extensible types: $other")
+        }
+        UnionDef(tags.toSeq)
+      }
       case either: TEither => singleParam(either)
       case option: TOption => singleParam(option)
       case basic => WrapperDef(FieldDef("value", SimpleTypeDef(basic)))
@@ -91,7 +97,24 @@ object Gen extends LazyLogging {
     }
   }
 
+  def superTypeMap(objs: Map[String, ObjDef]): Map[String, String] = {
+    // TODO: handle multiple?
+    val result = Vector.newBuilder[(String, String)]
+    objs.foreach {
+      case (tag, objDef) => {
+        objDef match {
+          case UnionDef(subs) => subs.foreach(sub => result += (sub -> tag))
+          case _ =>
+        }
+      }
+      case _ =>
+    }
+    result.result().toMap
+  }
+
   def output(pkg: String, objs: Map[String, ObjDef], pw: PrintWriter): Unit = {
+
+    val superMap = superTypeMap(objs)
 
     pw.println(s"package $pkg")
     pw.println()
@@ -102,8 +125,9 @@ object Gen extends LazyLogging {
     objs.foreach {
       case (tag, obj) =>
         obj match {
-          case d: StructDef => writeStatic(tag, d, pw)
-          case d: WrapperDef => writeWrapperStatic(tag, d, pw)
+          case d: StructDef => writeStatic(tag, d, superMap.get(tag), pw)
+          case d: WrapperDef => writeWrapperStatic(tag, d, superMap.get(tag), pw)
+          case d: UnionDef => writeUnionStatic(tag, d, pw)
         }
     }
 
@@ -205,7 +229,7 @@ object Gen extends LazyLogging {
       case t: TExt => t.tag
       case t: TList => "ValueList"
       case t: TMap => "ValueMap"
-      case t: TUnion => containerTag
+      // case t: TUnion => containerTag
       case TBool => "ValueBool"
       case TInt32 => "ValueInt32"
       case TUInt32 => "ValueUInt32"
@@ -220,8 +244,39 @@ object Gen extends LazyLogging {
 
   def tab(n: Int): String = Range(0, n).map(_ => "  ").mkString("")
 
-  def writeWrapperStatic(name: String, wrapper: WrapperDef, pw: PrintWriter): Unit = {
+  def writeUnionStatic(name: String, unionDef: UnionDef, pw: PrintWriter): Unit = {
     logger.debug(s"Writing $name")
+
+    pw.println(s"object $name {")
+    pw.println()
+
+    pw.println(tab(1) + s"def read(element: Value, ctx: ReaderContext): Either[String, $name] = {")
+    pw.println(tab(2) + s"element match {")
+    pw.println(tab(3) + s"""case t: TaggedValue => """)
+    pw.println(tab(4) + s"""t.tag match {""")
+    unionDef.tags.foreach(tag => pw.println(tab(5) + s"""case "$tag" => $tag.read(element, ctx)"""))
+    pw.println(tab(5) + s"""case other => throw new IllegalArgumentException("Type $name did not union type tag " + other)""")
+    pw.println(tab(4) + s"""}""")
+
+    pw.println(tab(3) + s"""case other => throw new IllegalArgumentException("Type $name did not recognize " + other)""")
+    pw.println(tab(2) + s"}")
+    pw.println(tab(1) + "}")
+
+    pw.println(tab(1) + s"def write(obj: $name): TaggedValue = {")
+    pw.println(tab(2) + s"obj match {")
+    unionDef.tags.foreach(tag => pw.println(tab(3) + s"case data: $tag => $tag.write(data)"))
+    pw.println(tab(3) + s"""case other => throw new IllegalArgumentException("Type $name did not recognize " + other)""")
+    pw.println(tab(2) + s"}")
+    //pw.println(tab(2) + s"""TaggedValue("$name", built)""")
+    pw.println(tab(1) + "}")
+
+    pw.println("}")
+
+    pw.println(s"""sealed trait $name""")
+    pw.println()
+  }
+
+  def writeWrapperStatic(name: String, wrapper: WrapperDef, superType: Option[String], pw: PrintWriter): Unit = {
     pw.println(s"object $name {")
     pw.println()
 
@@ -269,11 +324,13 @@ object Gen extends LazyLogging {
 
     pw.println("}")
 
-    pw.println(s"""case class $name(${wrapper.field.name}: ${signatureFor(wrapper.field.typ)})""")
+    val extStr = superType.map(t => s" extends $t").getOrElse("")
+
+    pw.println(s"""case class $name(${wrapper.field.name}: ${signatureFor(wrapper.field.typ)})$extStr""")
     pw.println()
   }
 
-  def writeStatic(name: String, objDef: StructDef, pw: PrintWriter): Unit = {
+  def writeStatic(name: String, objDef: StructDef, superType: Option[String], pw: PrintWriter): Unit = {
     pw.println(s"object $name {")
     pw.println()
 
@@ -334,7 +391,9 @@ object Gen extends LazyLogging {
 
     val fieldDescs = objDef.fields.map(fd => s"${fd.name}: ${signatureFor(fd.typ)}")
 
-    pw.println(s"""case class $name(${fieldDescs.mkString(", ")})""")
+    val extStr = superType.map(t => s" extends $t").getOrElse("")
+
+    pw.println(s"""case class $name(${fieldDescs.mkString(", ")})$extStr""")
     pw.println()
   }
 
