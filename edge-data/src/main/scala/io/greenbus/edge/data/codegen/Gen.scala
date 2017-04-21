@@ -124,7 +124,7 @@ object Gen extends LazyLogging {
     pw.println("import io.greenbus.edge.data._")
     pw.println()
 
-    objs.foreach {
+    objs.toVector.sortBy(_._1).foreach {
       case (tag, obj) =>
         obj match {
           case d: StructDef => writeStatic(tag, d, superMap.get(tag), pw)
