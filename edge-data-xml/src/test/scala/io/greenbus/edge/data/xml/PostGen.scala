@@ -20,7 +20,7 @@ package io.greenbus.edge.data.xml
 
 import java.io._
 
-
+/*
 import com.google.common.io.Files
 import io.greenbus.edge.fep.config.model._
 import io.greenbus.edge.fep.dnp3.config.model._
@@ -49,7 +49,13 @@ object XmlWriterTester {
 
     val stringOut = new FileOutputStream(f)
     //XmlWriter.write(obj, stringOut, Some("io.greenbus.edge.fep.dnp3.config.model"))
-    SchemaGuidedXmlWriter.write(obj, DnpGatewaySchema.gateway, stringOut, Some("io.greenbus.edge.fep.dnp3.config.model"))
+
+    val xmlNs = XmlNamespaceInfo(DnpGatewaySchema.gateway.ns.name,
+      Map(
+        (DnpGatewaySchema.ns.name, XmlNsDecl("dnp3", DnpGatewaySchema.ns.name)),
+        (FrontendSchema.ns.name, XmlNsDecl("fep", FrontendSchema.ns.name))))
+
+    SchemaGuidedXmlWriter.write(obj, DnpGatewaySchema.gateway, stringOut, xmlNs)
     stringOut.close()
 
     /*val stringIn = new FileInputStream(f)
@@ -193,3 +199,4 @@ object PostGen {
             requestBooleanLabels = None))))
   }
 }
+*/
