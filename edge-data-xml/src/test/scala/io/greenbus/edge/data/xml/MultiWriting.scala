@@ -95,7 +95,7 @@ object DnpXmlSchemaWriter {
 
 object FrontendSchema {
 
-  val ns = TypeNamespace("io.greenbus.edge.fep.config.model", Map("scalaPackage" -> "io.greenbus.edge.fep.config.model"))
+  val ns = TypeNamespace("io.greenbus.edge.fep.config.model", Map("scalaPackage" -> "io.greenbus.edge.fep.config.model", "xmlns" -> "io.greenbus.edge.fep.config.model"))
 
   val sampleTypeEnum: TExt = {
     TExt(ns, "SampleType", TEnum(Seq(
@@ -240,7 +240,7 @@ object FrontendSchema {
 
 object DnpGatewaySchema {
 
-  val ns = TypeNamespace("io.greenbus.edge.fep.dnp3.config.model", Map("scalaPackage" -> "io.greenbus.edge.fep.dnp3.config.model"))
+  val ns = TypeNamespace("io.greenbus.edge.fep.dnp3.config.model", Map("scalaPackage" -> "io.greenbus.edge.fep.dnp3.config.model", "xmlns" -> "io.greenbus.edge.fep.dnp3.config.model"))
 
   val linkLayer: TExt = {
     TExt(ns, "LinkLayer", TStruct(Vector(
