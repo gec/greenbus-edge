@@ -25,26 +25,28 @@ import io.greenbus.edge.data.schema._
 
 object OptionTest {
 
+  val ns = TypeNamespace("my.fake.namespace.first", options = Map("scalaPackage" -> "io.greenbus.edge.data.codegen.test"))
+
   val selectRange: TExt = {
-    TExt("IndexRange", TStruct(Vector(
+    TExt(ns, "IndexRange", TStruct(Vector(
       StructFieldDef("start", TUInt32, 0),
       StructFieldDef("count", TUInt32, 1))))
   }
   val indexSet: TExt = {
     //TExt("IndexSet", TList(TUnion(Set(selectIndex, selectRange))))
-    TExt("IndexSet", TList(selectRange))
+    TExt(ns, "IndexSet", TList(selectRange))
   }
 
-  val typeCast = TExt("TypeCast", TStruct(Vector(
+  val typeCast = TExt(ns, "TypeCast", TStruct(Vector(
     StructFieldDef("target", TString, 0))))
 
-  val linearTransform = TExt("LinearTransform", TStruct(Vector(
+  val linearTransform = TExt(ns, "LinearTransform", TStruct(Vector(
     StructFieldDef("scale", TDouble, 0),
     StructFieldDef("offset", TDouble, 1))))
 
-  val transformDescriptor = TExt("TransformDescriptor", TUnion(Set(typeCast, linearTransform)))
+  val transformDescriptor = TExt(ns, "TransformDescriptor", TUnion(Set(typeCast, linearTransform)))
 
-  val seriesType = TExt("SeriesType", TEnum(Seq(
+  val seriesType = TExt(ns, "SeriesType", TEnum(Seq(
     EnumDef("AnalogStatus", 0),
     EnumDef("AnalogSample", 1),
     EnumDef("CounterStatus", 2),
@@ -52,7 +54,7 @@ object OptionTest {
     EnumDef("BooleanStatus", 4),
     EnumDef("IntegerEnum", 5))))
 
-  val frontendDataKey = TExt("FrontendDataKey", TStruct(Vector(
+  val frontendDataKey = TExt(ns, "FrontendDataKey", TStruct(Vector(
     StructFieldDef("gatewayKey", TString, 0),
     StructFieldDef("transforms", transformDescriptor, 1),
     StructFieldDef("indexSet", indexSet, 2),
@@ -60,7 +62,7 @@ object OptionTest {
     StructFieldDef("seriesType", seriesType, 4))))
 
   def main(args: Array[String]): Unit = {
-    val all = Gen.collectObjDefs(frontendDataKey, Map())
+    val all = Gen.collectObjDefs(ns.name, frontendDataKey, Map())
 
     println(all)
 
@@ -70,12 +72,23 @@ object OptionTest {
       f.createNewFile()
     }
 
-    //val fw = new PrintWriter("dnp3-gateway/fakesrc/testfile.scala" /*new FileOutputStream(new File("testdir/testfile.scala"))*/ )
     val fw = new PrintWriter(new FileOutputStream(f))
-    Gen.output("io.greenbus.edge.data.codegen.test", all, fw)
+    Gen.output("io.greenbus.edge.data.codegen.test", ns.name, all, fw)
     fw.flush()
-
   }
+}
+
+object SecondSchema {
+
+  val ns = TypeNamespace("my.fake.namespace.second", options = Map("scalaPackage" -> "io.greenbus.edge.data.codegen.test2"))
+
+  val secondSchemaStruct = TExt(ns, "SecondSchemaStruct", TStruct(Vector(
+    StructFieldDef("localKey", TString, 0),
+    StructFieldDef("unit", TOption(TString), 1))))
+
+  val masterStruct = TExt(ns, "MasterStruct", TStruct(Vector(
+    StructFieldDef("secondSchema", secondSchemaStruct, 0),
+    StructFieldDef("originalSchema", OptionTest.frontendDataKey, 1))))
 }
 
 /*

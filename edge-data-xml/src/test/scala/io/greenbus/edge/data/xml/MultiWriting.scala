@@ -27,17 +27,32 @@ object MultiWriting {
 
 }
 
+/*
 object FepXmlSchemaWriter {
 
   def main(args: Array[String]): Unit = {
 
-    val f = new File("testschemas/test.xsd")
+    val f = new File("testschemas/fep.xsd")
     Files.createParentDirs(f)
     if (!f.exists()) {
       f.createNewFile()
     }
 
     SchemaWriter.write(FrontendSchema.all, Seq(FrontendSchema.frontendConfiguration), "io.greenbus.edge.fep.config.model", new FileOutputStream(f))
+  }
+}
+
+object DnpXmlSchemaWriter {
+
+  def main(args: Array[String]): Unit = {
+
+    val f = new File("testschemas/dnp.xsd")
+    Files.createParentDirs(f)
+    if (!f.exists()) {
+      f.createNewFile()
+    }
+
+    SchemaWriter.write(DnpGatewaySchema.all ++ Schema.all, Seq(DnpGatewaySchema.gateway), "io.greenbus.edge.fep.dnp3.config.model", new FileOutputStream(f))
   }
 }
 
@@ -334,3 +349,4 @@ object DnpGatewaySchema {
     outputModel,
     gateway)
 }
+*/ 

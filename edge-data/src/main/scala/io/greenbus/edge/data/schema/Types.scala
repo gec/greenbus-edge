@@ -18,11 +18,13 @@
  */
 package io.greenbus.edge.data.schema
 
+case class TypeNamespace(name: String, options: Map[String, String])
+
 sealed trait ValueType
 case class VTField(fieldName: String, fieldType: VTValueElem) extends ValueType
 
 sealed trait VTValueElem extends ValueType
-case class TExt(tag: String, reprType: BasicValueType) extends VTValueElem
+case class TExt(ns: TypeNamespace, tag: String, reprType: BasicValueType) extends VTValueElem
 
 sealed trait BasicValueType extends VTValueElem
 sealed trait PrimitiveValueType extends BasicValueType

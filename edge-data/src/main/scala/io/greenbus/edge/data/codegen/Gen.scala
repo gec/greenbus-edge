@@ -28,17 +28,18 @@ object Gen extends LazyLogging {
   sealed trait FieldTypeDef
   case class SimpleTypeDef(typ: ValueType) extends FieldTypeDef
   case class ParamTypeDef(typ: ValueType) extends FieldTypeDef
-  case class TagTypeDef(tag: String) extends FieldTypeDef
+  case class TagTypeDef(tag: String, ns: TypeNamespace) extends FieldTypeDef
+  //case class ForeignTypeDef(tag: String, foreignNs: TypeNamespace) extends FieldTypeDef
 
   case class FieldDef(name: String, typ: FieldTypeDef)
 
   sealed trait ObjDef
   case class StructDef(fields: Seq[FieldDef]) extends ObjDef
   case class WrapperDef(field: FieldDef) extends ObjDef
-  case class UnionDef(tags: Seq[String]) extends ObjDef
+  case class UnionDef(tags: Seq[(String, TypeNamespace)]) extends ObjDef
   case class EnumTypeDef(enum: TEnum) extends ObjDef
 
-  def objDefForExtType(typ: TExt): ObjDef = {
+  def objDefForExtType(targetNs: String, typ: TExt): ObjDef = {
 
     def singleParam(typ: ValueType): ObjDef = {
       WrapperDef(FieldDef("value", ParamTypeDef(typ)))
@@ -48,7 +49,13 @@ object Gen extends LazyLogging {
       case struct: TStruct => {
         val fields = struct.fields.map { fd =>
           val ftd = fd.typ match {
-            case t: TExt => TagTypeDef(t.tag)
+            case t: TExt =>
+              TagTypeDef(t.tag, t.ns)
+            /*if (t.ns.name == targetNs) {
+                TagTypeDef(t.tag, t.ns)
+              } else {
+                ForeignTypeDef(t.tag, t.ns)
+              }*/
             case t: TList => ParamTypeDef(t)
             case t: TMap => ParamTypeDef(t)
             case t: TUnion => ParamTypeDef(t)
@@ -65,7 +72,7 @@ object Gen extends LazyLogging {
       case map: TMap => singleParam(map)
       case union: TUnion => {
         val tags = union.unionTypes.map {
-          case t: TExt => t.tag
+          case t: TExt => (t.tag, t.ns)
           case other => throw new IllegalArgumentException(s"Union type must be extensible types: $other")
         }
         UnionDef(tags.toSeq)
@@ -77,24 +84,28 @@ object Gen extends LazyLogging {
     }
   }
 
-  def collectObjDefs(typ: VTValueElem, seen: Map[String, ObjDef]): Map[String, ObjDef] = {
+  def collectObjDefs(nsTarget: String, typ: VTValueElem, seen: Map[String, ObjDef]): Map[String, ObjDef] = {
     typ match {
       case ext: TExt => {
-        val obj = objDefForExtType(ext)
-        Map(ext.tag -> obj) ++ collectObjDefs(ext.reprType, seen)
+        if (ext.ns.name == nsTarget) {
+          val obj = objDefForExtType(nsTarget, ext)
+          Map(ext.tag -> obj) ++ collectObjDefs(nsTarget, ext.reprType, seen)
+        } else {
+          Map()
+        }
       }
       case struct: TStruct =>
-        struct.fields.foldLeft(seen) { (accum, fd) => collectObjDefs(fd.typ, accum) }
+        struct.fields.foldLeft(seen) { (accum, fd) => collectObjDefs(nsTarget, fd.typ, accum) }
       case list: TList =>
-        collectObjDefs(list.paramType, seen)
+        collectObjDefs(nsTarget, list.paramType, seen)
       case map: TMap =>
-        collectObjDefs(map.keyType, seen) ++ collectObjDefs(map.valueType, seen)
+        collectObjDefs(nsTarget, map.keyType, seen) ++ collectObjDefs(nsTarget, map.valueType, seen)
       case union: TUnion =>
-        union.unionTypes.foldLeft(seen) { (accum, t) => collectObjDefs(t, accum) }
+        union.unionTypes.foldLeft(seen) { (accum, t) => collectObjDefs(nsTarget, t, accum) }
       case either: TEither =>
-        collectObjDefs(either.leftType, seen) ++ collectObjDefs(either.rightType, seen)
+        collectObjDefs(nsTarget, either.leftType, seen) ++ collectObjDefs(nsTarget, either.rightType, seen)
       case option: TOption =>
-        collectObjDefs(option.paramType, seen)
+        collectObjDefs(nsTarget, option.paramType, seen)
       case basic => seen
     }
   }
@@ -105,7 +116,7 @@ object Gen extends LazyLogging {
     objs.foreach {
       case (tag, objDef) => {
         objDef match {
-          case UnionDef(subs) => subs.foreach(sub => result += (sub -> tag))
+          case UnionDef(subs) => subs.foreach(sub => result += (sub._1 -> tag))
           case _ =>
         }
       }
@@ -114,7 +125,7 @@ object Gen extends LazyLogging {
     result.result().toMap
   }
 
-  def output(pkg: String, objs: Map[String, ObjDef], pw: PrintWriter): Unit = {
+  def output(pkg: String, typNs: String, objs: Map[String, ObjDef], pw: PrintWriter): Unit = {
 
     val superMap = superTypeMap(objs)
 
@@ -142,7 +153,7 @@ object Gen extends LazyLogging {
   def readFuncForTypeParam(typ: ValueType): String = {
     typ match {
       //case t: VTTuple =>
-      case t: TExt => s"${t.tag}.read"
+      case t: TExt => s"${tagType(t)}.read"
       case t => readFuncForSimpleTyp(t)
     }
   }
@@ -151,7 +162,7 @@ object Gen extends LazyLogging {
     ftd match {
       case td: SimpleTypeDef => fieldSignatureFor(td.typ)
       case td: ParamTypeDef => fieldSignatureFor(td.typ)
-      case td: TagTypeDef => td.tag
+      case td: TagTypeDef => tagType(td)
     }
   }
 
@@ -168,7 +179,7 @@ object Gen extends LazyLogging {
       case t: TList => s"Seq[${fieldSignatureFor(t.paramType)}]"
       case t: TOption => s"Option[${fieldSignatureFor(t.paramType)}]"
       //case t: TUnion => "Any"
-      case t: TExt => t.tag
+      case t: TExt => tagType(t)
       case t => throw new IllegalArgumentException(s"Type signature unhandled: $t")
     }
   }
@@ -187,6 +198,10 @@ object Gen extends LazyLogging {
     }
   }
 
+  def getScalaPkg(ns: TypeNamespace): String = {
+    ns.options.getOrElse("scalaPackage", throw new IllegalArgumentException(s"Namespace ${ns.name} did not include scala package"))
+  }
+
   def writeCallFor(ftd: FieldTypeDef, paramDeref: String): String = {
     ftd match {
       case SimpleTypeDef(t) => writeFuncFor(t) + s"($paramDeref)"
@@ -201,7 +216,7 @@ object Gen extends LazyLogging {
           case _ => throw new IllegalArgumentException(s"Unhandled parameterized type def")
         }
       }
-      case TagTypeDef(tag) => s"$tag.write($paramDeref)"
+      case TagTypeDef(tag, ns) => s"${getScalaPkg(ns)}.$tag.write($paramDeref)"
     }
   }
 
@@ -209,13 +224,13 @@ object Gen extends LazyLogging {
     ftd match {
       case SimpleTypeDef(t) => writeFuncFor(t)
       case ParamTypeDef(t) => writeFuncFor(t)
-      case TagTypeDef(tag) => s"$tag.write"
+      case TagTypeDef(tag, ns) => s"${getScalaPkg(ns)}.$tag.write"
     }
   }
 
   def writeFuncFor(typ: ValueType): String = {
     typ match {
-      case t: TExt => s"${t.tag}.write"
+      case t: TExt => s"${tagType(t)}.write"
       case t =>
         typ match {
           case TBool => "ValueBool"
@@ -233,7 +248,7 @@ object Gen extends LazyLogging {
 
   def inputSignatureFor(typ: ValueType, containerTag: String): String = {
     typ match {
-      case t: TExt => t.tag
+      case t: TExt => tagType(t)
       case t: TList => "ValueList"
       case t: TMap => "ValueMap"
       // case t: TUnion => containerTag
@@ -247,6 +262,13 @@ object Gen extends LazyLogging {
       case TString => "ValueString"
       case _ => throw new IllegalArgumentException(s"Type unhandled: $typ")
     }
+  }
+
+  private def tagType(t: TagTypeDef): String = {
+    s"${getScalaPkg(t.ns)}.${t.tag}"
+  }
+  private def tagType(t: TExt): String = {
+    s"${getScalaPkg(t.ns)}.${t.tag}"
   }
 
   def tab(n: Int): String = Range(0, n).map(_ => "  ").mkString("")
@@ -312,7 +334,7 @@ object Gen extends LazyLogging {
     pw.println(tab(2) + s"element match {")
     pw.println(tab(3) + s"""case t: TaggedValue => """)
     pw.println(tab(4) + s"""t.tag match {""")
-    unionDef.tags.foreach(tag => pw.println(tab(5) + s"""case "$tag" => $tag.read(element, ctx)"""))
+    unionDef.tags.foreach(tag => pw.println(tab(5) + s"""case "${tag._1}" => ${getScalaPkg(tag._2)}.${tag._1}.read(element, ctx)"""))
     pw.println(tab(5) + s"""case other => throw new IllegalArgumentException("Type $name did not union type tag " + other)""")
     pw.println(tab(4) + s"""}""")
 
@@ -322,7 +344,7 @@ object Gen extends LazyLogging {
 
     pw.println(tab(1) + s"def write(obj: $name): TaggedValue = {")
     pw.println(tab(2) + s"obj match {")
-    unionDef.tags.foreach(tag => pw.println(tab(3) + s"case data: $tag => $tag.write(data)"))
+    unionDef.tags.foreach(tag => pw.println(tab(3) + s"case data: ${getScalaPkg(tag._2)}.${tag._1} => ${getScalaPkg(tag._2)}.${tag._1}.write(data)"))
     pw.println(tab(3) + s"""case other => throw new IllegalArgumentException("Type $name did not recognize " + other)""")
     pw.println(tab(2) + s"}")
     pw.println(tab(1) + "}")
@@ -340,7 +362,7 @@ object Gen extends LazyLogging {
     val typeSignature = wrapper.field.typ match {
       case SimpleTypeDef(typ) => inputSignatureFor(typ, name)
       case ParamTypeDef(typ) => inputSignatureFor(typ, name)
-      case TagTypeDef(tag) => tag
+      case TagTypeDef(tag, ns) => s"${getScalaPkg(ns)}.$tag"
     }
 
     pw.println(tab(1) + s"def read(element: Value, ctx: ReaderContext): Either[String, $name] = {")
@@ -373,7 +395,7 @@ object Gen extends LazyLogging {
       }
       case ttd: TagTypeDef => {
         val tagName = ttd.tag
-        pw.println(tab(2) + "" + s"""$utilKlass.readFieldSubStruct("$name", element, "$tagName", $tagName.read, ctx).map(result => $name(result))""")
+        pw.println(tab(2) + "" + s"""$utilKlass.readFieldSubStruct("$name", element, "$tagName", ${tagType(ttd)}.read, ctx).map(result => $name(result))""")
       }
     }
     pw.println(tab(1) + "}")
@@ -433,7 +455,7 @@ object Gen extends LazyLogging {
         }
         case ttd: TagTypeDef => {
           val tagName = ttd.tag
-          pw.println(tab(2) + "" + s"""val $name = $utilKlass.getMapField("$name", element).flatMap(elem => $utilKlass.readFieldSubStruct("$name", elem, "$tagName", $tagName.read, ctx))""")
+          pw.println(tab(2) + "" + s"""val $name = $utilKlass.getMapField("$name", element).flatMap(elem => $utilKlass.readFieldSubStruct("$name", elem, "$tagName", ${tagType(ttd)}.read, ctx))""")
         }
       }
     }
