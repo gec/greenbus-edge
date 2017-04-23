@@ -91,7 +91,7 @@ object Gen extends LazyLogging {
           val obj = objDefForExtType(nsTarget, ext)
           Map(ext.tag -> obj) ++ collectObjDefs(nsTarget, ext.reprType, seen)
         } else {
-          Map()
+          seen
         }
       }
       case struct: TStruct =>

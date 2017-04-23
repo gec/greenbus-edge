@@ -89,6 +89,22 @@ object SecondSchema {
   val masterStruct = TExt(ns, "MasterStruct", TStruct(Vector(
     StructFieldDef("secondSchema", secondSchemaStruct, 0),
     StructFieldDef("originalSchema", OptionTest.frontendDataKey, 1))))
+
+  def main(args: Array[String]): Unit = {
+    val all = Gen.collectObjDefs(ns.name, masterStruct, Map())
+
+    println(all)
+
+    val f = new File("edge-data/target/generated-sources/scala/io/greenbus/edge/data/codegen/test2/Model.scala")
+    Files.createParentDirs(f)
+    if (!f.exists()) {
+      f.createNewFile()
+    }
+
+    val fw = new PrintWriter(new FileOutputStream(f))
+    Gen.output("io.greenbus.edge.data.codegen.test2", ns.name, all, fw)
+    fw.flush()
+  }
 }
 
 /*

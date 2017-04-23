@@ -70,6 +70,7 @@ object XmlWriter {
       case v: ValueFloat => writeSimple("float", v.value.toString, w, ctxName)
       case v: ValueDouble => writeSimple("double", v.value.toString, w, ctxName)
       case v: ValueString => writeSimple("string", v.value.toString, w, ctxName)
+      case ValueNone =>
       case _ => throw new IllegalArgumentException(s"Type not handled: " + value)
     }
   }

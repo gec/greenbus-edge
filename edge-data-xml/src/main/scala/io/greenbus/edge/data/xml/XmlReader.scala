@@ -58,7 +58,8 @@ object Node extends LazyLogging {
       case TDouble => term(java.lang.Double.parseDouble, ValueDouble, tagOpt)
       case TString => term(s => s, ValueString, tagOpt)
       case t: TList => new ListNode(t, tagOpt)
-      case _ => throw new IllegalArgumentException(s"Type unhandled: " + typ)
+      case t: TOption => simpleNodeFor(t.paramType, tagOpt)
+      case _ => throw new IllegalArgumentException(s"Type unhandled: " + typ + " for: " + tagOpt)
     }
   }
 
@@ -112,6 +113,9 @@ class TerminalNode(parser: String => Option[BasicValue], tagOpt: Option[String])
       }
     }
   }
+  override def toString: String = {
+    s"Term($tagOpt)"
+  }
 }
 
 class ListNode(typ: TList, tagOpt: Option[String]) extends Node {
@@ -132,6 +136,9 @@ class ListNode(typ: TList, tagOpt: Option[String]) extends Node {
       case None => Some(ValueList(elems.toVector))
       case Some(tag) => Some(TaggedValue(tag, ValueList(elems.toVector)))
     }
+  }
+  override def toString: String = {
+    s"List(${typ.paramType})"
   }
 }
 
@@ -177,6 +184,7 @@ class StructNode(typeTag: String, vt: TStruct) extends Node {
       case None =>
         new NullNode
       case Some(sfd) => {
+        println("Struct push: " + name)
         currentField = Some(sfd.name)
         Node.nodeFor(sfd.typ)
       }
@@ -209,6 +217,10 @@ class StructNode(typeTag: String, vt: TStruct) extends Node {
 
     Some(TaggedValue(typeTag, ValueMap(kvs.toMap)))
   }
+
+  override def toString: String = {
+    s"Struct($typeTag)"
+  }
 }
 
 class RootNode(rootType: VTValueElem) extends Node {
@@ -238,6 +250,8 @@ class RootNode(rootType: VTValueElem) extends Node {
   def result(): Option[Value] = {
     resultOpt
   }
+
+  override def toString: String = "Root"
 }
 
 object XmlReader {
@@ -254,6 +268,7 @@ object XmlReader {
     nodeStack ::= root
 
     while (reader.hasNext) {
+      println(nodeStack)
       val event = reader.nextEvent()
 
       if (event.isStartElement) {
