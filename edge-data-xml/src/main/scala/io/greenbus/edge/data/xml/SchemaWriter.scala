@@ -79,11 +79,38 @@ object SchemaWriter {
     }
   }
 
-  def writeUnion(tag: String, union: TUnion, w: XMLStreamWriter): Unit = {
+  /*
+      <!--<xs:element name="transforms">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="TransformDescriptor" minOccurs="0" maxOccurs="unbounded">
+              <xs:complexType>
+                <xs:complexContent>
+                  <xs:extension base="TransformDescriptor"/>
+                </xs:complexContent>
+              </xs:complexType>
+            </xs:element>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>-->
+      <xs:element name="transforms">
+        <xs:complexType>
+          <xs:choice minOccurs="0" maxOccurs="unbounded">
+            <xs:element name="LinearTransform" type="LinearTransform"/>
+            <xs:element name="SimpleTransform" type="SimpleTransform"/>
+            <xs:element name="TypeCast" type="TypeCast"/>
+          </xs:choice>
+        </xs:complexType>
+      </xs:element>
+   */
+
+  def writeUnion(tag: String, union: TUnion, w: XMLStreamWriter, anon: Boolean = false, minOccurs: String = "1", maxOccurs: String = "1"): Unit = {
 
     w.writeStartElement("xs", "complexType", xmlSchemaNs)
-    w.writeAttribute("name", tag)
+    if (!anon) { w.writeAttribute("name", tag) }
     w.writeStartElement("xs", "choice", xmlSchemaNs)
+    if (minOccurs != "1") w.writeAttribute("minOccurs", minOccurs)
+    if (maxOccurs != "1") w.writeAttribute("maxOccurs", maxOccurs)
 
     val tags = union.unionTypes.map {
       case t: TExt => t.tag
@@ -209,27 +236,37 @@ object SchemaWriter {
   }
 
   def writeListComplex(nameOpt: Option[String], list: TList, nsInfo: XmlNamespaceInfo, w: XMLStreamWriter): Unit = {
-    w.writeStartElement("xs", "complexType", xmlSchemaNs)
-    nameOpt.foreach(name => w.writeAttribute("name", name))
-    w.writeStartElement("xs", "sequence", xmlSchemaNs)
+   // w.writeStartElement("xs", "sequence", xmlSchemaNs)
+
+    def wrapSequence(f: => Unit) = {
+      w.writeStartElement("xs", "complexType", xmlSchemaNs)
+      nameOpt.foreach(name => w.writeAttribute("name", name))
+      w.writeStartElement("xs", "sequence", xmlSchemaNs)
+      f
+      w.writeEndElement()
+      w.writeEndElement()
+    }
 
     list.paramType match {
       case ext: TExt => {
-        writeExtension(ext.tag, ext.tag, ext.ns, nsInfo, w, minOccurs = "0", maxOccurs = "unbounded")
+        ext.reprType match {
+          case t: TUnion => writeUnion(ext.tag, t, w, anon = true, minOccurs = "0", maxOccurs = "unbounded")
+          case other => wrapSequence { writeExtension(ext.tag, ext.tag, ext.ns, nsInfo, w, minOccurs = "0", maxOccurs = "unbounded") }
+        }
+        //writeExtension(ext.tag, ext.tag, ext.ns, nsInfo, w, minOccurs = "0", maxOccurs = "unbounded")
       }
-      case TBool => writeSimple("value", "xs:boolean", w, minOccurs = "0", maxOccurs = "unbounded")
-      case TByte => writeSimple("value", "xs:byte", w, minOccurs = "0", maxOccurs = "unbounded")
-      case TInt32 => writeSimple("value", "xs:int", w, minOccurs = "0", maxOccurs = "unbounded")
-      case TUInt32 => writeSimple("value", "xs:unsignedInt", w, minOccurs = "0", maxOccurs = "unbounded")
-      case TInt64 => writeSimple("value", "xs:long", w, minOccurs = "0", maxOccurs = "unbounded")
-      case TUInt64 => writeSimple("value", "xs:unsignedLong", w, minOccurs = "0", maxOccurs = "unbounded")
-      case TFloat => writeSimple("value", "xs:decimal", w, minOccurs = "0", maxOccurs = "unbounded")
-      case TDouble => writeSimple("value", "xs:decimal", w, minOccurs = "0", maxOccurs = "unbounded")
-      case TString => writeSimple("value", "xs:string", w, minOccurs = "0", maxOccurs = "unbounded")
+      case TBool => wrapSequence { writeSimple("value", "xs:boolean", w, minOccurs = "0", maxOccurs = "unbounded") }
+      case TByte => wrapSequence { writeSimple("value", "xs:byte", w, minOccurs = "0", maxOccurs = "unbounded") }
+      case TInt32 => wrapSequence { writeSimple("value", "xs:int", w, minOccurs = "0", maxOccurs = "unbounded") }
+      case TUInt32 => wrapSequence { writeSimple("value", "xs:unsignedInt", w, minOccurs = "0", maxOccurs = "unbounded") }
+      case TInt64 => wrapSequence { writeSimple("value", "xs:long", w, minOccurs = "0", maxOccurs = "unbounded") }
+      case TUInt64 => wrapSequence { writeSimple("value", "xs:unsignedLong", w, minOccurs = "0", maxOccurs = "unbounded") }
+      case TFloat => wrapSequence { writeSimple("value", "xs:decimal", w, minOccurs = "0", maxOccurs = "unbounded") }
+      case TDouble => wrapSequence { writeSimple("value", "xs:decimal", w, minOccurs = "0", maxOccurs = "unbounded") }
+      case TString =>wrapSequence {  writeSimple("value", "xs:string", w, minOccurs = "0", maxOccurs = "unbounded") }
       case other => throw new IllegalArgumentException(s"Not handling list param type: " + other)
     }
-    w.writeEndElement()
-    w.writeEndElement()
+    //w.writeEndElement()
   }
 
   def writeExtList(tag: String, list: TList, nsInfo: XmlNamespaceInfo, w: XMLStreamWriter): Unit = {
