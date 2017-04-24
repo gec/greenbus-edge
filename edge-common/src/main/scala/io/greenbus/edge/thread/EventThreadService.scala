@@ -20,6 +20,8 @@ package io.greenbus.edge.thread
 
 import java.util.concurrent.{ Executors, ThreadFactory, TimeUnit }
 
+import com.typesafe.scalalogging.LazyLogging
+
 trait EventThreadService extends SchedulableCallMarshaller {
 
   def close(): Unit
@@ -27,7 +29,7 @@ trait EventThreadService extends SchedulableCallMarshaller {
 
 object EventThreadService {
 
-  private class ExecutorEventThread(id: String) extends EventThreadService {
+  private class ExecutorEventThread(id: String) extends EventThreadService with LazyLogging {
 
     private val s = Executors.newSingleThreadScheduledExecutor(new ThreadFactory {
       def newThread(runnable: Runnable): Thread = {
@@ -37,14 +39,21 @@ object EventThreadService {
 
     def marshal(f: => Unit): Unit = {
       s.execute(new Runnable {
-        def run(): Unit = f
+        def run(): Unit = execute { f }
       })
     }
 
     def delayed(durationMs: Long, f: => Unit): Unit = {
       s.schedule(new Runnable {
-        def run(): Unit = f
+        def run(): Unit = execute { f }
       }, durationMs, TimeUnit.MILLISECONDS)
+    }
+
+    private def execute(f: => Unit): Unit = {
+      try { f } catch {
+        case ex: Throwable =>
+          logger.error(s"Exception thrown in event thread handler: " + ex)
+      }
     }
 
     def close(): Unit = {
