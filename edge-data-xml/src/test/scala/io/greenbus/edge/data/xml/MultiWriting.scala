@@ -75,7 +75,11 @@ object FepXmlSchemaWriter {
       f.createNewFile()
     }
 
-    SchemaWriter.write(FrontendSchema.all, Seq(FrontendSchema.frontendConfiguration), "io.greenbus.edge.fep.config.model", new FileOutputStream(f))
+    val xmlNs = XmlNamespaceInfo(FrontendSchema.ns.name,
+      Map(
+        (FrontendSchema.ns.name, XmlNsDecl("fep", FrontendSchema.ns.name))))
+
+    SchemaWriter.write(FrontendSchema.all, Seq(FrontendSchema.frontendConfiguration), xmlNs, new FileOutputStream(f))
   }
 }
 
@@ -89,7 +93,12 @@ object DnpXmlSchemaWriter {
       f.createNewFile()
     }
 
-    SchemaWriter.write(DnpGatewaySchema.all, Seq(DnpGatewaySchema.gateway), "io.greenbus.edge.fep.dnp3.config.model", new FileOutputStream(f))
+    val xmlNs = XmlNamespaceInfo(DnpGatewaySchema.gateway.ns.name,
+      Map(
+        (DnpGatewaySchema.ns.name, XmlNsDecl("dnp3", DnpGatewaySchema.ns.name)),
+        (FrontendSchema.ns.name, XmlNsDecl("fep", FrontendSchema.ns.name))))
+
+    SchemaWriter.write(DnpGatewaySchema.all, Seq(DnpGatewaySchema.gateway), xmlNs, new FileOutputStream(f))
   }
 }
 

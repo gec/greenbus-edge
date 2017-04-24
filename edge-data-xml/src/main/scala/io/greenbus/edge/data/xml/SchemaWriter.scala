@@ -27,7 +27,7 @@ import io.greenbus.edge.data.schema._
 object SchemaWriter {
   val xmlSchemaNs = "http://www.w3.org/2001/XMLSchema"
 
-  def write(types: Seq[TExt], concreteTypes: Seq[TExt], uri: String, os: OutputStream): Unit = {
+  def write(types: Seq[TExt], concreteTypes: Seq[TExt], info: XmlNamespaceInfo, os: OutputStream): Unit = {
 
     val output = XMLOutputFactory.newFactory()
     val base = output.createXMLStreamWriter(os)
@@ -36,14 +36,14 @@ object SchemaWriter {
 
     w.writeStartElement("xs", "schema", xmlSchemaNs)
     w.writeAttribute("xmlns:xs", xmlSchemaNs)
-    w.writeAttribute("xmlns", uri)
-    w.writeAttribute("targetNamespace", uri)
+    //w.writeAttribute("xmlns", uri)
+    writeRootNsDeclarations(w, info)
     w.writeAttribute("elementFormDefault", "qualified")
 
-    types.foreach(writeType(_, w))
+    types.foreach(writeType(_, info, w))
 
     concreteTypes.foreach { typ =>
-      writeExtension(typ.tag, typ.tag, w)
+      writeExtension(typ.tag, typ.tag, typ.ns, info, w)
     }
 
     w.writeEndElement()
@@ -52,11 +52,27 @@ object SchemaWriter {
     w.flush()
   }
 
-  def writeType(typ: TExt, w: XMLStreamWriter): Unit = {
+
+  def writeRootNsDeclarations(w: XMLStreamWriter, namespaceInfo: XmlNamespaceInfo): Unit = {
+    val defaultDeclOpt = namespaceInfo.namespaceMap.get(namespaceInfo.defaultTypeNs)
+    defaultDeclOpt.foreach { decl =>
+      w.writeAttribute("xmlns", decl.uri)
+      w.writeAttribute("targetNamespace", decl.uri)
+    }
+    namespaceInfo.namespaceMap.toVector.
+      filterNot(_._1 == namespaceInfo.defaultTypeNs)
+      .sortBy(_._1).foreach {
+        case (_, decl) =>
+          w.writeAttribute(s"xmlns:${decl.prefix}", decl.uri)
+      }
+  }
+
+
+  def writeType(typ: TExt, nsInfo: XmlNamespaceInfo, w: XMLStreamWriter): Unit = {
     System.err.println(s"${typ.tag}")
     typ.reprType match {
-      case t: TStruct => writeExtStruct(typ.tag, t, w)
-      case t: TList => writeExtList(typ.tag, t, w)
+      case t: TStruct => writeExtStruct(typ.tag, t, typ.ns, nsInfo, w)
+      case t: TList => writeExtList(typ.tag, t, nsInfo, w)
       case t: TEnum => writeEnum(typ.tag, t, w)
       case t: TUnion => writeUnion(typ.tag, t, w)
       case t => System.err.println("Unhandled: " + t.getClass.getSimpleName + ": " + typ.tag)
@@ -99,7 +115,7 @@ object SchemaWriter {
     w.writeEndElement()
   }
 
-  def writeExtension(elemName: String, extName: String, w: XMLStreamWriter, minOccurs: String = "1", maxOccurs: String = "1"): Unit = {
+  def writeExtension(elemName: String, extName: String, tns: TypeNamespace, nsInfo: XmlNamespaceInfo, w: XMLStreamWriter, minOccurs: String = "1", maxOccurs: String = "1"): Unit = {
 
     w.writeStartElement("xs", "element", xmlSchemaNs)
     w.writeAttribute("name", elemName)
@@ -108,7 +124,7 @@ object SchemaWriter {
     w.writeStartElement("xs", "complexType", xmlSchemaNs)
     w.writeStartElement("xs", "complexContent", xmlSchemaNs)
     w.writeEmptyElement("xs", "extension", xmlSchemaNs)
-    w.writeAttribute("base", extName)
+    w.writeAttribute("base", nameWithPrefix(extName, tns, nsInfo))
     w.writeEndElement()
     w.writeEndElement()
 
@@ -127,14 +143,30 @@ object SchemaWriter {
     w.writeEndElement()
   }
 
-  def writeExtStruct(tag: String, struct: TStruct, w: XMLStreamWriter): Unit = {
+  def namePrefix(ns: TypeNamespace, info: XmlNamespaceInfo): Option[String] = {
+    info.namespaceMap.get(ns.name).map(_.prefix)
+  }
+
+  def nameWithPrefix(name: String, ns: TypeNamespace, info: XmlNamespaceInfo): String = {
+    namePrefix(ns, info) match {
+      case None => name
+      case Some(pre) =>
+        if (ns.name == info.defaultTypeNs) {
+          name
+        } else {
+          s"$pre:$name"
+        }
+    }
+  }
+
+  def writeExtStruct(tag: String, struct: TStruct, tns: TypeNamespace, nsInfo: XmlNamespaceInfo, w: XMLStreamWriter): Unit = {
     w.writeStartElement("xs", "complexType", xmlSchemaNs)
-    w.writeAttribute("name", tag)
+    w.writeAttribute("name", nameWithPrefix(tag, tns, nsInfo))
 
     w.writeStartElement("xs", "all", xmlSchemaNs)
 
     struct.fields.foreach { sfd =>
-      writeField(sfd.name, sfd.typ, w)
+      writeField(sfd.name, sfd.typ, nsInfo, w)
     }
 
     w.writeEndElement()
@@ -142,14 +174,14 @@ object SchemaWriter {
     w.writeEndElement()
   }
 
-  private def writeField(name: String, typ: VTValueElem, w: XMLStreamWriter, minOccurs: String = "1", maxOccurs: String = "1"): Unit = {
+  private def writeField(name: String, typ: VTValueElem, nsInfo: XmlNamespaceInfo, w: XMLStreamWriter, minOccurs: String = "1", maxOccurs: String = "1"): Unit = {
 
     typ match {
       case t: TExt => {
-        writeExtension(name, t.tag, w, minOccurs, maxOccurs)
+        writeExtension(name, t.tag, t.ns, nsInfo, w, minOccurs, maxOccurs)
       }
       case t: TList => {
-        writeListConcrete(name, t, w, minOccurs, maxOccurs)
+        writeListConcrete(name, t, nsInfo, w, minOccurs, maxOccurs)
       }
       case TBool => writeSimple(name, "xs:boolean", w, minOccurs, maxOccurs)
       case TByte => writeSimple(name, "xs:byte", w, minOccurs, maxOccurs)
@@ -160,30 +192,30 @@ object SchemaWriter {
       case TFloat => writeSimple(name, "xs:decimal", w, minOccurs, maxOccurs)
       case TDouble => writeSimple(name, "xs:decimal", w, minOccurs, maxOccurs)
       case TString => writeSimple(name, "xs:string", w, minOccurs, maxOccurs)
-      case t: TOption => writeField(name, t.paramType, w, minOccurs = "0")
+      case t: TOption => writeField(name, t.paramType, nsInfo, w, minOccurs = "0")
       case _ =>
     }
   }
 
-  def writeListConcrete(name: String, list: TList, w: XMLStreamWriter, minOccurs: String = "1", maxOccurs: String = "1"): Unit = {
+  def writeListConcrete(name: String, list: TList, nsInfo: XmlNamespaceInfo, w: XMLStreamWriter, minOccurs: String = "1", maxOccurs: String = "1"): Unit = {
     w.writeStartElement("xs", "element", xmlSchemaNs)
     w.writeAttribute("name", name)
     if (minOccurs != "1") w.writeAttribute("minOccurs", minOccurs)
     if (maxOccurs != "1") w.writeAttribute("maxOccurs", maxOccurs)
 
-    writeListComplex(None, list, w)
+    writeListComplex(None, list, nsInfo, w)
 
     w.writeEndElement()
   }
 
-  def writeListComplex(nameOpt: Option[String], list: TList, w: XMLStreamWriter): Unit = {
+  def writeListComplex(nameOpt: Option[String], list: TList, nsInfo: XmlNamespaceInfo, w: XMLStreamWriter): Unit = {
     w.writeStartElement("xs", "complexType", xmlSchemaNs)
     nameOpt.foreach(name => w.writeAttribute("name", name))
     w.writeStartElement("xs", "sequence", xmlSchemaNs)
 
     list.paramType match {
       case ext: TExt => {
-        writeExtension(ext.tag, ext.tag, w, minOccurs = "0", maxOccurs = "unbounded")
+        writeExtension(ext.tag, ext.tag, ext.ns, nsInfo, w, minOccurs = "0", maxOccurs = "unbounded")
       }
       case TBool => writeSimple("value", "xs:boolean", w, minOccurs = "0", maxOccurs = "unbounded")
       case TByte => writeSimple("value", "xs:byte", w, minOccurs = "0", maxOccurs = "unbounded")
@@ -200,7 +232,7 @@ object SchemaWriter {
     w.writeEndElement()
   }
 
-  def writeExtList(tag: String, list: TList, w: XMLStreamWriter): Unit = {
-    writeListComplex(Some(tag), list, w)
+  def writeExtList(tag: String, list: TList, nsInfo: XmlNamespaceInfo, w: XMLStreamWriter): Unit = {
+    writeListComplex(Some(tag), list, nsInfo, w)
   }
 }

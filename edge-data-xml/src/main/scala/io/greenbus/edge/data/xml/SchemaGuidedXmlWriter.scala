@@ -209,9 +209,6 @@ object SchemaGuidedXmlWriter {
 
     val nextCtx = prevCtx.copy(explicitOpt = nsDeclFor(typ.ns, prevCtx.info))
 
-    System.err.println("------")
-    System.err.println(value)
-    System.err.println(typ)
     typ.reprType match {
       case t: TStruct => {
         repr match {

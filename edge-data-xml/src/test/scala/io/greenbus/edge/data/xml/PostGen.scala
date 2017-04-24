@@ -20,7 +20,7 @@ package io.greenbus.edge.data.xml
 
 import java.io._
 
-/*
+
 import com.google.common.io.Files
 import io.greenbus.edge.fep.config.model._
 import io.greenbus.edge.fep.dnp3.config.model._
@@ -199,4 +199,4 @@ object PostGen {
             requestBooleanLabels = None))))
   }
 }
-*/
+
