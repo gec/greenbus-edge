@@ -46,7 +46,7 @@ object Node extends LazyLogging {
     new TerminalNode(termParse(parse, build), tagOpt)
   }
 
-  def simpleNodeFor(typ: VTValueElem, tagOpt: Option[String]): Node = {
+  def simpleNodeFor(typ: VTValueElem, tagOpt: Option[String], elemName: String): Node = {
     typ match {
       case TByte => term(java.lang.Byte.parseByte, ValueByte, tagOpt)
       case TBool => term(java.lang.Boolean.parseBoolean, ValueBool, tagOpt)
@@ -58,20 +58,29 @@ object Node extends LazyLogging {
       case TDouble => term(java.lang.Double.parseDouble, ValueDouble, tagOpt)
       case TString => term(s => s, ValueString, tagOpt)
       case t: TList => new ListNode(t, tagOpt)
-      case t: TOption => simpleNodeFor(t.paramType, tagOpt)
+      case t: TOption => nodeFor(t.paramType, elemName)
+      case t: TEnum => term(s => s, ValueString, tagOpt)
+      case t: TUnion => {
+        val typeTags = t.unionTypes.flatMap {
+          case ext: TExt => Some(ext.tag -> ext)
+          case _ => None
+        }.toMap
+
+        typeTags.get(elemName).map(ext => nodeFor(ext, elemName)).getOrElse(new NullNode)
+      }
       case _ => throw new IllegalArgumentException(s"Type unhandled: " + typ + " for: " + tagOpt)
     }
   }
 
-  def nodeFor(typ: VTValueElem): Node = {
+  def nodeFor(typ: VTValueElem, elemName: String): Node = {
     typ match {
       case t: TExt => {
         t.reprType match {
           case extType: TStruct => new StructNode(t.tag, extType)
-          case other => simpleNodeFor(other, Some(t.tag))
+          case other => simpleNodeFor(other, Some(t.tag), elemName: String)
         }
       }
-      case t => simpleNodeFor(typ, None)
+      case t => simpleNodeFor(typ, None, elemName: String)
     }
   }
 
@@ -124,7 +133,7 @@ class ListNode(typ: TList, tagOpt: Option[String]) extends Node {
   def setText(content: String): Unit = {}
 
   def onPush(name: String): Node = {
-    Node.nodeFor(typ.paramType)
+    Node.nodeFor(typ.paramType, name)
   }
 
   def onPop(subElemOpt: Option[Value]): Unit = {
@@ -138,7 +147,7 @@ class ListNode(typ: TList, tagOpt: Option[String]) extends Node {
     }
   }
   override def toString: String = {
-    s"List(${typ.paramType})"
+    s"List($tagOpt)"
   }
 }
 
@@ -186,7 +195,7 @@ class StructNode(typeTag: String, vt: TStruct) extends Node {
       case Some(sfd) => {
         println("Struct push: " + name)
         currentField = Some(sfd.name)
-        Node.nodeFor(sfd.typ)
+        Node.nodeFor(sfd.typ, name)
       }
     }
   }
@@ -234,7 +243,7 @@ class RootNode(rootType: VTValueElem) extends Node {
   def onPush(name: String): Node = {
     if (!pushed) {
       pushed = true
-      Node.nodeFor(rootType)
+      Node.nodeFor(rootType, name)
     } else {
       new NullNode
     }

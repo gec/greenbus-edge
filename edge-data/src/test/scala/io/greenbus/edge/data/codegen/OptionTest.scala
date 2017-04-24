@@ -62,7 +62,7 @@ object OptionTest {
     StructFieldDef("seriesType", seriesType, 4))))
 
   def main(args: Array[String]): Unit = {
-    val all = Gen.collectObjDefs(ns.name, frontendDataKey, Map())
+    val all = ScalaGen.collectObjDefs(ns.name, frontendDataKey, Map())
 
     println(all)
 
@@ -73,7 +73,7 @@ object OptionTest {
     }
 
     val fw = new PrintWriter(new FileOutputStream(f))
-    Gen.output("io.greenbus.edge.data.codegen.test", ns.name, all, fw)
+    ScalaGen.output("io.greenbus.edge.data.codegen.test", ns.name, all, fw)
     fw.flush()
   }
 }
@@ -91,7 +91,7 @@ object SecondSchema {
     StructFieldDef("originalSchema", OptionTest.frontendDataKey, 1))))
 
   def main(args: Array[String]): Unit = {
-    val all = Gen.collectObjDefs(ns.name, masterStruct, Map())
+    val all = ScalaGen.collectObjDefs(ns.name, masterStruct, Map())
 
     println(all)
 
@@ -102,7 +102,7 @@ object SecondSchema {
     }
 
     val fw = new PrintWriter(new FileOutputStream(f))
-    Gen.output("io.greenbus.edge.data.codegen.test2", ns.name, all, fw)
+    ScalaGen.output("io.greenbus.edge.data.codegen.test2", ns.name, all, fw)
     fw.flush()
   }
 }

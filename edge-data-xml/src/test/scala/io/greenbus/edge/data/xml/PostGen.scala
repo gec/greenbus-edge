@@ -20,8 +20,9 @@ package io.greenbus.edge.data.xml
 
 import java.io._
 
-
+/*
 import com.google.common.io.Files
+import io.greenbus.edge.data.mapping.{RootCtx, SimpleReaderContext}
 import io.greenbus.edge.fep.config.model._
 import io.greenbus.edge.fep.dnp3.config.model._
 
@@ -58,7 +59,7 @@ object XmlWriterTester {
     SchemaGuidedXmlWriter.write(obj, DnpGatewaySchema.gateway, stringOut, xmlNs)
     stringOut.close()
 
-    /*val stringIn = new FileInputStream(f)
+    val stringIn = new FileInputStream(f)
 
     val readOpt = XmlReader.read(stringIn, DnpGatewaySchema.gateway)
 
@@ -67,7 +68,13 @@ object XmlWriterTester {
     println(xmlRead)
 
     val theyMatch = obj == xmlRead
-    println("match? " + theyMatch)*/
+    println("match? " + theyMatch)
+
+    val result = DNP3Gateway.read(xmlRead, SimpleReaderContext(Vector(RootCtx("DNP3Gateway"))))
+
+    println(result.right.get)
+    println(example)
+    println(result.right.get == example)
   }
 }
 
@@ -199,4 +206,4 @@ object PostGen {
             requestBooleanLabels = None))))
   }
 }
-
+*/

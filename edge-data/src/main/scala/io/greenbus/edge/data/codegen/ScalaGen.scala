@@ -23,13 +23,12 @@ import java.io.PrintWriter
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.data.schema._
 
-object Gen extends LazyLogging {
+object ScalaGen extends LazyLogging {
 
   sealed trait FieldTypeDef
   case class SimpleTypeDef(typ: ValueType) extends FieldTypeDef
   case class ParamTypeDef(typ: ValueType) extends FieldTypeDef
   case class TagTypeDef(tag: String, ns: TypeNamespace) extends FieldTypeDef
-  //case class ForeignTypeDef(tag: String, foreignNs: TypeNamespace) extends FieldTypeDef
 
   case class FieldDef(name: String, typ: FieldTypeDef)
 
@@ -51,11 +50,6 @@ object Gen extends LazyLogging {
           val ftd = fd.typ match {
             case t: TExt =>
               TagTypeDef(t.tag, t.ns)
-            /*if (t.ns.name == targetNs) {
-                TagTypeDef(t.tag, t.ns)
-              } else {
-                ForeignTypeDef(t.tag, t.ns)
-              }*/
             case t: TList => ParamTypeDef(t)
             case t: TMap => ParamTypeDef(t)
             case t: TUnion => ParamTypeDef(t)
@@ -388,7 +382,7 @@ object Gen extends LazyLogging {
           case typ: TList => {
             val paramRead = readFuncForTypeParam(typ.paramType)
             val paramSig = fieldSignatureFor(typ.paramType)
-            pw.println(tab(2) + "" + s"""$utilKlass.readList[$paramSig](element, $utilKlass.readTup[$paramSig](_, _, $paramRead), ctx).map(result => $name(result))""")
+            pw.println(tab(2) + "" + s"""$utilKlass.readList[$paramSig](element, $paramRead, ctx).map(result => $name(result))""")
           }
           case other => throw new IllegalArgumentException(s"Parameterized type not handled: $other")
         }
@@ -443,7 +437,7 @@ object Gen extends LazyLogging {
             case typ: TList => {
               val paramRead = readFuncForTypeParam(typ.paramType)
               val paramSig = fieldSignatureFor(typ.paramType)
-              pw.println(tab(2) + "" + s"""val $name = $utilKlass.getMapField("$name", element).flatMap(elem => $utilKlass.readList[$paramSig](elem, $utilKlass.readTup[$paramSig](_, _, $paramRead), ctx))""")
+              pw.println(tab(2) + "" + s"""val $name = $utilKlass.getMapField("$name", element).flatMap(elem => $utilKlass.readList[$paramSig](elem, $paramRead, ctx))""")
             }
             case optTyp: TOption => {
               val paramRead = readFuncForTypeParam(optTyp.paramType)

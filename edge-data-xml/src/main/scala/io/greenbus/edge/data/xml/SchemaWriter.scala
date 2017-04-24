@@ -52,7 +52,6 @@ object SchemaWriter {
     w.flush()
   }
 
-
   def writeRootNsDeclarations(w: XMLStreamWriter, namespaceInfo: XmlNamespaceInfo): Unit = {
     val defaultDeclOpt = namespaceInfo.namespaceMap.get(namespaceInfo.defaultTypeNs)
     defaultDeclOpt.foreach { decl =>
@@ -66,7 +65,6 @@ object SchemaWriter {
           w.writeAttribute(s"xmlns:${decl.prefix}", decl.uri)
       }
   }
-
 
   def writeType(typ: TExt, nsInfo: XmlNamespaceInfo, w: XMLStreamWriter): Unit = {
     System.err.println(s"${typ.tag}")
@@ -236,7 +234,7 @@ object SchemaWriter {
   }
 
   def writeListComplex(nameOpt: Option[String], list: TList, nsInfo: XmlNamespaceInfo, w: XMLStreamWriter): Unit = {
-   // w.writeStartElement("xs", "sequence", xmlSchemaNs)
+    // w.writeStartElement("xs", "sequence", xmlSchemaNs)
 
     def wrapSequence(f: => Unit) = {
       w.writeStartElement("xs", "complexType", xmlSchemaNs)
@@ -263,7 +261,7 @@ object SchemaWriter {
       case TUInt64 => wrapSequence { writeSimple("value", "xs:unsignedLong", w, minOccurs = "0", maxOccurs = "unbounded") }
       case TFloat => wrapSequence { writeSimple("value", "xs:decimal", w, minOccurs = "0", maxOccurs = "unbounded") }
       case TDouble => wrapSequence { writeSimple("value", "xs:decimal", w, minOccurs = "0", maxOccurs = "unbounded") }
-      case TString =>wrapSequence {  writeSimple("value", "xs:string", w, minOccurs = "0", maxOccurs = "unbounded") }
+      case TString => wrapSequence { writeSimple("value", "xs:string", w, minOccurs = "0", maxOccurs = "unbounded") }
       case other => throw new IllegalArgumentException(s"Not handling list param type: " + other)
     }
     //w.writeEndElement()

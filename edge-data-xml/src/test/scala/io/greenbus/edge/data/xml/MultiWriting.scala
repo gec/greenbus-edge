@@ -21,17 +21,17 @@ package io.greenbus.edge.data.xml
 import java.io.{ File, FileOutputStream, PrintWriter }
 
 import com.google.common.io.Files
-import io.greenbus.edge.data.codegen.Gen
+import io.greenbus.edge.data.codegen.ScalaGen
 import io.greenbus.edge.data.schema._
 
 object MultiWriting {
 
 }
 
-object FepSchemaWriter {
+object FepScalaWriter {
 
   def main(args: Array[String]): Unit = {
-    val all = Gen.collectObjDefs(FrontendSchema.ns.name, FrontendSchema.frontendConfiguration, Map())
+    val all = ScalaGen.collectObjDefs(FrontendSchema.ns.name, FrontendSchema.frontendConfiguration, Map())
 
     println(all)
 
@@ -42,14 +42,14 @@ object FepSchemaWriter {
     }
 
     val fw = new PrintWriter(new FileOutputStream(f))
-    Gen.output("io.greenbus.edge.fep.config.model", FrontendSchema.ns.name, all, fw)
+    ScalaGen.output("io.greenbus.edge.fep.config.model", FrontendSchema.ns.name, all, fw)
     fw.flush()
   }
 }
-object DnpSchemaWriter {
+object DnpScalaWriter {
 
   def main(args: Array[String]): Unit = {
-    val all = Gen.collectObjDefs(DnpGatewaySchema.ns.name, DnpGatewaySchema.gateway, Map())
+    val all = ScalaGen.collectObjDefs(DnpGatewaySchema.ns.name, DnpGatewaySchema.gateway, Map())
 
     println(all)
 
@@ -60,7 +60,7 @@ object DnpSchemaWriter {
     }
 
     val fw = new PrintWriter(new FileOutputStream(f))
-    Gen.output("io.greenbus.edge.fep.dnp3.config.model", DnpGatewaySchema.ns.name, all, fw)
+    ScalaGen.output("io.greenbus.edge.fep.dnp3.config.model", DnpGatewaySchema.ns.name, all, fw)
     fw.flush()
   }
 }
