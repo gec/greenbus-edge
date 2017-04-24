@@ -193,7 +193,6 @@ class StructNode(typeTag: String, vt: TStruct) extends Node {
       case None =>
         new NullNode
       case Some(sfd) => {
-        println("Struct push: " + name)
         currentField = Some(sfd.name)
         Node.nodeFor(sfd.typ, name)
       }
@@ -277,7 +276,6 @@ object XmlReader {
     nodeStack ::= root
 
     while (reader.hasNext) {
-      println(nodeStack)
       val event = reader.nextEvent()
 
       if (event.isStartElement) {
