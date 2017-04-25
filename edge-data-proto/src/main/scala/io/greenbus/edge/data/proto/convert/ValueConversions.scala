@@ -125,11 +125,12 @@ object ValueConversions {
       case data.ValueInt64(v) => proto.Value.newBuilder().setSint64Value(v).build()
       case data.ValueUInt64(v) => proto.Value.newBuilder().setUint64Value(v).build()
       case data.ValueString(v) => proto.Value.newBuilder().setStringValue(v).build()
+      case data.ValueBytes(v) => proto.Value.newBuilder().setBytesValue(ByteString.copyFrom(v)).build()
+      case data.ValueByte(v) => proto.Value.newBuilder().setByteValue(v).build()
       case v: data.ValueList => proto.Value.newBuilder().setListValue(toProto(v)).build()
       case v: data.ValueMap => proto.Value.newBuilder().setMapValue(toProto(v)).build()
       case v: data.TaggedValue => proto.Value.newBuilder().setTaggedValue(toProto(v)).build()
       case ValueNone => proto.Value.newBuilder().build()
-      case other => throw new IllegalArgumentException(s"Conversion not implemented for $other")
     }
   }
 

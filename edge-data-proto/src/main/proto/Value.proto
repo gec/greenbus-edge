@@ -17,6 +17,7 @@ message Value {
         bool bool_value = 7;
         string string_value = 8;
         bytes bytes_value = 9;
+        uint32 byte_value = 10;
 
         //repeated float float_array = 10;
 
