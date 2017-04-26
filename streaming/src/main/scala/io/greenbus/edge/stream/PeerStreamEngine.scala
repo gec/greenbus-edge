@@ -264,7 +264,7 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
     val removedRouteMap: Map[TypeValue, Set[TableRow]] = RowId.setToRouteMap(removed)
     val addedRouteMap: Map[TypeValue, Set[TableRow]] = RowId.setToRouteMap(added)
 
-    logger.debug(s"$logId subscriptions params: $params, added: $addedRouteMap, removed: $removedRouteMap")
+    logger.debug(s"$logId subscription params: $params, added: $addedRouteMap, removed: $removedRouteMap")
     val updatedRoutes = removedRouteMap.keySet ++ addedRouteMap.keySet
 
     val streamEvents = updatedRoutes.flatMap { route =>

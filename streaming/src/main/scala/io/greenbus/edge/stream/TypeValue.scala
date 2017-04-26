@@ -68,6 +68,7 @@ case class SymbolVal(v: String) extends TypeValueDecl(SymbolDesc) with OrderedTy
     }
   }
 
+  override def toString: String = simpleString()
   def simpleString(): String = v
 }
 
@@ -82,6 +83,7 @@ case class TextVal(v: String) extends TypeValueDecl(TextDesc) with OrderedTypeVa
     }
   }
 
+  override def toString: String = simpleString()
   def simpleString(): String = v
 }
 
@@ -122,6 +124,7 @@ case class BytesVal(v: Array[Byte]) extends TypeValueDecl(BytesDesc) with Ordere
     }
   }
 
+  override def toString: String = simpleString()
   def simpleString(): String = s"Bytes[${v.length}]"
 
   override def equals(r: Any): Boolean = {
@@ -147,6 +150,7 @@ case class UuidVal(v: UUID) extends TypeValueDecl(UuidDesc) with OrderedTypeValu
     }
   }
 
+  override def toString: String = simpleString()
   def simpleString(): String = v.toString
 }
 
@@ -161,6 +165,7 @@ case class BoolVal(v: Boolean) extends TypeValueDecl(BoolDesc) with OrderedTypeV
     }
   }
 
+  override def toString: String = simpleString()
   def simpleString(): String = v.toString
 }
 
@@ -175,6 +180,7 @@ case class DoubleVal(v: Double) extends TypeValueDecl(DoubleDesc) with OrderedTy
     }
   }
 
+  override def toString: String = simpleString()
   def simpleString(): String = v.toString
 }
 
@@ -195,18 +201,21 @@ case class Int64Val(v: Long) extends TypeValueDecl(Int64Desc) with SequencedType
     }
   }
 
+  override def toString: String = simpleString()
   def simpleString(): String = v.toString
 }
 
 case class TupleDesc(elementsDesc: Seq[TypeDesc]) extends FinalTypeDesc
 case class TupleVal(elements: Seq[TypeValue]) extends TypeValueDecl(TupleDesc(elements.map(_.typeDesc))) {
 
+  override def toString: String = simpleString()
   def simpleString(): String = elements.map(_.simpleString()).mkString("(", ", ", ")")
 }
 
 case class OptionDesc(elementDesc: TypeDesc) extends FinalTypeDesc
 case class OptionVal(element: Option[TypeValue]) extends TypeValueDecl(OptionDesc(element.map(_.typeDesc).getOrElse(NothingDesc))) {
 
+  override def toString: String = simpleString()
   def simpleString(): String = element.map(v => s"Some(${v.simpleString()})").getOrElse("None")
 }
 

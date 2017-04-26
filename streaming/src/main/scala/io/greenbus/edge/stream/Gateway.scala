@@ -115,7 +115,12 @@ class Gateway(localSession: PeerSessionId) extends LocalGateway with LazyLogging
     if (existing != rows) {
       subscriptions.put(route, rows)
       clientToRoutes.getSecond(route).foreach { proxy =>
-        proxy.subscriptions.push(rows.map(_.toRowId(route)))
+
+        val updatedRowsForProxy = clientToRoutes.getFirst(proxy).getOrElse(Set())
+          .flatMap(route => subscriptions.getOrElse(route, Set()).map(_.toRowId(route)))
+
+        logger.debug(s"Rows for proxy updated: $updatedRowsForProxy")
+        proxy.subscriptions.push(updatedRowsForProxy)
       }
     }
   }
@@ -224,10 +229,10 @@ class GatewayRowSynthesizerImpl(row: RowId, peerSession: PeerSessionId, startSeq
   }
 
   private def handleEvent(event: AppendEvent): Seq[AppendEvent] = {
-    logger.debug(s"Handle: $nextSequence -- $event")
+    logger.trace(s"Handle: $nextSequence -- $event")
     val (resequenced, updatedNextSeq) = resequenceAppendEvent(event, peerSession, nextSequence)
     nextSequence = updatedNextSeq
-    logger.debug(s"Resequenced: $nextSequence -- $resequenced")
+    logger.trace(s"Resequenced: $nextSequence -- $resequenced")
     Seq(resequenced)
   }
 
