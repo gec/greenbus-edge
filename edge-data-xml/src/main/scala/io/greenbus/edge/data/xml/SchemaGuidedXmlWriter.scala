@@ -278,6 +278,10 @@ object SchemaGuidedXmlWriter {
           case _ => throw new IllegalArgumentException(s"Union types must only include user typed values (${typ.tag})")
         }.toMap
 
+        ctxName.foreach { name =>
+          prevCtx.writeStartElement(w, name)
+        }
+
         tagOpt match {
           case None => throw new IllegalArgumentException(s"Values of union types must be tagged (${typ.tag})")
           case Some(tag) =>
@@ -288,18 +292,10 @@ object SchemaGuidedXmlWriter {
               }
             }
         }
-        /*repr match {
-          case tagged: TaggedValue => {
-            tagMap.get(tagged.tag) match {
-              case None => throw new IllegalArgumentException(s"Tag on value: ${tagged.tag} was not part of union ${typ.tag}")
-              case Some(tagType) => {
-                writeTypedValue()
-              }
-            }
-          }
-          case _ => throw new IllegalArgumentException(s"Values of union types must be tagged (${typ.tag})")
-        }*/
 
+        if (ctxName.nonEmpty) {
+          w.writeEndElement()
+        }
       }
       case other => System.err.println("UNHANDLED: " + other)
     }

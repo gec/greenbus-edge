@@ -66,17 +66,23 @@ object Node extends LazyLogging {
           case _ => None
         }.toMap
 
-        typeTags.get(elemName).map(ext => nodeFor(ext, elemName)).getOrElse(new NullNode)
+        typeTags.get(elemName).map(ext => nodeFor(ext, elemName)).getOrElse {
+          logger.warn(s"Did not recognize $elemName for union")
+          new NullNode
+        }
       }
       case _ => throw new IllegalArgumentException(s"Type unhandled: " + typ + " for: " + tagOpt)
     }
   }
 
-  def nodeFor(typ: VTValueElem, elemName: String): Node = {
+  def nodeFor(typ: VTValueElem, elemName: String, structField: Boolean = false): Node = {
     typ match {
       case t: TExt => {
         t.reprType match {
           case extType: TStruct => new StructNode(t.tag, extType)
+          case union: TUnion if structField => {
+            new UnionNode(union)
+          }
           case other => simpleNodeFor(other, Some(t.tag), elemName: String)
         }
       }
@@ -100,6 +106,33 @@ class NullNode extends Node {
 
   def result(): Option[Value] = {
     None
+  }
+}
+
+class UnionNode(union: TUnion) extends Node with LazyLogging {
+
+  private val typeTags = union.unionTypes.flatMap {
+    case ext: TExt => Some(ext.tag -> ext)
+    case _ => None
+  }.toMap
+
+  private var resultOpt = Option.empty[Value]
+
+  def setText(content: String): Unit = {}
+
+  def onPush(name: String): Node = {
+    typeTags.get(name).map(ext => Node.nodeFor(ext, name)).getOrElse {
+      logger.warn(s"Did not recognize $name for union")
+      new NullNode
+    }
+  }
+
+  def onPop(subElemOpt: Option[Value]): Unit = {
+    resultOpt = subElemOpt
+  }
+
+  def result(): Option[Value] = {
+    resultOpt
   }
 }
 
@@ -189,12 +222,16 @@ class StructNode(typeTag: String, vt: TStruct) extends Node {
   }
 
   def onPush(name: String): Node = {
+    //println(s"struct $typeTag push: $name")
     fieldMap.get(name) match {
       case None =>
+        println(s"Null node $name for $typeTag")
         new NullNode
       case Some(sfd) => {
         currentField = Some(sfd.name)
-        Node.nodeFor(sfd.typ, name)
+        val selected = Node.nodeFor(sfd.typ, name, structField = true)
+        //println(s"struct $typeTag selected node $selected for $typeTag")
+        selected
       }
     }
   }
