@@ -66,7 +66,10 @@ object Node extends LazyLogging {
           case _ => None
         }.toMap
 
-        typeTags.get(elemName).map(ext => nodeFor(ext, elemName)).getOrElse(new NullNode)
+        typeTags.get(elemName).map(ext => nodeFor(ext, elemName)).getOrElse {
+          logger.warn(s"Did not recognize $tagOpt / $elemName for union ${t}")
+          new NullNode
+        }
       }
       case _ => throw new IllegalArgumentException(s"Type unhandled: " + typ + " for: " + tagOpt)
     }
@@ -189,12 +192,16 @@ class StructNode(typeTag: String, vt: TStruct) extends Node {
   }
 
   def onPush(name: String): Node = {
+    println(s"struct $typeTag push: $name")
     fieldMap.get(name) match {
       case None =>
+        println(s"Null node $name for $typeTag")
         new NullNode
       case Some(sfd) => {
         currentField = Some(sfd.name)
-        Node.nodeFor(sfd.typ, name)
+        val selected = Node.nodeFor(sfd.typ, name)
+        println(s"struct $typeTag selected node $selected for $typeTag")
+        selected
       }
     }
   }

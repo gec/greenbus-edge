@@ -20,7 +20,7 @@ package io.greenbus.edge.data.xml
 
 import java.io._
 
-/*
+
 import com.google.common.io.Files
 import io.greenbus.edge.data.mapping.{RootCtx, SimpleReaderContext}
 import io.greenbus.edge.fep.config.model._
@@ -144,10 +144,15 @@ object PostGen {
   def buildFep: FrontendConfiguration = {
     FrontendConfiguration(
       endpointId = Path(Seq("mthy", "mgrid", "ess01")),
+      metadata = Seq(
+        MetadataKeyValue(Path(Seq("myns", "endpointv01")), MetadataStringValue("my value")),
+        MetadataKeyValue(Path(Seq("myns", "endpointv02")), MetadataStringValue("my second value"))
+      ),
       dataKeys = Seq(
         DataKeyConfig(
           gatewayKey = "analog_0",
           path = Path(Seq("outputPower")),
+          metadata = Seq(MetadataKeyValue(Path(Seq("myns", "dataKey01")), MetadataIntegerValue(5))),
           descriptor = SeriesDescriptor(
             seriesType = SeriesType.AnalogStatus,
             unit = Some("kW"),
@@ -160,6 +165,7 @@ object PostGen {
         DataKeyConfig(
           gatewayKey = "analog_1",
           path = Path(Seq("mode")),
+          metadata = Seq(MetadataKeyValue(Path(Seq("myns", "dataKey02")), MetadataDoubleValue(3.14))),
           descriptor = SeriesDescriptor(
             seriesType = SeriesType.IntegerEnum,
             unit = None,
@@ -174,6 +180,7 @@ object PostGen {
         DataKeyConfig(
           gatewayKey = "binary_0",
           path = Path(Seq("faultStatus")),
+          metadata = Seq(MetadataKeyValue(Path(Seq("myns", "dataKey03")), MetadataBoolValue(true))),
           descriptor = SeriesDescriptor(
             seriesType = SeriesType.BooleanStatus,
             unit = None,
@@ -184,8 +191,9 @@ object PostGen {
           filter = None)),
       outputKeys = Seq(
         OutputKeyConfig(
-          gatewayKey = "control_0",
-          path = Path(Seq("Clear")),
+          gatewayKey = "setpoint_0",
+          path = Path(Seq("SetOutputPower")),
+          metadata = Seq(MetadataKeyValue(Path(Seq("myns", "outputKey01")), MetadataBoolValue(true))),
           descriptor = OutputDescriptor(
             OutputType.AnalogSetpoint,
             requestScale = Some(100),
@@ -195,6 +203,7 @@ object PostGen {
         OutputKeyConfig(
           gatewayKey = "setpoint_1",
           path = Path(Seq("SetMode")),
+          metadata = Seq(MetadataKeyValue(Path(Seq("myns", "outputKey02")), MetadataBoolValue(true))),
           descriptor = OutputDescriptor(
             OutputType.EnumerationSetpoint,
             requestScale = None,
@@ -206,4 +215,4 @@ object PostGen {
             requestBooleanLabels = None))))
   }
 }
-*/
+

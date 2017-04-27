@@ -194,13 +194,51 @@ object FrontendSchema {
       StructFieldDef("deadband", TOption(TDouble), 1))))
   }
 
+  val metadataStringValue: TExt = {
+    TExt(ns, "MetadataStringValue", TStruct(Vector(
+      StructFieldDef("value", TString, 0)
+    )))
+  }
+  val metadataIntegerValue: TExt = {
+    TExt(ns, "MetadataIntegerValue", TStruct(Vector(
+      StructFieldDef("value", TInt64, 0)
+    )))
+  }
+  val metadataBoolValue: TExt = {
+    TExt(ns, "MetadataBoolValue", TStruct(Vector(
+      StructFieldDef("value", TBool, 0)
+    )))
+  }
+  val metadataDoubleValue: TExt = {
+    TExt(ns, "MetadataDoubleValue", TStruct(Vector(
+      StructFieldDef("value", TDouble, 0)
+    )))
+  }
+
+  val metadataValue: TExt = {
+    TExt(ns, "MetadataValue", TUnion(Set(
+      metadataStringValue,
+      metadataIntegerValue,
+      metadataBoolValue,
+      metadataDoubleValue
+    )))
+  }
+
+  val metadataItem: TExt = {
+    TExt(ns, "MetadataKeyValue", TStruct(Vector(
+      StructFieldDef("path", path, 0),
+      StructFieldDef("value", metadataValue, 1)
+    )))
+  }
+
   val frontendDataKey: TExt = {
     TExt(ns, "DataKeyConfig", TStruct(Vector(
       StructFieldDef("gatewayKey", TString, 0),
       StructFieldDef("path", path, 1),
-      StructFieldDef("descriptor", seriesDescriptor, 2),
-      StructFieldDef("transforms", TList(transformDescriptor), 3),
-      StructFieldDef("filter", TOption(filterDescriptor), 4))))
+      StructFieldDef("metadata", TList(metadataItem), 2),
+      StructFieldDef("descriptor", seriesDescriptor, 3),
+      StructFieldDef("transforms", TList(transformDescriptor), 4),
+      StructFieldDef("filter", TOption(filterDescriptor), 5))))
   }
 
   val outputDescriptor: TExt = {
@@ -216,14 +254,16 @@ object FrontendSchema {
     TExt(ns, "OutputKeyConfig", TStruct(Vector(
       StructFieldDef("gatewayKey", TString, 0),
       StructFieldDef("path", path, 1),
-      StructFieldDef("descriptor", outputDescriptor, 2))))
+      StructFieldDef("metadata", TList(metadataItem), 2),
+      StructFieldDef("descriptor", outputDescriptor, 3))))
   }
 
   val frontendConfiguration: TExt = {
     TExt(ns, "FrontendConfiguration", TStruct(Vector(
       StructFieldDef("endpointId", path, 0),
-      StructFieldDef("dataKeys", TList(frontendDataKey), 1),
-      StructFieldDef("outputKeys", TList(frontendOutputKey), 2))))
+      StructFieldDef("metadata", TList(metadataItem), 1),
+      StructFieldDef("dataKeys", TList(frontendDataKey), 2),
+      StructFieldDef("outputKeys", TList(frontendOutputKey), 3))))
   }
 
   val all = Seq(
@@ -241,6 +281,12 @@ object FrontendSchema {
     seriesDescriptor,
     transformDescriptor,
     filterDescriptor,
+    metadataItem,
+    metadataValue,
+    metadataStringValue,
+    metadataBoolValue,
+    metadataIntegerValue,
+    metadataDoubleValue,
     frontendDataKey,
     outputDescriptor,
     frontendOutputKey,
