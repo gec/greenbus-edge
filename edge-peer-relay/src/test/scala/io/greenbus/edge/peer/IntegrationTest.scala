@@ -22,22 +22,24 @@ import java.util.UUID
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.amqp.impl.AmqpListener
-import io.greenbus.edge.api.stream.KeyMetadata
 import io.greenbus.edge.api._
+import io.greenbus.edge.api.stream.KeyMetadata
 import io.greenbus.edge.data.{ ValueDouble, ValueString }
 import io.greenbus.edge.stream.PeerSessionId
-import io.greenbus.edge.stream.subscribe.ValueSync
-import io.greenbus.edge.peer.TestHelpers.TypedEventQueue
 import org.junit.runner.RunWith
-import org.scalatest.{ BeforeAndAfterEach, FunSuite, Matchers }
 import org.scalatest.junit.JUnitRunner
+import org.scalatest.{ BeforeAndAfterEach, FunSuite, Matchers }
 
 import scala.concurrent.Await
-import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
+
+object EdgeSubHelpers extends TypedSubHelpers[IdentifiedEdgeUpdate]
 
 @RunWith(classOf[JUnitRunner])
 class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach with LazyLogging {
+
+  logger.debug("Test start")
 
   private var serverOpt = Option.empty[AmqpListener]
   private var serviceConnections = Vector.empty[EdgeServices]
@@ -49,19 +51,75 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
   }
 
   override protected def beforeEach(): Unit = {
+    //startRelay()
+  }
+
+  override protected def afterEach(): Unit = {
+    //stopRelay()
+    serviceConnections.foreach(_.shutdown())
+    serviceConnections = Vector()
+  }
+
+  def startRelay(): Unit = {
     val sessionId = PeerSessionId(UUID.randomUUID(), 0)
     val server = Await.result(PeerRelayServer.runRelay(sessionId, "127.0.0.1", 50555), 5000.milliseconds)
     serverOpt = Some(server)
   }
 
-  override protected def afterEach(): Unit = {
+  def stopRelay(): Unit = {
     serverOpt.foreach(_.close())
-    serviceConnections.foreach(_.shutdown())
     serverOpt = None
-    serviceConnections = Vector()
   }
 
-  test("Double consumer") {
+  class Producer1(services: EdgeServices) {
+
+    val endpointId = EndpointId(Path("my-endpoint"))
+    val builder = services.producer.endpointBuilder(endpointId)
+
+    val dataKey = Path("series-double-1")
+    val endDataKey = EndpointPath(endpointId, dataKey)
+
+    val series1 = builder.seriesValue(Path("series-double-1"), KeyMetadata(indexes = Map(Path("index1") -> ValueString("value 1"))))
+    val buffer = builder.build(seriesBuffersSize = 100, eventBuffersSize = 100)
+
+    def updateAndFlush(v: Double, time: Long): Unit = {
+      series1.update(ValueDouble(2.33), time)
+      buffer.flush()
+    }
+  }
+
+  test("Progression") {
+    import EdgeSubHelpers._
+    //val servicesForPublisher = services()
+    //servicesForPublisher.start()
+
+    val servicesForConsumer = services()
+    servicesForConsumer.start()
+
+    val subClient = servicesForConsumer.consumer.subscriptionClient
+
+    val params = SubscriptionParams(
+      dataKeys = DataKeySubscriptionParams(
+        series = Seq(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1")))))
+
+    val subscription = subClient.subscribe(params)
+
+    val flatQueue = new FlatQueue
+    subscription.updates.bind(flatQueue.received)
+
+    flatQueue.awaitListen(
+      prefixMatcher(
+        fixed {
+          case up: IdDataKeyUpdate => up.data == Pending
+        },
+        fixed {
+          case up: IdDataKeyUpdate => up.data == Disconnected
+        }), 5000)
+
+  }
+
+  /*test("Double consumer") {
+    startRelay()
 
     val servicesForPublisher = services()
     servicesForPublisher.start()
@@ -129,6 +187,6 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     sub2.updates.bind(sub2Q.received)
 
     Await.result(fut2, 5000.milliseconds)
-  }
+  }*/
 
 }

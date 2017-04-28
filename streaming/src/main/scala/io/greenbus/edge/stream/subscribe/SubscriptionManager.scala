@@ -356,7 +356,7 @@ class SubscriptionFilterMap(sink: Sink[Seq[RowUpdate]]) extends LazyLogging {
   }
 }
 
-class SubscriptionManager(eventThread: CallMarshaller) extends StreamSubscriptionManager {
+/*class SubscriptionManager(eventThread: CallMarshaller) extends StreamSubscriptionManager {
 
   private val dist = new QueuedDistributor[Seq[RowUpdate]]
   private val filters = new SubscriptionFilterMap(dist)
@@ -389,7 +389,7 @@ class SubscriptionManager(eventThread: CallMarshaller) extends StreamSubscriptio
   }
 
   def source: Source[Seq[RowUpdate]] = dist
-}
+}*/
 
 trait StreamSubscriptionManager {
   def update(set: Set[RowId])
@@ -399,7 +399,7 @@ trait StreamSubscriptionManager {
 trait StreamDynamicSubscriptionManager {
   def update(set: Set[SubscriptionKey]): Unit
   def source: Source[Seq[KeyedUpdate]]
-  def sync(key: SubscriptionKey): Option[ValueSync]
+  def initial(key: SubscriptionKey): Option[ValueUpdate]
 }
 
 class DynamicSubscriptionManager(eventThread: CallMarshaller) extends StreamDynamicSubscriptionManager with LazyLogging {
@@ -442,12 +442,20 @@ class DynamicSubscriptionManager(eventThread: CallMarshaller) extends StreamDyna
     }
   }
 
-  def sync(key: SubscriptionKey): Option[ValueSync] = {
-    keyRowMap.keyToRow.get(key).flatMap(filters.sync)
+  def initial(key: SubscriptionKey): Option[ValueUpdate] = {
+    logger.debug("!!! sync: " + key)
+    logger.debug("!!! current: " + keyRowMap.keyToRow.get(key))
+    logger.debug("!!! map: " + keyRowMap)
+    if (connectionOpt.nonEmpty) {
+      keyRowMap.keyToRow.get(key).flatMap(filters.sync)
+    } else {
+      Some(ValueDisconnected)
+    }
   }
 
   def update(set: Set[SubscriptionKey]): Unit = {
     eventThread.marshal {
+      logger.debug("!!! sub update")
       registeredKeys = set
       connectionOpt.foreach {
         case (sess, proxy) => computeAndUpdateSub(sess, proxy)
