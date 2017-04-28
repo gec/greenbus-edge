@@ -52,4 +52,8 @@ object Path {
     Path(Seq(part))
   }
 }
-case class Path(parts: Seq[String])
+case class Path(parts: Seq[String]) {
+  override def toString: String = {
+    parts.mkString("(", ",", ")")
+  }
+}

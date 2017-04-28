@@ -44,8 +44,8 @@ object RetryingConnector {
     def close(): Unit = channel.close()
   }
 
-  def client(service: AmqpService, host: String, port: Int)(implicit ec: ExecutionContext): Future[StreamClientResult] = {
-    service.connect(host, port, 5000).flatMap { clientSource =>
+  def client(service: AmqpService, host: String, port: Int, timeoutMs: Long)(implicit ec: ExecutionContext): Future[StreamClientResult] = {
+    service.connect(host, port, timeoutMs).flatMap { clientSource =>
 
       val describer = new ChannelDescriberImpl
       val responseParser = new ClientResponseParser
@@ -56,7 +56,7 @@ object RetryingConnector {
     }
   }
 }
-class RetryingConnector(eventThread: SchedulableCallMarshaller, service: AmqpService, host: String, port: Int, retryIntervalMs: Long)(implicit ec: ExecutionContext) {
+class RetryingConnector(eventThread: SchedulableCallMarshaller, service: AmqpService, host: String, port: Int, retryIntervalMs: Long, connectTimeoutMs: Long)(implicit ec: ExecutionContext) {
   import RetryingConnector._
 
   private var sequence: Long = 0
@@ -68,7 +68,7 @@ class RetryingConnector(eventThread: SchedulableCallMarshaller, service: AmqpSer
   private val retrier = new Retrier[StreamClientResult](
     s"[$host:$port]",
     eventThread,
-    () => RetryingConnector.client(service, host, port),
+    () => RetryingConnector.client(service, host, port, connectTimeoutMs),
     handle,
     retryIntervalMs)
 

@@ -186,12 +186,17 @@ trait ProducerUserBuffer {
 }
 trait ProducerHandle {
   def flush(): Unit
+  def close(): Unit
 }
 
 class ProducerHandleImpl(handle: RouteSourceHandle) extends ProducerHandle {
 
   def flush(): Unit = {
     handle.flushEvents()
+  }
+
+  def close(): Unit = {
+    handle.close()
   }
 }
 
@@ -224,7 +229,7 @@ class StreamProducerBinder(routeSource: GatewayRouteSource) extends ProducerBind
   import StreamProducerBinder._
 
   def bindEndpoint(provider: EndpointProducerDesc, seriesBuffersSize: Int, eventBuffersSize: Int): ProducerHandle = {
-    val routeHandle = routeSource.route(EdgeCodecCommon.endpointIdToRoute(provider.endpointId))
+    val routeHandle = routeSource.routeSourced(EdgeCodecCommon.endpointIdToRoute(provider.endpointId))
 
     val endpointDescriptorRow = EdgeCodecCommon.endpointIdToEndpointDescriptorTableRow(provider.endpointId)
     val descSink = routeHandle.appendSetRow(endpointDescriptorRow, 1, None)

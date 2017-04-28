@@ -33,7 +33,7 @@ object EdgeIndexer {
 
     val service = AmqpService.build()
     val exe = EventThreadService.build("event")
-    val retrier = new RetryingConnector(exe, service, host, port, 10000)
+    val retrier = new RetryingConnector(exe, service, host, port, 10000, 10000)
     val mgr = new ObservingIndexMgr(exe)
     retrier.bindGatewayObserver(mgr)
     retrier.bindPeerLinkObserver(mgr)

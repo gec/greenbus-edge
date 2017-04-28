@@ -35,15 +35,15 @@ trait EdgeServices {
 }
 
 object AmqpEdgeService {
-  def build(host: String, port: Int, retryIntervalMs: Long)(implicit ec: ExecutionContext): EdgeServices = {
-    new AmqpEdgeService(host, port, retryIntervalMs)
+  def build(host: String, port: Int, retryIntervalMs: Long = 10000, connectTimeoutMs: Long = 10000)(implicit ec: ExecutionContext): EdgeServices = {
+    new AmqpEdgeService(host, port, retryIntervalMs, connectTimeoutMs)
   }
 }
-class AmqpEdgeService(host: String, port: Int, retryIntervalMs: Long)(implicit ec: ExecutionContext) extends EdgeServices {
+class AmqpEdgeService(host: String, port: Int, retryIntervalMs: Long, connectTimeoutMs: Long)(implicit ec: ExecutionContext) extends EdgeServices {
 
   private val service = AmqpService.build()
   private val exe = EventThreadService.build("event")
-  private val retrier = new RetryingConnector(exe, service, host, port, 10000)
+  private val retrier = new RetryingConnector(exe, service, host, port, retryIntervalMs, connectTimeoutMs)
 
   private val consumerServices = StreamConsumerManager.build(exe)
   retrier.bindPeerLinkObserver(consumerServices)

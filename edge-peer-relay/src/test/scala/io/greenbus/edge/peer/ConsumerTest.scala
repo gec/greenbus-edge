@@ -44,7 +44,7 @@ object ConsumerTest extends LazyLogging {
 
   def main(args: Array[String]): Unit = {
 
-    val services = AmqpEdgeService.build("127.0.0.1", 50001, 10000)
+    val services = AmqpEdgeService.build("127.0.0.1", 50001, 10000, 10000)
     services.start()
     val consumerServices = services.consumer
 

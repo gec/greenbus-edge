@@ -78,9 +78,11 @@ class Gateway(localSession: PeerSessionId) extends LocalGateway with LazyLogging
       logger.debug(s"Client route update: $routes")
       val gatewayRoutesBefore = clientToRoutes.values
 
-      val proxyRoutesBefore = clientToRoutes.getFirst(ctx.proxy).getOrElse(Set())
+      val proxyRoutesBefore: Set[TypeValue] = clientToRoutes.getFirst(ctx.proxy).getOrElse(Set())
       val subsBefore = proxyRoutesBefore.flatMap(r => subscriptions.getOrElse(r, Set()).map(_.toRowId(r)))
 
+      val removes = proxyRoutesBefore -- routes
+      removes.foreach(r => clientToRoutes.remove(ctx.proxy, r))
       routes.foreach(r => clientToRoutes.put(ctx.proxy, r))
 
       val proxyRoutesAfter = clientToRoutes.getFirst(ctx.proxy).getOrElse(Set())

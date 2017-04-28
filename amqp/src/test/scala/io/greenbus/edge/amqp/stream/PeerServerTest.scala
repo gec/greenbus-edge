@@ -111,7 +111,7 @@ object GatewayTest {
     val exe = new ExecutorEventThread
     val gatewaySource = GatewayRouteSource.build(exe)
 
-    val route = gatewaySource.route(SymbolVal("my_route"))
+    val route = gatewaySource.routeSourced(SymbolVal("my_route"))
 
     var setElems: Vector[Long] = Vector(5, 11)
     def toSet: Set[TypeValue] = setElems.map(Int64Val).toSet

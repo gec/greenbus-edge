@@ -342,7 +342,7 @@ class IndexProducer(eventThread: CallMarshaller, routeSource: GatewayRouteSource
   }
 
   private def register(sess: PeerSessionId, peer: PeerLinkProxyChannel): Unit = {
-    val handle = routeSource.route(IndexProducer.routeForSession(sess))
+    val handle = routeSource.routeSourced(IndexProducer.routeForSession(sess))
     handle.dynamicTable(EdgeTables.endpointPrefixTable, endpointSetSource)
     handle.dynamicTable(EdgeTables.endpointIndexTable, endpointIndexSource)
     handle.dynamicTable(EdgeTables.dataKeyIndexTable, dataKeyIndexSource)

@@ -67,6 +67,7 @@ trait RouteSourceHandle {
   def requests: Source[Seq[RouteServiceRequest]]
 
   def flushEvents(): Unit
+  def close(): Unit
 }
 
 /*
@@ -188,6 +189,12 @@ class RouteHandleImpl(eventThread: CallMarshaller, route: TypeValue, mgr: RouteM
   def flushEvents(): Unit = {
     mgr.flushEvents()
   }
+
+  def close(): Unit = {
+    eventThread.marshal {
+      mgr.close()
+    }
+  }
 }
 
 object RouteMgr {
@@ -199,6 +206,9 @@ class RouteMgr(route: TypeValue, mgr: SourceMgr, requestSink: Sink[Seq[RouteServ
   private var dynamicTables = Map.empty[String, BindableTableMgr]
   private var rows = Map.empty[TableRow, BindableRowMgr]
   private var bindingOpt = Option.empty[Binding]
+  private var subscribedRows = Set.empty[TableRow]
+
+  def subscribed: Set[TableRow] = subscribedRows
 
   def addBindable(row: TableRow, mgr: BindableRowMgr): Unit = {
     logger.debug(s"Route $route saw bindable added for row: $row")
@@ -231,6 +241,7 @@ class RouteMgr(route: TypeValue, mgr: SourceMgr, requestSink: Sink[Seq[RouteServ
 
   def subscriptionUpdate(subbed: Set[TableRow]): Unit = {
     logger.debug(s"Route $route subscription update: $subbed")
+    subscribedRows = subbed
     bindingOpt.foreach { binding =>
 
       val before = binding.subscribed
@@ -292,6 +303,10 @@ class RouteMgr(route: TypeValue, mgr: SourceMgr, requestSink: Sink[Seq[RouteServ
     dynamicTables.foreach(_._2.unbind())
   }
 
+  def close(): Unit = {
+    mgr.routeRemoved(route)
+  }
+
 }
 
 object GatewayRouteSource {
@@ -304,7 +319,7 @@ trait GatewayConnectionObserver {
   def connect(channel: GatewayProxyChannel): Unit
 }
 trait GatewayRouteSource {
-  def route(route: TypeValue): RouteSourceHandle
+  def routeSourced(route: TypeValue): RouteSourceHandle
   def connect(channel: GatewayProxyChannel): Unit
 }
 
@@ -318,7 +333,7 @@ class SourceMgr(eventThread: CallMarshaller) extends GatewayRouteSource with Laz
 
   private var connectionOpt = Option.empty[SourceConnectedState]
 
-  def route(route: TypeValue): RouteSourceHandle = {
+  def routeSourced(route: TypeValue): RouteSourceHandle = {
     val requestDist = new RemoteBoundQueuedDistributor[Seq[RouteServiceRequest]](eventThread)
     val mgr = new RouteMgr(route, this, requestDist)
     eventThread.marshal {
@@ -339,6 +354,24 @@ class SourceMgr(eventThread: CallMarshaller) extends GatewayRouteSource with Laz
       ctx.buffer.flush(Some(routes.keySet))
 
       connectionOpt = Some(ctx.copy(unsourcedRoutes = ctx.unsourcedRoutes - route))
+    }
+  }
+
+  def routeRemoved(route: TypeValue): Unit = {
+    eventThread.marshal {
+      onRouteRemoved(route)
+    }
+  }
+
+  private def onRouteRemoved(route: TypeValue): Unit = {
+    logger.debug(s"Route removed: $route")
+    // TODO: this should be tracked in the main subscription management, not threaded back and forth from the (ephemeral) object
+    val subscribedRows = routes.get(route).map(_.subscribed).getOrElse(Set())
+    routes -= route
+
+    connectionOpt.foreach { ctx =>
+      ctx.buffer.flush(Some(routes.keySet))
+      connectionOpt = Some(ctx.copy(unsourcedRoutes = ctx.unsourcedRoutes + (route -> subscribedRows)))
     }
   }
 
