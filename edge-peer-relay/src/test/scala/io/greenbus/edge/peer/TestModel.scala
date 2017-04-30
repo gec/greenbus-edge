@@ -16,34 +16,33 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.peer.indexer
+package io.greenbus.edge.peer
 
-import io.greenbus.edge.amqp.AmqpService
-import io.greenbus.edge.peer.RetryingConnector
-import io.greenbus.edge.thread.EventThreadService
+import io.greenbus.edge.api.{ EndpointId, EndpointPath, Path }
+import io.greenbus.edge.api.stream.KeyMetadata
+import io.greenbus.edge.data.{ ValueDouble, ValueString }
 
-import scala.concurrent.ExecutionContext.Implicits.global
+object TestModel {
 
-object EdgeIndexer {
+  class Producer1(services: EdgeServices) {
 
-  def main(args: Array[String]): Unit = {
+    val endpointId = EndpointId(Path("my-endpoint"))
+    val builder = services.producer.endpointBuilder(endpointId)
 
-    val host = "127.0.0.1"
-    val port = 50001
+    val dataKey = Path("series-double-1")
+    val endDataKey = EndpointPath(endpointId, dataKey)
 
-    build(host, port)
+    val series1 = builder.seriesValue(Path("series-double-1"), KeyMetadata(indexes = Map(Path("index1") -> ValueString("value 1"))))
+    val buffer = builder.build(seriesBuffersSize = 100, eventBuffersSize = 100)
+
+    def updateAndFlush(v: Double, time: Long): Unit = {
+      series1.update(ValueDouble(v), time)
+      buffer.flush()
+    }
+
+    def close(): Unit = {
+      buffer.close()
+    }
   }
 
-  def build(host: String, port: Int, retryIntervalMs: Long = 10000, connectTimeoutMs: Long = 10000): RetryingConnector = {
-    val service = AmqpService.build()
-    val exe = EventThreadService.build(s"$host:$port indexer")
-    val retrier = new RetryingConnector(exe, service, host, port, retryIntervalMs, connectTimeoutMs)
-    val mgr = new ObservingIndexMgr(exe)
-    retrier.bindGatewayObserver(mgr)
-    retrier.bindPeerLinkObserver(mgr)
-    retrier.start()
-
-    retrier
-  }
 }
-

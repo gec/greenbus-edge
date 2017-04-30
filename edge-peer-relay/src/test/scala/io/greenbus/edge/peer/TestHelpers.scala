@@ -84,18 +84,13 @@ object TestHelpers {
                 case Some((consumed, remains)) => {
                   queue = remains.toVector
                   prom.success(consumed)
+                  chk = None
                 }
               }
             } catch {
               case ex: Throwable =>
                 prom.failure(ex)
             }
-          /*if (check(queue)) {
-              val q = queue
-              queue = Vector.empty[A]
-              prom.success(q)
-              chk = None
-            }*/
         }
       }
     }
@@ -136,8 +131,6 @@ object TestHelpers {
   }
 
   sealed trait SeqMatcher[A]
-  /*case class FixedMatcher[A](f: A => Boolean) extends SeqMatchers[A]
-  case class EventualMatcher[A](f: A => Boolean)  extends SeqMatchers[A]*/
   case class FixedMatcher[A](f: PartialFunction[A, Boolean]) extends SeqMatcher[A]
   case class EventualMatcher[A](f: PartialFunction[A, Boolean]) extends SeqMatcher[A]
 

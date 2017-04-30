@@ -18,6 +18,7 @@
  */
 package io.greenbus.edge.thread
 
+import java.io.{ ByteArrayOutputStream, PrintStream }
 import java.util.concurrent.{ Executors, ThreadFactory, TimeUnit }
 
 import com.typesafe.scalalogging.LazyLogging
@@ -53,6 +54,11 @@ object EventThreadService {
       try { f } catch {
         case ex: Throwable =>
           logger.error(s"Exception thrown in event thread handler: " + ex)
+          val bos = new ByteArrayOutputStream()
+          val ps = new PrintStream(bos)
+          ex.printStackTrace(ps)
+          ps.flush()
+          logger.debug(new String(bos.toByteArray, "UTF-8"))
       }
     }
 

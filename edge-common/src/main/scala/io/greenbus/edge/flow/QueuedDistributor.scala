@@ -245,3 +245,38 @@ class RemoteBoundLatestSource[A](eventThread: CallMarshaller) extends Source[A] 
     }
   }
 }
+
+object ThreadTraversingQueue {
+  sealed trait State[A]
+  case class Unbound[A](queue: ArrayBuffer[A]) extends State[A]
+  case class Opened[A](handler: Handler[A]) extends State[A]
+}
+class ThreadTraversingQueue[A](source: CallMarshaller, target: CallMarshaller) extends Source[A] with Sink[A] with LazyLogging {
+  import ThreadTraversingQueue._
+
+  private var state: State[A] = Unbound(ArrayBuffer.empty[A])
+
+  def bind(handler: Handler[A]): Unit = {
+    source.marshal {
+      state match {
+        case Unbound(queue) =>
+          state = Opened(handler)
+          target.marshal {
+            queue.foreach(handler.handle)
+          }
+        case Opened(_) =>
+          logger.error("Queued distributor bound twice")
+      }
+    }
+  }
+
+  def push(obj: A): Unit = {
+    state match {
+      case Unbound(queue) => queue += obj
+      case Opened(handler) =>
+        target.marshal {
+          handler.handle(obj)
+        }
+    }
+  }
+}

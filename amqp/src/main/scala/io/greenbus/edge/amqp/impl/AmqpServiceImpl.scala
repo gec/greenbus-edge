@@ -30,13 +30,14 @@ import io.greenbus.edge.thread.CallMarshaller
 import org.apache.qpid.proton.Proton
 import org.apache.qpid.proton.engine._
 
-import scala.concurrent.{ Future, Promise }
+import scala.concurrent.{ Await, Future, Promise }
+import scala.concurrent.duration._
 
 trait AmqpChannelClientSource extends CloseableComponent {
   def open(describer: AmqpChannelDescriber, responseParser: AmqpClientResponseParser, serialization: ChannelSerializationProvider): Future[ChannelClient]
 }
 
-class AmqpChannelClientSourceImpl(ioThread: CallMarshaller, c: Connection, promise: Promise[AmqpChannelClientSource]) extends AmqpChannelClientSource {
+class AmqpChannelClientSourceImpl(ioThread: CallMarshaller, c: Connection, promise: Promise[AmqpChannelClientSource], parent: ResourceRemoveObserver) extends AmqpChannelClientSource with HandlerResource {
   private val children = new ResourceContainer
 
   private var opened = false
@@ -48,6 +49,8 @@ class AmqpChannelClientSourceImpl(ioThread: CallMarshaller, c: Connection, promi
     ioThread.marshal {
       c.close()
       closeLatch()
+      children.notifyOfClose()
+      parent.handleChildRemove(this)
     }
   }
 
@@ -72,16 +75,25 @@ class AmqpChannelClientSourceImpl(ioThread: CallMarshaller, c: Connection, promi
 
     def onOpen(c: Connection): Unit = {
       opened = true
-      promise.success(self)
+      if (!promise.isCompleted) {
+        promise.success(self)
+      }
     }
 
     def onRemoteClose(c: Connection): Unit = {
       closeLatch()
-      if (!opened) {
+      if (!opened && !promise.isCompleted) {
         promise.failure(new TimeoutException(s"Transport closed"))
       }
       children.notifyOfClose()
+      parent.handleChildRemove(self)
     }
+  }
+
+  def handleParentClose(): Unit = {
+    c.close()
+    closeLatch()
+    children.notifyOfClose()
   }
 }
 
@@ -93,6 +105,8 @@ class AmqpServiceImpl(idOpt: Option[String] = None) extends AmqpService {
     r.getGlobalHandler.add(new UnhandledLogger(idOpt.getOrElse("AMQP")))
   }
 
+  private val children = new ResourceContainer
+
   private val threadId = idOpt.map(id => s"AMQP reactor - $id").getOrElse("AMQP reactor")
   private val threadPump = new ThreadReactorPump(r, opQueue.handle, threadId)
   opQueue.setNotifier(threadPump)
@@ -100,6 +114,13 @@ class AmqpServiceImpl(idOpt: Option[String] = None) extends AmqpService {
   threadPump.open()
 
   def close(): Unit = {
+    val prom = Promise[Boolean]
+    val fut = prom.future
+    opQueue.marshal {
+      children.notifyOfClose()
+      prom.success(true)
+    }
+    Await.result(fut, 5000.milliseconds)
     threadPump.close()
   }
 
@@ -107,13 +128,14 @@ class AmqpServiceImpl(idOpt: Option[String] = None) extends AmqpService {
 
   def connect(host: String, port: Int, timeoutMs: Long): Future[AmqpChannelClientSource] = {
     val hostname = s"$host:$port"
-
-    val protonHandler = new ClientConnectionProtonHandler(hostname)
     val promise = Promise[AmqpChannelClientSource]
 
     opQueue.marshal {
+
+      val protonHandler = new ClientConnectionProtonHandler(hostname)
       val conn = r.connectionToHost(host, port, protonHandler)
-      val impl = new AmqpChannelClientSourceImpl(opQueue, conn, promise)
+      val impl = new AmqpChannelClientSourceImpl(opQueue, conn, promise, children)
+      children.add(impl)
 
       r.schedule(timeoutMs.toInt, protonHandler)
       conn.setContext(impl.handler)
@@ -125,13 +147,14 @@ class AmqpServiceImpl(idOpt: Option[String] = None) extends AmqpService {
   }
 
   def listen(host: String, port: Int, /*sslOpt: Option[AmqpSslServerConfig], saslEnabled: Boolean,*/ handler: AmqpChannelServer): Future[AmqpListener] = {
-    val hostname = s"$host:$port"
-    val ctx = new ListenerContext(hostname, opQueue, handler)
-    val protonHandler = new ListenerProtonHandler(hostname, ctx /*, sslOpt, saslEnabled*/ )
 
     val prom = Promise[AmqpListener]
 
     opQueue.marshal {
+      val hostname = s"$host:$port"
+      val ctx = new ListenerContext(hostname, opQueue, handler, children)
+      children.add(ctx)
+      val protonHandler = new ListenerProtonHandler(hostname, ctx /*, sslOpt, saslEnabled*/ )
       val acceptor = r.acceptor(host, port, protonHandler)
       prom.success(new ListenerImpl(opQueue, acceptor))
     }

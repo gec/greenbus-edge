@@ -55,7 +55,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
   }
 
   override protected def afterEach(): Unit = {
-    //stopRelay()
+    stopRelay()
     serviceConnections.foreach(_.shutdown())
     serviceConnections = Vector()
   }
@@ -71,33 +71,14 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     serverOpt = None
   }
 
-  class Producer1(services: EdgeServices) {
-
-    val endpointId = EndpointId(Path("my-endpoint"))
-    val builder = services.producer.endpointBuilder(endpointId)
-
-    val dataKey = Path("series-double-1")
-    val endDataKey = EndpointPath(endpointId, dataKey)
-
-    val series1 = builder.seriesValue(Path("series-double-1"), KeyMetadata(indexes = Map(Path("index1") -> ValueString("value 1"))))
-    val buffer = builder.build(seriesBuffersSize = 100, eventBuffersSize = 100)
-
-    def updateAndFlush(v: Double, time: Long): Unit = {
-      series1.update(ValueDouble(v), time)
-      buffer.flush()
-    }
-
-    def close(): Unit = {
-      buffer.close()
-    }
-  }
-
   /*
    TODO:
 
    producer removes endpoint while disconnected, not there when it reconnects
 
     */
+
+  import TestModel._
 
   test("Progression") {
     import EdgeSubHelpers._

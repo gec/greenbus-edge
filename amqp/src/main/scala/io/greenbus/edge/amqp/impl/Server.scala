@@ -81,7 +81,7 @@ class ServerSessionImpl(handler: AmqpChannelServer, parent: ResourceRemoveObserv
   }
 }
 
-class ServerConnectionImpl(handler: AmqpChannelServer) extends ConnectionContext with LazyLogging {
+class ServerConnectionImpl(conn: Connection, handler: AmqpChannelServer, parent: ResourceRemoveObserver) extends ConnectionContext with HandlerResource with LazyLogging {
   private val children = new ResourceContainer
 
   def onSessionRemoteOpen(s: Session): Unit = {
@@ -97,10 +97,17 @@ class ServerConnectionImpl(handler: AmqpChannelServer) extends ConnectionContext
   def onRemoteClose(c: Connection): Unit = {
     logger.debug(s"Connection closed: ${c.getRemoteHostname}")
     children.notifyOfClose()
+    parent.handleChildRemove(this)
+  }
+
+  def handleParentClose(): Unit = {
+    children.notifyOfClose()
+    conn.close()
   }
 }
 
-class ListenerContext(id: String, ioThread: CallMarshaller, handler: AmqpChannelServer) extends LazyLogging {
+class ListenerContext(id: String, ioThread: CallMarshaller, handler: AmqpChannelServer, parent: ResourceRemoveObserver) extends HandlerResource with LazyLogging {
+  private val children = new ResourceContainer
 
   def handleConnectionOpen(conn: Connection /*, credentials: Option[SaslPlainCredentials]*/ ): Unit = {
 
@@ -109,9 +116,18 @@ class ListenerContext(id: String, ioThread: CallMarshaller, handler: AmqpChannel
 
     // TODO: auth here?
 
-    val impl = new ServerConnectionImpl(handler)
+    val impl = new ServerConnectionImpl(conn, handler, children)
+    children.add(impl)
     conn.setContext(impl)
     conn.open()
+  }
+
+  def close(): Unit = {
+    children.notifyOfClose()
+  }
+
+  def handleParentClose(): Unit = {
+    children.notifyOfClose()
   }
 }
 

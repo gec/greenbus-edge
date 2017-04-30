@@ -25,6 +25,10 @@ class ContextualProtonHandler(id: String) extends BaseHandler with LazyLogging {
 
   override def onTransportError(e: Event): Unit = {
     logger.debug("Transport error: " + Option(e.getTransport.getCondition).map(_.getDescription).getOrElse("[unknown]"))
+    e.getConnection.getContext match {
+      case ctx: ConnectionContext => ctx.onRemoteClose(e.getConnection)
+      case _ => logger.warn(s"$id unknown context in transport error")
+    }
   }
 
   override def onTransportClosed(e: Event): Unit = {
