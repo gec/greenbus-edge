@@ -254,7 +254,7 @@ class RowFilterImpl extends RowFilter with LazyLogging {
   def sync(): Option[ValueSync] = {
     activeFilterOpt match {
       case None =>
-        logger.warn(s"Filter sync had no active filter"); None
+        logger.debug(s"Filter sync had no active filter"); None
       case Some(filt) =>
         Some(filt.sync())
     }

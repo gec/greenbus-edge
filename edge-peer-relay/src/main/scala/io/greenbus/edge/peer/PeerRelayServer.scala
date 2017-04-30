@@ -41,9 +41,13 @@ object PeerRelayServer {
 
   def main(args: Array[String]): Unit = {
 
+    val baseDir = Option(System.getProperty("io.greenbus.config.base")).getOrElse("")
+    val amqpConfigPath = Option(System.getProperty("io.greenbus.edge.config.peer")).map(baseDir + _).getOrElse(baseDir + "io.greenbus.edge.peer.relay.cfg")
+    val settings = PeerRelaySettings.load(amqpConfigPath)
+
     val sessionId = PeerSessionId(UUID.randomUUID(), 0)
 
-    runRelay(sessionId, "127.0.0.1", 50001)
+    runRelay(sessionId, settings.host, settings.port)
 
     System.in.read()
 
@@ -104,94 +108,5 @@ class PeerRelay(sessionId: PeerSessionId) {
   def close(): Unit = {
     service.close()
     indexThread.close()
-  }
-}
-
-object LocalChannelSource {
-
-  class SubAdapter(client: CallMarshaller, server: CallMarshaller) extends PeerLinkProxyChannel {
-
-    private val subQueue = new ThreadTraversingQueue[Set[RowId]](client, server)
-    private val eventQueue = new ThreadTraversingQueue[Seq[StreamEvent]](server, client)
-    private val requestsQueue = new ThreadTraversingQueue[Seq[ServiceRequest]](client, server)
-    private val responsesQueue = new ThreadTraversingQueue[Seq[ServiceResponse]](server, client)
-
-    def subscriptions: Sink[Set[RowId]] = subQueue
-    def events: Source[Seq[StreamEvent]] = eventQueue
-    def requests: Sink[Seq[ServiceRequest]] = requestsQueue
-    def responses: Source[Seq[ServiceResponse]] = responsesQueue
-
-    def close(): Unit = {}
-    def onClose: LatchSubscribable = new NullLatchSubscribable
-
-    val subProxy: SubscriberProxyChannel = new SubscriberProxyChannel {
-
-      def subscriptions: Source[Set[RowId]] = subQueue
-      def events: Sink[Seq[StreamEvent]] = eventQueue
-      def requests: Source[Seq[ServiceRequest]] = requestsQueue
-      def responses: Sink[Seq[ServiceResponse]] = responsesQueue
-
-      def onClose: LatchSubscribable = new NullLatchSubscribable
-      def close(): Unit = {}
-    }
-  }
-
-  class GatewayAdapter(client: CallMarshaller, server: CallMarshaller) extends GatewayProxyChannel {
-
-    private val subQueue = new ThreadTraversingQueue[Set[RowId]](server, client)
-    private val eventQueue = new ThreadTraversingQueue[GatewayEvents](client, server)
-    private val requestsQueue = new ThreadTraversingQueue[Seq[ServiceRequest]](server, client)
-    private val responsesQueue = new ThreadTraversingQueue[Seq[ServiceResponse]](client, server)
-
-    def subscriptions: Source[Set[RowId]] = subQueue
-
-    def events: Sender[GatewayEvents, Boolean] = new Sender[GatewayEvents, Boolean] {
-      def send(obj: GatewayEvents, handleResponse: (Try[Boolean]) => Unit): Unit = {
-        eventQueue.push(obj)
-        client.marshal {
-          handleResponse(Success(true))
-        }
-      }
-    }
-
-    def requests: Source[Seq[ServiceRequest]] = requestsQueue
-    def responses: Sink[Seq[ServiceResponse]] = responsesQueue
-
-    def close(): Unit = {}
-    def onClose: LatchSubscribable = new NullLatchSubscribable
-
-    val gateProxy: GatewayClientProxyChannel = new GatewayClientProxyChannel {
-
-      def subscriptions: Sink[Set[RowId]] = subQueue
-      def events: Source[GatewayEvents] = eventQueue
-      def requests: Sink[Seq[ServiceRequest]] = requestsQueue
-      def responses: Source[Seq[ServiceResponse]] = responsesQueue
-
-      def close(): Unit = {}
-      def onClose: LatchSubscribable = new NullLatchSubscribable
-    }
-  }
-
-  class NullLatchSubscribable extends LatchSubscribable {
-    def subscribe(handler: LatchHandler): Closeable = {
-      new Closeable {
-        def close(): Unit = {}
-      }
-    }
-  }
-
-}
-class LocalChannelSource(machine: PeerChannelHandler) {
-  import LocalChannelSource._
-  def subscribe(client: CallMarshaller, server: CallMarshaller): PeerLinkProxyChannel = {
-    val adapter = new SubAdapter(client, server)
-    machine.subscriberOpened(adapter.subProxy)
-    adapter
-  }
-
-  def gateway(client: CallMarshaller, server: CallMarshaller): GatewayProxyChannel = {
-    val adapter = new GatewayAdapter(client, server)
-    machine.gatewayClientOpened(adapter.gateProxy)
-    adapter
   }
 }

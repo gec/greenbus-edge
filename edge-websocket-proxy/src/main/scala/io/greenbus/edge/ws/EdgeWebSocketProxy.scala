@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 import akka.actor.ActorSystem
 import com.typesafe.config.ConfigFactory
-import io.greenbus.edge.peer.AmqpEdgeService
+import io.greenbus.edge.peer.{ AmqpEdgeService, PeerClientSettings }
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -36,7 +36,13 @@ object EdgeWebSocketProxy {
     val akkaConfig = slf4jConfig.withFallback(rootConfig)
     val system = ActorSystem("brokerTest", akkaConfig)
 
-    val services = AmqpEdgeService.build("127.0.0.1", 50001, 10000)
+    val baseDir = Option(System.getProperty("io.greenbus.config.base")).getOrElse("")
+    val amqpConfigPath = Option(System.getProperty("io.greenbus.edge.config.client")).map(baseDir + _).getOrElse(baseDir + "io.greenbus.edge.peer.client.cfg")
+    val wsConfigPath = Option(System.getProperty("io.greenbus.edge.config.ws.proxy")).map(baseDir + _).getOrElse(baseDir + "io.greenbus.edge.ws.proxy.cfg")
+    val clientSettings = PeerClientSettings.load(amqpConfigPath)
+    val proxySettings = WebSocketProxySettings.load(wsConfigPath)
+
+    val services = AmqpEdgeService.build(clientSettings.host, clientSettings.port, retryIntervalMs = clientSettings.retryIntervalMs, connectTimeoutMs = clientSettings.connectTimeoutMs)
     services.start()
 
     val linkMgr = system.actorOf(PeerLinkMgr.props(services.consumer))
@@ -44,7 +50,7 @@ object EdgeWebSocketProxy {
     val mgr = new GuiSocketMgr(linkMgr)
     globalSocketMgr.set(mgr)
 
-    val server = new EdgeGuiServer(8080)
+    val server = new EdgeGuiServer(proxySettings.port)
     server.run()
   }
 }
