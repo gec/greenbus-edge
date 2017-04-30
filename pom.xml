@@ -48,6 +48,7 @@
         <module>protobuf</module>
         <module>amqp</module>
         <module>edge-peer-relay</module>
+        <module>edge-websocket-proxy</module>
     </modules>
 
     <repositories>
