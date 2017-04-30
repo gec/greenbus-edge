@@ -182,7 +182,7 @@ trait DescriptorObserver {
   def removed(id: EndpointId): Unit
 }
 
-class NotifyingDescriptorCache(notify: (EndpointId, EndpointDescriptor) => Unit) extends DescriptorCache with DescriptorObserver {
+class NotifyingDescriptorCache(notify: (EndpointId, EndpointDescriptor) => Unit, notifyRemoved: EndpointId => Unit) extends DescriptorCache with DescriptorObserver {
 
   private var descMap = Map.empty[EndpointId, EndpointDescriptor]
 
@@ -197,6 +197,7 @@ class NotifyingDescriptorCache(notify: (EndpointId, EndpointDescriptor) => Unit)
 
   def removed(id: EndpointId): Unit = {
     descMap -= id
+    notifyRemoved(id)
   }
 }
 
@@ -309,7 +310,7 @@ object IndexProducer {
 }
 class IndexProducer(eventThread: CallMarshaller, routeSource: GatewayRouteSource) {
 
-  private val observer = new NotifyingDescriptorCache(handleUpdate)
+  private val observer = new NotifyingDescriptorCache(handleUpdate, handleRemove)
 
   private val endpointSetSource = new EndpointSetSource
 
@@ -331,6 +332,14 @@ class IndexProducer(eventThread: CallMarshaller, routeSource: GatewayRouteSource
     endpointIndexSource.observed(id, desc)
     dataKeyIndexSource.observed(id, desc)
     outputKeyIndexSource.observed(id, desc)
+    sourceOpt.foreach(_.flushEvents())
+  }
+
+  private def handleRemove(id: EndpointId): Unit = {
+    endpointSetSource.removed(id)
+    endpointIndexSource.removed(id)
+    dataKeyIndexSource.removed(id)
+    outputKeyIndexSource.removed(id)
     sourceOpt.foreach(_.flushEvents())
   }
 
