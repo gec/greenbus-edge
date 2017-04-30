@@ -35,7 +35,7 @@ trait SetStateType[Full, Diff] {
 }
 
 object MapDiffCalc {
-  def calculate[A, B](next: Map[A, B], prev: Map[A, B]): (Set[A], Set[(A, B)], Set[(A, B)]) = {
+  def calculate[A, B](prev: Map[A, B], next: Map[A, B]): (Set[A], Set[(A, B)], Set[(A, B)]) = {
     val removed = prev.keySet -- next.keySet
 
     val added = Set.newBuilder[(A, B)]
@@ -59,7 +59,7 @@ object MapDiffCalc {
 object KeyedSetSink extends SetStateType[Map[TypeValue, TypeValue], MapDiff] {
 
   def diff(next: Map[TypeValue, TypeValue], prev: Map[TypeValue, TypeValue]): MapDiff = {
-    val (removed, added, modified) = MapDiffCalc.calculate(next, prev)
+    val (removed, added, modified) = MapDiffCalc.calculate(prev, next)
     MapDiff(removed, added, modified)
   }
 
