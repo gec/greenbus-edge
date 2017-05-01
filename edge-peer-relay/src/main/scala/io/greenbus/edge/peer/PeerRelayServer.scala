@@ -48,9 +48,6 @@ object PeerRelayServer {
     val sessionId = PeerSessionId(UUID.randomUUID(), 0)
 
     runRelay(sessionId, settings.host, settings.port)
-
-    System.in.read()
-
   }
 
   def runRelay(sessionId: PeerSessionId, host: String, port: Int): Future[AmqpListener] = {
