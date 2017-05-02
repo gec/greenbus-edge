@@ -176,7 +176,7 @@ class PeerLink(socket: Socket, services: ConsumerServices) extends Actor with Ca
 
   def receive = {
     case FromSocket(text) => {
-      logger.info("Got socket text: " + text + ", " + socket)
+      logger.debug("Got socket text: " + text + ", " + socket)
 
       val b = ClientToServerMessage.newBuilder()
       try {
