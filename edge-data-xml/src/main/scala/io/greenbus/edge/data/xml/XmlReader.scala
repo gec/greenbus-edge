@@ -315,38 +315,44 @@ object XmlReader {
     while (reader.hasNext) {
       val event = reader.nextEvent()
 
-      if (event.isStartElement) {
+      try {
 
-        val elem = event.asStartElement()
+        if (event.isStartElement) {
 
-        nodeStack.headOption.foreach { head =>
-          val pushed = head.onPush(elem.getName.getLocalPart)
-          nodeStack ::= pushed
-        }
+          val elem = event.asStartElement()
 
-      } else if (event.isCharacters) {
-
-        val trimmed = event.asCharacters().getData.trim
-        if (trimmed.nonEmpty) {
           nodeStack.headOption.foreach { head =>
-            head.setText(trimmed)
+            val pushed = head.onPush(elem.getName.getLocalPart)
+            nodeStack ::= pushed
           }
-        }
 
-      } else if (event.isEndElement) {
+        } else if (event.isCharacters) {
 
-        if (nodeStack.nonEmpty) {
-          val current = nodeStack.head
-          nodeStack = nodeStack.tail
+          val trimmed = event.asCharacters().getData.trim
+          if (trimmed.nonEmpty) {
+            nodeStack.headOption.foreach { head =>
+              head.setText(trimmed)
+            }
+          }
+
+        } else if (event.isEndElement) {
 
           if (nodeStack.nonEmpty) {
-            val prev = nodeStack.head
-            prev.onPop(current.result())
-          } else {
+            val current = nodeStack.head
+            nodeStack = nodeStack.tail
+
+            if (nodeStack.nonEmpty) {
+              val prev = nodeStack.head
+              prev.onPop(current.result())
+            } else {
+            }
           }
         }
-      }
 
+      } catch {
+        case ex: Throwable =>
+          throw new IllegalArgumentException(ex.getMessage + " at: " + event.getLocation)
+      }
     }
 
     root.result()
