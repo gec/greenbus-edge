@@ -437,7 +437,7 @@ object ScalaGen extends LazyLogging {
             case typ: TList => {
               val paramRead = readFuncForTypeParam(typ.paramType)
               val paramSig = fieldSignatureFor(typ.paramType)
-              pw.println(tab(2) + "" + s"""val $name = $utilKlass.getMapField("$name", element).flatMap(elem => $utilKlass.readList[$paramSig](elem, $paramRead, ctx))""")
+              pw.println(tab(2) + "" + s"""val $name = $utilKlass.optMapField("$name", element).map(elem => $utilKlass.readList[$paramSig](elem, $paramRead, ctx)).getOrElse(Right(Seq()))""")
             }
             case optTyp: TOption => {
               val paramRead = readFuncForTypeParam(optTyp.paramType)
