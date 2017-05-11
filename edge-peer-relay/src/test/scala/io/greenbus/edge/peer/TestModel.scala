@@ -24,10 +24,10 @@ import io.greenbus.edge.data.{ ValueDouble, ValueString }
 
 object TestModel {
 
-  class Producer1(services: EdgeServices) {
+  class Producer1(producer: ProducerServices) {
 
     val endpointId = EndpointId(Path("my-endpoint"))
-    val builder = services.producer.endpointBuilder(endpointId)
+    val builder = producer.endpointBuilder(endpointId)
 
     val dataKey = Path("series-double-1")
     val endDataKey = EndpointPath(endpointId, dataKey)

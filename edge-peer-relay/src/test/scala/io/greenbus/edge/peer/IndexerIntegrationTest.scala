@@ -116,7 +116,7 @@ class IndexerIntegrationTest extends FunSuite with Matchers with BeforeAndAfterE
 
     val servicesForPublisher = services()
     servicesForPublisher.start()
-    val producer = new Producer1(servicesForPublisher)
+    val producer = new Producer1(servicesForPublisher.producer)
 
     flatQueue.awaitListen(
       prefixMatcher(

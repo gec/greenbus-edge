@@ -89,7 +89,9 @@ object TestHelpers {
               }
             } catch {
               case ex: Throwable =>
-                prom.failure(ex)
+                if (!prom.isCompleted) {
+                  prom.failure(ex)
+                }
             }
         }
       }
