@@ -21,14 +21,16 @@ package io.greenbus.edge.peer
 import java.util.UUID
 
 import com.typesafe.scalalogging.LazyLogging
+import io.greenbus.edge.amqp.AmqpService
 import io.greenbus.edge.amqp.impl.AmqpListener
 import io.greenbus.edge.api._
 import io.greenbus.edge.api.stream.KeyMetadata
-import io.greenbus.edge.data.{ ValueDouble, ValueString }
+import io.greenbus.edge.data.{ValueDouble, ValueString}
 import io.greenbus.edge.stream.PeerSessionId
+import io.greenbus.edge.thread.EventThreadService
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
-import org.scalatest.{ BeforeAndAfterEach, FunSuite, Matchers }
+import org.scalatest.{BeforeAndAfterEach, FunSuite, Matchers}
 
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -43,12 +45,27 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
 
   private var serverOpt = Option.empty[AmqpListener]
   private var serviceConnections = Vector.empty[EdgeServices]
+  private var executors = Vector.empty[EventThreadService]
 
   protected def services(): EdgeServices = {
     val services = AmqpEdgeService.build("127.0.0.1", 50555, retryIntervalMs = 100, connectTimeoutMs = 100)
     serviceConnections :+= services
     services
   }
+
+  protected def consumer(name: String = "consumer"): StreamConsumerManager = {
+    val exe = EventThreadService.build("event")
+    executors :+= exe
+    StreamConsumerManager.build(exe)
+  }
+
+  protected def connectConsumer(consumer: StreamConsumerManager): Unit = {
+    val service = AmqpService.build()
+    val result = Await.result(RetryingConnector.client(service, "127.0.0.1", 50555, 5000), 5000.milliseconds)
+    val (sess, link) = Await.result(result.client.openPeerLinkClient(), 5000.milliseconds)
+    consumer.connected(sess, link)
+  }
+  
 
   override protected def beforeEach(): Unit = {
     //startRelay()
@@ -58,6 +75,8 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     stopRelay()
     serviceConnections.foreach(_.shutdown())
     serviceConnections = Vector()
+    executors.foreach(_.close())
+    executors = Vector()
   }
 
   def startRelay(): Unit = {
