@@ -35,50 +35,16 @@ import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 
 @RunWith(classOf[JUnitRunner])
-class IndexerIntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach with LazyLogging {
+class IndexerIntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach with BaseEdgeIntegration with LazyLogging {
 
   logger.debug("Test start")
-
-  private var serverOpt = Option.empty[PeerRelay]
-  private var serviceConnections = Vector.empty[EdgeServices]
-
-  protected def services(): EdgeServices = {
-    val services = AmqpEdgeService.build("127.0.0.1", 50555, retryIntervalMs = 100, connectTimeoutMs = 100)
-    serviceConnections :+= services
-    services
-  }
-
-  override protected def beforeEach(): Unit = {
-    //startRelay()
-  }
-
-  override protected def afterEach(): Unit = {
-    //stopRelay()
-    serviceConnections.foreach(_.shutdown())
-    serviceConnections = Vector()
-  }
-
-  def startRelay(): Unit = {
-    val sessionId = PeerSessionId(UUID.randomUUID(), 0)
-    //val server = Await.result(PeerRelayServer.runRelay(sessionId, "127.0.0.1", 50555), 5000.milliseconds)
-    val relay = new PeerRelay(sessionId)
-    relay.listen("127.0.0.1", 50555)
-    serverOpt = Some(relay)
-  }
-
-  def stopRelay(): Unit = {
-    serverOpt.foreach(_.close())
-    serverOpt = None
-  }
 
   import TestModel._
 
   test("Indexer") {
 
-    val servicesForConsumer = services()
-    servicesForConsumer.start()
-
-    val subClient = servicesForConsumer.consumer.subscriptionClient
+    val consumer = buildConsumer()
+    val subClient = consumer.subscriptionClient
 
     val params = SubscriptionParams(indexing = IndexSubscriptionParams(endpointPrefixes = Seq(Path(Seq()))))
 
@@ -97,6 +63,7 @@ class IndexerIntegrationTest extends FunSuite with Matchers with BeforeAndAfterE
         }), 5000)
 
     startRelay()
+    connectConsumer(consumer)
 
     flatQueue.awaitListen(
       prefixMatcher(
@@ -114,9 +81,9 @@ class IndexerIntegrationTest extends FunSuite with Matchers with BeforeAndAfterE
             }
         }), 5000)
 
-    val servicesForPublisher = services()
-    servicesForPublisher.start()
-    val producer = new Producer1(servicesForPublisher.producer)
+    val producerMgr = buildProducer()
+    val producer = new Producer1(producerMgr)
+    connectProducer(producerMgr)
 
     flatQueue.awaitListen(
       prefixMatcher(

@@ -58,7 +58,6 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     import EdgeSubHelpers._
 
     val consumer = buildConsumer()
-
     val subClient = consumer.subscriptionClient
 
     val params = SubscriptionParams(
