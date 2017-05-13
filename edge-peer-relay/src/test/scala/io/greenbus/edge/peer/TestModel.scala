@@ -29,10 +29,10 @@ object TestModel {
     val endpointId = EndpointId(Path("my-endpoint"))
     val builder = producer.endpointBuilder(endpointId)
 
-    val dataKey = Path("series-double-1")
-    val endDataKey = EndpointPath(endpointId, dataKey)
+    val seriesDataKey = Path("series-double-1")
+    val seriesEndPath = EndpointPath(endpointId, seriesDataKey)
 
-    val series1 = builder.seriesValue(Path("series-double-1"), KeyMetadata(indexes = Map(Path("index1") -> ValueString("value 1"))))
+    val series1 = builder.seriesValue(seriesDataKey, KeyMetadata(indexes = Map(Path("index1") -> ValueString("value 1"))))
     val buffer = builder.build(seriesBuffersSize = 100, eventBuffersSize = 100)
 
     def updateAndFlush(v: Double, time: Long): Unit = {
@@ -49,4 +49,28 @@ object TestModel {
     }
   }
 
+  class Producer2(producer: ProducerServices) {
+
+    val endpointId = EndpointId(Path("my-endpoint-2"))
+    val builder = producer.endpointBuilder(endpointId)
+
+    val seriesDataKey = Path("series-double-2A")
+    val seriesEndPath = EndpointPath(endpointId, seriesDataKey)
+
+    val series1 = builder.seriesValue(seriesDataKey, KeyMetadata(indexes = Map(Path("index2") -> ValueString("value 2"))))
+    val buffer = builder.build(seriesBuffersSize = 100, eventBuffersSize = 100)
+
+    def updateAndFlush(v: Double, time: Long): Unit = {
+      series1.update(ValueDouble(v), time)
+      buffer.flush()
+    }
+    def updateAndFlush(seq: Seq[(Double, Long)]): Unit = {
+      seq.foreach { case (v, time) => series1.update(ValueDouble(v), time) }
+      buffer.flush()
+    }
+
+    def close(): Unit = {
+      buffer.close()
+    }
+  }
 }

@@ -29,6 +29,20 @@ import org.scalatest.{ BeforeAndAfterEach, FunSuite, Matchers }
 
 object EdgeMatchers {
 
+  def idDataKeyResolved(endPath: EndpointPath)(f: DataKeyUpdate => Boolean): PartialFunction[IdentifiedEdgeUpdate, Boolean] = {
+    case up: IdDataKeyUpdate =>
+      val valueMatched = up.data match {
+        case ResolvedValue(v) =>
+          v match {
+            case v: DataKeyUpdate => f(v)
+            case _ => false
+          }
+        case _ => false
+      }
+
+      up.id == endPath && valueMatched
+  }
+
   def dataKeyResolved(f: DataKeyUpdate => Boolean): PartialFunction[IdentifiedEdgeUpdate, Boolean] = {
     case up: IdDataKeyUpdate =>
       up.data match {
@@ -249,13 +263,59 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
 
   class TestProducer {
     val producerMgr = buildProducer()
-    val producer = new Producer1(producerMgr)
+    //val producer = new Producer1(producerMgr)
 
     private var connectionOpt = Option.empty[Closeable]
 
     def connect(): Unit = {
       connectionOpt = Some(connectProducer(producerMgr))
     }
+
+    def disconnect(): Unit = {
+      connectionOpt.foreach(_.close())
+    }
+  }
+
+  ignore("Resolved absent lifecycle") {
+    import EdgeSubHelpers._
+
+    startRelay()
+
+    val producerA = new TestProducer
+    val producer1 = new Producer1(producerA.producerMgr)
+
+    val nonexistentEndPath = EndpointPath(producer1.endpointId, Path("nonexistent"))
+
+    val params = SubscriptionParams(
+      dataKeys = DataKeySubscriptionParams(
+        series = Seq(nonexistentEndPath)))
+
+    val consA = new TestConsumer(params)
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          case up: IdDataKeyUpdate => up.id == nonexistentEndPath && up.data == Pending
+        },
+        fixed {
+          case up: IdDataKeyUpdate => up.id == nonexistentEndPath && up.data == Disconnected
+        }), 5000)
+
+    consA.connect()
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          case up: IdDataKeyUpdate => up.id == nonexistentEndPath && up.data == DataUnresolved
+        }), 5000)
+
+    producerA.connect()
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          case up: IdDataKeyUpdate => up.id == nonexistentEndPath && up.data == ResolvedAbsent
+        }), 5000)
   }
 
   test("Two consumers, producer first, one unsubscribes") {
@@ -286,9 +346,9 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
           case up: IdDataKeyUpdate => up.data == DataUnresolved
         }), 5000)
 
-    val producerMgr = buildProducer()
-    val producer = new Producer1(producerMgr)
-    connectProducer(producerMgr)
+    val producerA = new TestProducer
+    val producer = new Producer1(producerA.producerMgr)
+    producerA.connect()
 
     producer.updateAndFlush(2.33, 5)
 
@@ -351,9 +411,9 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
 
     startRelay()
 
-    val producerMgr = buildProducer()
-    val producer = new Producer1(producerMgr)
-    connectProducer(producerMgr)
+    val producerA = new TestProducer
+    val producer = new Producer1(producerA.producerMgr)
+    producerA.connect()
 
     producer.updateAndFlush(2.33, 5)
 
@@ -410,6 +470,102 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     consA.queue.awaitListen(
       prefixMatcher(
         matchSeriesUpdates(updates3 ++ updates4): _*), 5000)
+  }
+
+  test("Two producers") {
+    import EdgeSubHelpers._
+
+    startRelay()
+
+    val producerA = new TestProducer
+    val producer1 = new Producer1(producerA.producerMgr)
+    producerA.connect()
+
+    val producerB = new TestProducer
+    val producer2 = new Producer2(producerB.producerMgr)
+
+    producer1.updateAndFlush(2.33, 5)
+
+    val params = SubscriptionParams(
+      dataKeys = DataKeySubscriptionParams(
+        series = Seq(producer1.seriesEndPath, producer2.seriesEndPath)))
+
+    val consA = new TestConsumer(params)
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          case up: IdDataKeyUpdate => up.id == producer1.seriesEndPath && up.data == Pending
+        },
+        fixed {
+          case up: IdDataKeyUpdate => up.id == producer1.seriesEndPath && up.data == Disconnected
+        },
+        fixed {
+          case up: IdDataKeyUpdate => up.id == producer2.seriesEndPath && up.data == Pending
+        },
+        fixed {
+          case up: IdDataKeyUpdate => up.id == producer2.seriesEndPath && up.data == Disconnected
+        }), 5000)
+
+    consA.connect()
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          case up: IdDataKeyUpdate => up.id == producer2.seriesEndPath && up.data == DataUnresolved
+        },
+        fixed {
+          idDataKeyResolved(producer1.seriesEndPath) { v: DataKeyUpdate =>
+            v.value == SeriesUpdate(ValueDouble(2.33), 5)
+          }
+        }), 5000)
+
+    producerB.connect()
+
+    /*consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          case up: IdDataKeyUpdate => up.id == producer2.seriesEndPath && up.data == ResolvedAbsent
+        }), 5000)*/
+
+    producer2.updateAndFlush(3.66, 6)
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          idDataKeyResolved(producer2.seriesEndPath) { v: DataKeyUpdate =>
+            v.value == SeriesUpdate(ValueDouble(3.66), 6)
+          }
+        }), 5000)
+
+    producer1.updateAndFlush(4.33, 7)
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          idDataKeyResolved(producer1.seriesEndPath) { v: DataKeyUpdate =>
+            v.value == SeriesUpdate(ValueDouble(4.33), 7)
+          }
+        }), 5000)
+
+    producerA.disconnect()
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          case up: IdDataKeyUpdate => up.id == producer1.seriesEndPath && up.data == DataUnresolved
+        }), 5000)
+
+    producer2.updateAndFlush(5.66, 8)
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          idDataKeyResolved(producer2.seriesEndPath) { v: DataKeyUpdate =>
+            v.value == SeriesUpdate(ValueDouble(5.66), 8)
+          }
+        }), 5000)
+
   }
 
 }
