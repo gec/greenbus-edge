@@ -39,6 +39,10 @@ object TestModel {
       series1.update(ValueDouble(v), time)
       buffer.flush()
     }
+    def updateAndFlush(seq: Seq[(Double, Long)]): Unit = {
+      seq.foreach { case (v, time) => series1.update(ValueDouble(v), time) }
+      buffer.flush()
+    }
 
     def close(): Unit = {
       buffer.close()
