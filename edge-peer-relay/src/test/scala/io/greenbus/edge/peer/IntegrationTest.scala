@@ -20,7 +20,7 @@ package io.greenbus.edge.peer
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.api._
-import io.greenbus.edge.data.ValueDouble
+import io.greenbus.edge.data.{ ValueDouble, ValueString, ValueUInt32 }
 import io.greenbus.edge.flow.Closeable
 import io.greenbus.edge.peer.EdgeSubHelpers.{ FlatQueue, fixed }
 import org.junit.runner.RunWith
@@ -77,6 +77,46 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     */
 
   import TestModel._
+
+  class TestConsumer(params: SubscriptionParams) {
+    val consumer = buildConsumer()
+
+    val subClient = consumer.subscriptionClient
+
+    val subscription = subClient.subscribe(params)
+
+    val queue = new FlatQueue
+    subscription.updates.bind(queue.received)
+
+    private var connectionOpt = Option.empty[Closeable]
+
+    def connect(): Unit = {
+      connectionOpt = Some(connectConsumer(consumer))
+    }
+
+    def unsubscribe(): Unit = {
+      subscription.close()
+    }
+
+    def disconnect(): Unit = {
+      connectionOpt.foreach(_.close())
+    }
+  }
+
+  class TestProducer {
+    val producerMgr = buildProducer()
+    //val producer = new Producer1(producerMgr)
+
+    private var connectionOpt = Option.empty[Closeable]
+
+    def connect(): Unit = {
+      connectionOpt = Some(connectProducer(producerMgr))
+    }
+
+    def disconnect(): Unit = {
+      connectionOpt.foreach(_.close())
+    }
+  }
 
   test("Producer comes up after consumer then quits first") {
     import EdgeSubHelpers._
@@ -234,46 +274,6 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
             v.value == SeriesUpdate(ValueDouble(4.11), 7)
           }
         }), 5000)
-  }
-
-  class TestConsumer(params: SubscriptionParams) {
-    val consumer = buildConsumer()
-
-    val subClient = consumer.subscriptionClient
-
-    val subscription = subClient.subscribe(params)
-
-    val queue = new FlatQueue
-    subscription.updates.bind(queue.received)
-
-    private var connectionOpt = Option.empty[Closeable]
-
-    def connect(): Unit = {
-      connectionOpt = Some(connectConsumer(consumer))
-    }
-
-    def unsubscribe(): Unit = {
-      subscription.close()
-    }
-
-    def disconnect(): Unit = {
-      connectionOpt.foreach(_.close())
-    }
-  }
-
-  class TestProducer {
-    val producerMgr = buildProducer()
-    //val producer = new Producer1(producerMgr)
-
-    private var connectionOpt = Option.empty[Closeable]
-
-    def connect(): Unit = {
-      connectionOpt = Some(connectProducer(producerMgr))
-    }
-
-    def disconnect(): Unit = {
-      connectionOpt.foreach(_.close())
-    }
   }
 
   ignore("Resolved absent lifecycle") {
@@ -565,7 +565,192 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
             v.value == SeriesUpdate(ValueDouble(5.66), 8)
           }
         }), 5000)
+  }
 
+  test("Kv subscribe before first publish/flush") {
+    import EdgeSubHelpers._
+
+    startRelay()
+
+    val producerA = new TestProducer
+    val producer = new TypesProducer(producerA.producerMgr, "type01")
+    producerA.connect()
+
+    val params = SubscriptionParams(
+      dataKeys = DataKeySubscriptionParams(
+        keyValues = Seq(producer.kv1.endpointPath)))
+
+    val consA = new TestConsumer(params)
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          case up: IdDataKeyUpdate => up.id == producer.kv1.endpointPath && up.data == Pending
+        },
+        fixed {
+          case up: IdDataKeyUpdate => up.id == producer.kv1.endpointPath && up.data == Disconnected
+        }), 5000)
+
+    consA.connect()
+
+    producer.kv1.handle.update(ValueString("v01"))
+    producer.buffer.flush()
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          idDataKeyResolved(producer.kv1.endpointPath) { v: DataKeyUpdate =>
+            v.value == KeyValueUpdate(ValueString("v01"))
+          }
+        }), 5000)
+  }
+
+  test("Kv updates") {
+    import EdgeSubHelpers._
+
+    startRelay()
+
+    val producerA = new TestProducer
+    val producer = new TypesProducer(producerA.producerMgr, "type01")
+    producerA.connect()
+
+    producer.kv1.handle.update(ValueString("v01"))
+    producer.buffer.flush()
+
+    val params = SubscriptionParams(
+      dataKeys = DataKeySubscriptionParams(
+        keyValues = Seq(producer.kv1.endpointPath)))
+
+    val consA = new TestConsumer(params)
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          case up: IdDataKeyUpdate => up.id == producer.kv1.endpointPath && up.data == Pending
+        },
+        fixed {
+          case up: IdDataKeyUpdate => up.id == producer.kv1.endpointPath && up.data == Disconnected
+        }), 5000)
+
+    consA.connect()
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          idDataKeyResolved(producer.kv1.endpointPath) { v: DataKeyUpdate =>
+            v.value == KeyValueUpdate(ValueString("v01"))
+          }
+        }), 5000)
+
+    producer.kv1.handle.update(ValueString("v02"))
+    producer.buffer.flush()
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          idDataKeyResolved(producer.kv1.endpointPath) { v: DataKeyUpdate =>
+            v.value == KeyValueUpdate(ValueString("v02"))
+          }
+        }), 5000)
+  }
+
+  test("event topics updates") {
+    import EdgeSubHelpers._
+
+    startRelay()
+
+    val producerA = new TestProducer
+    val producer = new TypesProducer(producerA.producerMgr, "type01")
+    producerA.connect()
+
+    producer.event1.handle.update(Path("topic"), ValueString("v01"), 8)
+    producer.buffer.flush()
+
+    val params = SubscriptionParams(
+      dataKeys = DataKeySubscriptionParams(
+        topicEvent = Seq(producer.event1.endpointPath)))
+
+    val consA = new TestConsumer(params)
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          case up: IdDataKeyUpdate => up.id == producer.event1.endpointPath && up.data == Pending
+        },
+        fixed {
+          case up: IdDataKeyUpdate => up.id == producer.event1.endpointPath && up.data == Disconnected
+        }), 5000)
+
+    consA.connect()
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          idDataKeyResolved(producer.event1.endpointPath) { v: DataKeyUpdate =>
+            v.value == TopicEventUpdate(Path("topic"), ValueString("v01"), 8)
+          }
+        }), 5000)
+
+    producer.event1.handle.update(Path("topic"), ValueString("v02"), 10)
+    producer.buffer.flush()
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          idDataKeyResolved(producer.event1.endpointPath) { v: DataKeyUpdate =>
+            v.value == TopicEventUpdate(Path("topic"), ValueString("v02"), 10)
+          }
+        }), 5000)
+  }
+
+  // need to fix added showing up on first resolve
+  ignore("active sets updates") {
+    import EdgeSubHelpers._
+
+    startRelay()
+
+    val producerA = new TestProducer
+    val producer = new TypesProducer(producerA.producerMgr, "type01")
+    producerA.connect()
+
+    producer.activeSet1.handle.update(Map(ValueString("Key01") -> ValueUInt32(2), ValueString("Key02") -> ValueUInt32(3)))
+    producer.buffer.flush()
+
+    val params = SubscriptionParams(
+      dataKeys = DataKeySubscriptionParams(
+        activeSet = Seq(producer.activeSet1.endpointPath)))
+
+    val consA = new TestConsumer(params)
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          case up: IdDataKeyUpdate => up.id == producer.activeSet1.endpointPath && up.data == Pending
+        },
+        fixed {
+          case up: IdDataKeyUpdate => up.id == producer.activeSet1.endpointPath && up.data == Disconnected
+        }), 5000)
+
+    consA.connect()
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          idDataKeyResolved(producer.activeSet1.endpointPath) { v: DataKeyUpdate =>
+            v.value == ActiveSetUpdate(Map(ValueString("Key01") -> ValueUInt32(2), ValueString("Key02") -> ValueUInt32(3)), Set(), Set((ValueString("Key01"), ValueUInt32(2)), (ValueString("Key02"), ValueUInt32(3))), Set())
+          }
+        }), 5000)
+
+    producer.activeSet1.handle.update(Map(ValueString("Key03") -> ValueUInt32(5), ValueString("Key02") -> ValueUInt32(4)))
+    producer.buffer.flush()
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          idDataKeyResolved(producer.activeSet1.endpointPath) { v: DataKeyUpdate =>
+            v.value == ActiveSetUpdate(Map(ValueString("Key03") -> ValueUInt32(5), ValueString("Key02") -> ValueUInt32(4)), Set(ValueString("Key01")), Set((ValueString("Key03"), ValueUInt32(5))), Set((ValueString("Key02"), ValueUInt32(4))))
+          }
+        }), 5000)
   }
 
 }

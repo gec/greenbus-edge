@@ -39,9 +39,11 @@ object EventThreadService {
     })
 
     def marshal(f: => Unit): Unit = {
-      s.execute(new Runnable {
-        def run(): Unit = execute { f }
-      })
+      if (!s.isShutdown) {
+        s.execute(new Runnable {
+          def run(): Unit = execute { f }
+        })
+      }
     }
 
     def delayed(durationMs: Long, f: => Unit): Unit = {

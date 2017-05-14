@@ -19,7 +19,7 @@
 package io.greenbus.edge.peer
 
 import io.greenbus.edge.api.{ EndpointId, EndpointPath, Path }
-import io.greenbus.edge.api.stream.KeyMetadata
+import io.greenbus.edge.api.stream.{ EndpointBuilder, KeyMetadata }
 import io.greenbus.edge.data.{ ValueDouble, ValueString }
 
 object TestModel {
@@ -66,6 +66,41 @@ object TestModel {
     }
     def updateAndFlush(seq: Seq[(Double, Long)]): Unit = {
       seq.foreach { case (v, time) => series1.update(ValueDouble(v), time) }
+      buffer.flush()
+    }
+
+    def close(): Unit = {
+      buffer.close()
+    }
+  }
+
+  object KeyEntry {
+    def build[A](endpointId: EndpointId, key: Path)(bld: Path => A): KeyEntry[A] = {
+      new KeyEntry[A](endpointId, key, bld(key))
+    }
+  }
+  class KeyEntry[A](endpointId: EndpointId, val key: Path, val handle: A) {
+    val endpointPath = EndpointPath(endpointId, key)
+  }
+
+  class TypesProducer(producer: ProducerServices, suffix: String) {
+
+    val endpointId = EndpointId(Path(s"my-types-endpoint-$suffix"))
+    val builder = producer.endpointBuilder(endpointId)
+
+    val series1 = KeyEntry.build(endpointId, Path("series-double-1")) { key => builder.seriesValue(key, KeyMetadata(indexes = Map(Path("index2") -> ValueString("value 2")))) }
+    val activeSet1 = KeyEntry.build(endpointId, Path("active-set-1")) { key => builder.activeSet(key, KeyMetadata(indexes = Map(Path("index2") -> ValueString("value 2")))) }
+    val kv1 = KeyEntry.build(endpointId, Path("latest-kv-1")) { key => builder.latestKeyValue(key, KeyMetadata(indexes = Map(Path("index2") -> ValueString("value 2")))) }
+    val event1 = KeyEntry.build(endpointId, Path("events-1")) { key => builder.topicEventValue(key, KeyMetadata(indexes = Map(Path("index2") -> ValueString("value 2")))) }
+
+    val buffer = builder.build(seriesBuffersSize = 100, eventBuffersSize = 100)
+
+    def updateAndFlush(v: Double, time: Long): Unit = {
+      series1.handle.update(ValueDouble(v), time)
+      buffer.flush()
+    }
+    def updateAndFlush(seq: Seq[(Double, Long)]): Unit = {
+      seq.foreach { case (v, time) => series1.handle.update(ValueDouble(v), time) }
       buffer.flush()
     }
 
