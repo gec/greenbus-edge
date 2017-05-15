@@ -153,7 +153,6 @@ class EdgeSubscriptionManager(eventThread: CallMarshaller, subImpl: StreamDynami
       updateQueue.flush()
     }
 
-    // TODO: pending for all rows?
     new EdgeSubscriptionManager.EdgeSubscriptionImpl(batchQueue, () => closeLatch())
   }
 

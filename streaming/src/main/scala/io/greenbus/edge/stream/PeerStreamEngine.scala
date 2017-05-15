@@ -112,6 +112,16 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
 
     mgr.sourceAdded(source, entry)
   }
+  private def removeSourceForRoute(source: ManagedRouteSource, route: TypeValue): Option[StreamEvent] = {
+    routeSourcingMap.get(route).flatMap { sourcing =>
+      val resultOpt = sourcing.sourceRemoved(source)
+      if (sourcing.unused()) {
+        routeSourcingMap -= route
+        retailCacheTable.removeRoute(route)
+      }
+      resultOpt
+    }
+  }
 
   private def handleSourcingUpdate(mgr: PeerRouteSource, events: Seq[StreamEvent]): Seq[StreamEvent] = {
     val manifestEvents = events.filter(_.routingKey == mgr.manifestRoute)
@@ -140,17 +150,6 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
       }
     } else {
       Seq()
-    }
-  }
-
-  private def removeSourceForRoute(source: ManagedRouteSource, route: TypeValue): Option[StreamEvent] = {
-    routeSourcingMap.get(route).flatMap { sourcing =>
-      val resultOpt = sourcing.sourceRemoved(source)
-      if (sourcing.unused()) {
-        routeSourcingMap -= route
-        retailCacheTable.removeRoute(route)
-      }
-      resultOpt
     }
   }
 

@@ -207,16 +207,6 @@ class GenInitializedStreamFilter(cid: String, startInit: ResyncSession) extends 
 
 }
 
-trait SequenceCache {
-  def sync(): Resync
-}
-
-trait SequenceQueue {
-  def delta(delta: Delta): Unit
-  def resync(resync: Resync): Unit
-  def dequeue(): SequenceEvent
-}
-
 trait ResyncSequenceQueue {
   def delta(delta: Delta): Unit
   def resync(resync: Resync): Unit

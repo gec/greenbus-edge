@@ -351,7 +351,7 @@ class SubscriptionFilterMap(sink: Sink[Seq[RowUpdate]]) extends LazyLogging {
     }
   }
 
-  def removeRows(removes: Set[RowId]): Unit = {
+  /*def removeRows(removes: Set[RowId]): Unit = {
     removes.groupBy(_.routingKey).foreach {
       case (route, rows) =>
         map.get(route).foreach { trMap =>
@@ -361,7 +361,7 @@ class SubscriptionFilterMap(sink: Sink[Seq[RowUpdate]]) extends LazyLogging {
           }
         }
     }
-  }
+  }*/
 
   def handleDisconnected(): Unit = {
     val updates = map.flatMap {
