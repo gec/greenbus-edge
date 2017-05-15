@@ -42,7 +42,7 @@ object PeerRouteSource {
 class PeerRouteSource(peerId: PeerSessionId, source: PeerLink) extends ManagedRouteSource with LazyLogging {
 
   private val routeRow = PeerRouteSource.peerRouteRow(peerId)
-  private val indexRow = PeerRouteSource.peerIndexRow(peerId)
+  //private val indexRow = PeerRouteSource.peerIndexRow(peerId)
 
   private val routeLog = RouteManifestSet.build
 

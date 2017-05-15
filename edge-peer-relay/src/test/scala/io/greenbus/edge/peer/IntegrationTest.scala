@@ -194,6 +194,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
         }), 5000)
   }
 
+  // ignored due to de-duplicate on reconnect not implemented
   ignore("Producer comes up after consumer, relay reboots, consumer connects before producer") {
     import EdgeSubHelpers._
 

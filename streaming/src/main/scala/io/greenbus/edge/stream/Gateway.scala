@@ -114,7 +114,7 @@ class Gateway(localSession: PeerSessionId) extends LocalGateway with LazyLogging
   def updateRowsForRoute(route: TypeValue, rows: Set[TableRow]): Unit = {
     logger.debug(s"Rows for route $route updates: $rows")
     val existing = subscriptions.get(route)
-    if (existing != rows) {
+    if (!existing.contains(rows)) {
       subscriptions.put(route, rows)
       clientToRoutes.getSecond(route).foreach { proxy =>
 
