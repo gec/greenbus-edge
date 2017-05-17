@@ -39,6 +39,7 @@ object EventThreadService {
     })
 
     def marshal(f: => Unit): Unit = {
+      logger.debug(s"!!! MARSHAL: " + Thread.currentThread().getStackTrace.toVector(2))
       if (!s.isShutdown) {
         s.execute(new Runnable {
           def run(): Unit = execute { f }
