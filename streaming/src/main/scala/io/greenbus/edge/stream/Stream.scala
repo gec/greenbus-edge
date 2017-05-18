@@ -29,7 +29,7 @@ sealed trait SequenceSnapshot
 case class SetSnapshot(snapshot: Set[TypeValue]) extends SequenceSnapshot
 case class MapSnapshot(snapshot: Map[TypeValue, TypeValue]) extends SequenceSnapshot
 
-case class AppendSetValue(sequence: SequencedTypeValue, value: AppendValue)
+//case class AppendSetValue(sequence: SequencedTypeValue, value: AppendValue)
 case class AppendSnapshot(current: SequencedDiff, previous: Seq[SequencedDiff]) extends SequenceSnapshot
 
 case class SequencedDiff(sequence: SequencedTypeValue, diff: SequenceTypeDiff)
@@ -60,8 +60,8 @@ sealed trait RowEvent extends StreamEvent {
 case class RowAppendEvent(rowId: RowId, appendEvent: AppendEvent) extends RowEvent {
   def routingKey: TypeValue = rowId.routingKey
 }
-
-/*case class RowResolvedAbsent(rowId: RowId) extends RowEvent {
+case class RowResolvedAbsent(rowId: RowId) extends RowEvent {
   def routingKey: TypeValue = rowId.routingKey
-}*/
+}
+
 case class RouteUnresolved(routingKey: TypeValue) extends StreamEvent
