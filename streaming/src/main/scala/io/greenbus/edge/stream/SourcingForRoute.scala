@@ -46,7 +46,7 @@ class SourcingForRoute(route: TypeValue) extends ServiceRouteProvider with LazyL
     currentSource.map(src => Seq(src)).getOrElse(Seq())
   }
 
-  def handleBatch(events: Seq[StreamEvent]): Unit = {
+  def observeForDelivery(events: Seq[StreamEvent]): Unit = {
     logger.trace(s"Route $route handling batch $events")
 
     val map = mutable.Map.empty[SubscriptionTarget, VectorBuilder[StreamEvent]]

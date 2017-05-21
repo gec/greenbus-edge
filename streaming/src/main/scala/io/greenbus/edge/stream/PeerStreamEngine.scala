@@ -50,7 +50,7 @@ manifest rows -> source (manifest)
 case class StreamSubscriptionParams(rows: Set[RowId])
 
 trait SubscriptionTarget {
-  def handleBatch(events: Seq[StreamEvent])
+  def handleBatch(events: Seq[StreamEvent]): Unit
 }
 
 object RouteManifestEntry {
@@ -159,7 +159,7 @@ class PeerStreamEngine(logId: String, selfSession: PeerSessionId, gateway: Local
     // TODO: maintain ordering across routes?
     events.groupBy(_.routingKey).foreach {
       case (route, routeEvents) =>
-        routeSourcingMap.get(route).foreach { mgr => mgr.handleBatch(routeEvents) }
+        routeSourcingMap.get(route).foreach { mgr => mgr.observeForDelivery(routeEvents) }
     }
   }
 
