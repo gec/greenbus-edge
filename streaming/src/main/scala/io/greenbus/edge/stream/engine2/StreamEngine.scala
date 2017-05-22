@@ -62,8 +62,12 @@ trait GenericTarget {
 }
  */
 
-trait GenericTarget {
+/*trait GenericTarget {
   def events(events: Seq[StreamEvent]): Unit
+}*/
+
+trait StreamTarget {
+  def flush(): Unit
 }
 
 /*
@@ -76,22 +80,13 @@ trait RouteSourcing {
   def issueServiceRequests(requests: Seq[ServiceRequest]): Unit
 }
 
-trait StreamSourcingManager[Source, Target] {
-
-  def sourcing: Map[TypeValue, RouteSourcing]
-
-  def sourceUpdate(source: Source, routes: Map[TypeValue, RouteManifestEntry]): Unit
-  def sourceRemoved(source: Source): Unit
-
-  def targetUpdate(target: Target, rows: Set[RowId]): Unit
-  def targetRemoved(target: Target): Unit
-
-}
-
-class StreamEngine {
+class StreamEngine(
+    sourceStrategyFactory: TypeValue => RouteSourcingStrategy,
+    routeKeyStreamFactory: TypeValue => (TableRow => KeyStream[RouteStreamSource])) {
 
   private val routeMap = mutable.Map.empty[TypeValue, RouteStreams]
   private val sourceToRouteMap = mutable.Map.empty[RouteStreamSource, Set[TypeValue]]
+  private val targetToRouteMap = mutable.Map.empty[StreamTarget, Map[TypeValue, RouteObservers]]
 
   def sourceUpdate(source: RouteStreamSource, update: SourceEvents): Unit = {
     update.routeUpdatesOpt.foreach { routesUpdate =>
@@ -121,12 +116,44 @@ class StreamEngine {
 
     // TODO: flush
   }
-  //def sourceEvents(events: SourceEvents): Unit
 
-  //def targetAdded(): Unit
-  def targetSubscriptionUpdate(rows: Set[RowId]): Unit = ???
-  def targetRemoved(): Unit = ???
+  def targetSubscriptionUpdate(target: StreamTarget, subscription: Map[TypeValue, RouteObservers]): Unit = {
+    val prev = targetToRouteMap.getOrElse(target, Map())
 
+    val removed = prev.keySet -- subscription.keySet
+    removed.foreach { route =>
+      prev.get(route).foreach { entry =>
+        routeMap.get(route).foreach { routeStreams =>
+          routeStreams.targetRemoved(entry.streamObserver)
+          if (!routeStreams.targeted()) {
+            routeMap -= route
+          }
+        }
+      }
+    }
+    subscription.foreach {
+      case (route, observers) =>
+        val routeStreams = routeMap.getOrElseUpdate(route, new RouteStreams(sourceStrategyFactory(route), routeKeyStreamFactory(route)))
+        routeStreams.targetUpdate(observers.streamObserver, observers.rowObserverMap)
+    }
+    targetToRouteMap.update(target, subscription)
+
+    // TODO: flush?
+    target.flush()
+  }
+  def targetRemoved(target: StreamTarget): Unit = {
+    val prev = targetToRouteMap.getOrElse(target, Map())
+    prev.foreach {
+      case (route, obs) =>
+        routeMap.get(route).foreach { routeStreams =>
+          routeStreams.targetRemoved(obs.streamObserver)
+          if (!routeStreams.targeted()) {
+            routeMap -= route
+          }
+        }
+    }
+    targetToRouteMap -= target
+  }
 }
 
 trait StreamObserver {
