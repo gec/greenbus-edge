@@ -145,8 +145,3 @@ trait RouteStreamSource {
   def updateSourcing(route: TypeValue, rows: Set[TableRow]): Unit
 }
 
-trait RowSynthesizer[Source] {
-  def append(source: Source, event: AppendEvent): Seq[AppendEvent]
-  def sourceRemoved(source: Source): Seq[AppendEvent]
-}
-
