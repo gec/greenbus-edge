@@ -79,7 +79,7 @@ trait StreamCache {
  */
 trait StreamCache {
   def handle(event: AppendEvent): Unit
-  def resync(): RowEvent
+  def resync(): Seq[AppendEvent]
 }
 
 object StreamCacheImpl {
@@ -89,7 +89,7 @@ object StreamCacheImpl {
   case object Uninit extends State
   case class Init(ctx: SessionContext, current: Resync) extends State
 }
-class StreamCacheImpl {
+class StreamCacheImpl extends StreamCache {
   import StreamCacheImpl._
   private var state: State = Uninit
 

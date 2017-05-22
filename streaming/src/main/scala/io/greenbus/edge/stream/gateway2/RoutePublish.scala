@@ -61,7 +61,7 @@ class GatewayPublisherSource extends GenericSource with LazyLogging {
   private val responseQueue = new QueuedDistributor[Seq[ServiceResponse]]
 
   def subscriptions: Sink[Set[RowId]] = ???
-  def events: Source[SourceEvents] = events
+  def events: Source[SourceEvents] = eventQueue
   def requests: Sink[Seq[ServiceRequest]] = ???
   def responses: Source[Seq[ServiceResponse]] = responseQueue
 
