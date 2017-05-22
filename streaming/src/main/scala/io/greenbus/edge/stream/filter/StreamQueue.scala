@@ -50,10 +50,6 @@ peer cache changes ctx; could keep multiple contexts around for history resync
 
  */
 
-class Filter {
-
-}
-
 /*class AppendSequencerIsh[A] {
   private var sequence: Long = 0
 
@@ -71,12 +67,6 @@ trait SequenceCache {
   def append(event: SequenceEvent): Unit
 }
 
-/*
-trait StreamCache {
-  def handle(append: AppendEvent): Unit
-  def sync(): ResyncSession
-}
- */
 trait StreamCache {
   def handle(event: AppendEvent): Unit
   def resync(): Seq[AppendEvent]
@@ -124,6 +114,11 @@ class StreamCacheImpl extends StreamCache {
   }
 }
 
+trait StreamQueue {
+  def handle(event: AppendEvent): Unit
+  def dequeue(): Seq[AppendEvent]
+}
+
 object StreamQueueImpl {
   case class SessionContext(sessionId: PeerSessionId, context: SequenceCtx)
 
@@ -133,7 +128,7 @@ object StreamQueueImpl {
   case class AccumulatingDeltas(ctx: SessionContext, current: Delta) extends State
   case class Resynced(ctx: SessionContext, current: Resync, prev: ArrayBuffer[AppendEvent]) extends State
 }
-class StreamQueueImpl {
+class StreamQueueImpl extends StreamQueue {
 
   import StreamQueueImpl._
 
@@ -184,7 +179,7 @@ class StreamQueueImpl {
     }
   }
 
-  def pop(): Seq[AppendEvent] = {
+  def dequeue(): Seq[AppendEvent] = {
     state match {
       case Uninit => Seq()
       case _: Idle => Seq()
