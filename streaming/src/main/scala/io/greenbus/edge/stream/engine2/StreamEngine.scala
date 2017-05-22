@@ -47,25 +47,6 @@ import scala.collection.mutable
 
 case class SourceEvents(routeUpdatesOpt: Option[Map[TypeValue, RouteManifestEntry]], events: Seq[StreamEvent])
 
-trait GenericSource {
-  def subscriptions: Sink[Set[RowId]]
-  def events: Source[SourceEvents]
-  def requests: Sink[Seq[ServiceRequest]]
-  def responses: Source[Seq[ServiceResponse]]
-}
-
-/*
-
-trait GenericTarget {
-  def subscriptions: Source[Set[RowId]]
-  def events: Sink[Seq[StreamEvent]]
-}
- */
-
-/*trait GenericTarget {
-  def events(events: Seq[StreamEvent]): Unit
-}*/
-
 trait StreamTarget {
   def flush(): Unit
 }
@@ -139,7 +120,7 @@ class StreamEngine(
     targetToRouteMap.update(target, subscription)
 
     // TODO: flush?
-    target.flush()
+    //target.flush()
   }
   def targetRemoved(target: StreamTarget): Unit = {
     val prev = targetToRouteMap.getOrElse(target, Map())
