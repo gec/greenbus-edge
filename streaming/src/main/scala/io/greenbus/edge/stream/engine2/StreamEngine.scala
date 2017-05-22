@@ -54,9 +54,22 @@ trait GenericSource {
   def responses: Source[Seq[ServiceResponse]]
 }
 
+/*
+
+trait GenericTarget {
+  def subscriptions: Source[Set[RowId]]
+  def events: Sink[Seq[StreamEvent]]
+}
+ */
+
 trait GenericTarget {
   def events(events: Seq[StreamEvent]): Unit
 }
+
+/*
+
+def targetUpdate(target: StreamObserver, subscription: Map[TableRow, KeyStreamObserver]): Unit = {
+ */
 
 trait RouteSourcing {
   //def observeForDelivery(events: Seq[StreamEvent]): Unit
@@ -74,17 +87,45 @@ trait StreamSourcingManager[Source, Target] {
   def targetRemoved(target: Target): Unit
 
 }
-abstract class StreamEngine {
-  // cache
-  // sourcing map
 
-  def sourceAdded(source: GenericSource): Unit
-  def sourceRemoved(source: GenericSource): Unit
+class StreamEngine {
+
+  private val routeMap = mutable.Map.empty[TypeValue, RouteStreams]
+  private val sourceToRouteMap = mutable.Map.empty[RouteStreamSource, Set[TypeValue]]
+
+  def sourceUpdate(source: RouteStreamSource, update: SourceEvents): Unit = {
+    update.routeUpdatesOpt.foreach { routesUpdate =>
+      val prev = sourceToRouteMap.getOrElse(source, Set())
+      sourceToRouteMap.update(source, routesUpdate.keySet)
+      val removes = prev -- routesUpdate.keySet
+      removes.foreach(route => routeMap.get(route).foreach(_.sourceRemoved(source)))
+      routesUpdate.foreach {
+        case (route, details) => routeMap.get(route).foreach(_.sourceAdded(source, details))
+      }
+    }
+
+    update.events.foreach {
+      case ev: RowAppendEvent => routeMap.get(ev.rowId.routingKey).foreach(_.events(source, Seq(ev))) // TODO: fix this seq
+      case ev: RowResolvedAbsent => routeMap.get(ev.rowId.routingKey).foreach(_.events(source, Seq(ev))) // TODO: fix this seq
+      case ev: RouteUnresolved => routeMap.get(ev.routingKey).foreach(_.events(source, Seq(ev)))
+    }
+
+    // TODO: flush
+  }
+
+  def sourceRemoved(source: RouteStreamSource): Unit = {
+    sourceToRouteMap.get(source).foreach { routes =>
+      routes.foreach { route => routeMap.get(route).foreach(_.sourceRemoved(source)) }
+    }
+    sourceToRouteMap -= source
+
+    // TODO: flush
+  }
   //def sourceEvents(events: SourceEvents): Unit
 
   //def targetAdded(): Unit
-  def targetSubscriptionUpdate(rows: Set[RowId]): Unit
-  def targetRemoved(): Unit
+  def targetSubscriptionUpdate(rows: Set[RowId]): Unit = ???
+  def targetRemoved(): Unit = ???
 
 }
 
@@ -101,29 +142,3 @@ trait RowSynthesizer[Source] {
   def sourceRemoved(source: Source): Seq[AppendEvent]
 }
 
-/*
-class GatewayKeyStream[Source] extends KeyStream[Source] {
-  private val retail = new RetailKeyStream
-  //private val synth = new SynthKeyStream[Source](retail)
-
-  def handle(source: Source, event: AppendEvent): Unit = {
-    retail.handle(event)
-  }
-
-  def sourceRemoved(source: Source): Unit = {
-    //retail.sourceRemoved(source)
-  }
-
-  def targeted(): Boolean = {
-    retail.targeted()
-  }
-
-  def targetAdded(observer: KeyStreamObserver): Unit = {
-    retail.targetAdded(observer)
-  }
-
-  def targetRemoved(observer: KeyStreamObserver): Unit = {
-    retail.targetRemoved(observer)
-  }
-}
-*/
