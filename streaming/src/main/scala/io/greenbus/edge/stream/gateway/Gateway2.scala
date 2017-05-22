@@ -79,6 +79,7 @@ peer cache changes ctx; could keep multiple contexts around for history resync
 
  */
 
+/*
 class Gateway2 {
 
 }
@@ -143,3 +144,4 @@ class AppendSequencer[A] {
     results
   }
 }*/
+*/ 

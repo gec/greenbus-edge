@@ -22,6 +22,8 @@ import io.greenbus.edge.stream._
 
 import scala.collection.mutable
 
+case class RouteObservers(streamObserver: StreamObserver, rowObserverMap: Map[TableRow, KeyStreamObserver])
+
 class SimpleRouteTargetQueues(route: TypeValue) {
 
   private val buffer = mutable.ArrayBuffer.empty[StreamEvent]
@@ -40,14 +42,14 @@ class SimpleRouteTargetQueues(route: TypeValue) {
     }
   }
 
-  def update(rows: Set[TableRow]): (StreamObserver, Map[TableRow, KeyStreamObserver]) = {
+  def update(rows: Set[TableRow]): RouteObservers = {
     val prev = keys.keySet
     val removes = prev -- rows
     keys --= removes
     val rowObsMap = rows.map { row =>
       row -> keys.getOrElseUpdate(row, new SimpleKeyObserver(row))
     }.toMap
-    (streamObs, rowObsMap)
+    RouteObservers(streamObs, rowObsMap)
   }
 
   def dequeue(): Seq[StreamEvent] = {
@@ -62,7 +64,7 @@ class TargetQueueMgr {
 
   private val routeMap = mutable.Map.empty[TypeValue, SimpleRouteTargetQueues]
 
-  def subscriptionUpdate(rows: Set[RowId]): Map[TypeValue, (StreamObserver, Map[TableRow, KeyStreamObserver])] = {
+  def subscriptionUpdate(rows: Set[RowId]): Map[TypeValue, RouteObservers] = {
     val routeToRows: Map[TypeValue, Set[TableRow]] = rows.groupBy(_.routingKey).mapValues(_.map(_.tableRow))
     val removes = routeMap.keySet -- routeToRows.keySet
     routeMap --= removes

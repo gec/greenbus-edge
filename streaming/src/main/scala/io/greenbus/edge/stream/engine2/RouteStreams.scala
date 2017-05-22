@@ -51,6 +51,10 @@ class RouteStreams(routingStrategy: RouteSourcingStrategy, streamFactory: TableR
     emitted.foreach(ev => subscriptionMap.keys.foreach(_.handle(ev)))
   }
 
+  def targeted(): Boolean = {
+    streamMap.keySet.nonEmpty
+  }
+
   def targetUpdate(target: StreamObserver, subscription: Map[TableRow, KeyStreamObserver]): Unit = {
     val previous = subscriptionMap.getOrElse(target, Map())
     val removes = previous.keySet -- subscription.keySet
