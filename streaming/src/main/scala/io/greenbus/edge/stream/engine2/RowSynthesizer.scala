@@ -29,52 +29,54 @@ trait RowSynthesizer[Source] {
   def sourceRemoved(source: Source): Seq[AppendEvent]
 }
 
-/*
-val prevSessOpt = currentSessionForSource.get(source)
+class UniqueValueMultiMap[A, B] {
+  private val keyToValueMap = mutable.Map.empty[A, Set[B]]
+  private val valueToKeyMap = mutable.Map.empty[B, A]
 
-      if (!prevSessOpt.contains(sessionResync.sessionId)) {
-        sessionToSources = sessionToSources.remove(source) + (sessionResync.sessionId -> source)
-      }
+  def contains(key: A): Boolean = keyToValueMap.contains(key)
+  def get(key: A): Option[Set[B]] = keyToValueMap.get(key)
+  def valueGet(v: B): Option[A] = valueToKeyMap.get(v)
 
-      if (sessionResync.sessionId == activeSession) {
+  def keySet(): Set[A] = keyToValueMap.keySet.toSet
 
-        // gc sessions with no sources
-        prevSessOpt.foreach { prevSess =>
-          if (!sessionToSources.keyToVal.contains(prevSess)) {
-            standbySessions -= prevSess
-          }
-        }
+  def put(key: A, v: B): Unit = {
+    doValueRemove(v)
+    keyToValueMap.get(key) match {
+      case None => keyToValueMap.update(key, Set(v))
+      case Some(prev) => keyToValueMap.update(key, prev)
+    }
+    valueToKeyMap.update(v, key)
+  }
 
-        activeFilter.handle(sessionResync)
-          .map(v => Seq(v))
-          .getOrElse(Seq())
+  def removeValue(v: B): Unit = {
+    doValueRemove(v)
+  }
 
+  private def doValueRemove(v: B): Unit = {
+    valueToKeyMap.get(v).foreach { key =>
+      val valueSet = keyToValueMap.getOrElse(key, Set())
+      val without = valueSet - v
+      if (without.nonEmpty) {
+        keyToValueMap.update(key, without)
       } else {
-
-        standbySessions.get(sessionResync.sessionId) match {
-          case None => {
-            val standbyQueue = new GenStandbyStreamQueue(rowId.toString, sessionResync)
-            standbySessions += (sessionResync.sessionId -> standbyQueue)
-          }
-          case Some(log) => log.append(sessionResync)
-        }
-
-        activeSessionChangeCheck()
+        keyToValueMap -= key
       }
- */
+    }
+  }
+}
 
 class RowSynthImpl[Source] extends RowSynthesizer[Source] with LazyLogging {
 
   private var activeSessionOpt = Option.empty[(PeerSessionId, StreamFilter)]
   private val standbySessions = mutable.Map.empty[PeerSessionId, StreamQueue]
-  private val sourceToSession = mutable.Map.empty[Source, PeerSessionId]
+  private val sessionToSources = new UniqueValueMultiMap[PeerSessionId, Source]
 
   def append(source: Source, event: AppendEvent): Seq[AppendEvent] = {
     event match {
       case resync: ResyncSession => {
-        val prevSessOpt = sourceToSession.get(source)
+        val prevSessOpt = sessionToSources.valueGet(source)
         if (!prevSessOpt.contains(resync.sessionId)) {
-          sourceToSession.put(source, resync.sessionId)
+          sessionToSources.put(resync.sessionId, source)
         }
 
         activeSessionOpt match {
@@ -103,163 +105,74 @@ class RowSynthImpl[Source] extends RowSynthesizer[Source] with LazyLogging {
           }
         }
       }
-      case delta: StreamDelta =>
-        ???
-    }
-  }
-
-  private def activeChangeCheck(): Seq[AppendEvent] = {
-    ???
-  }
-
-  def sourceRemoved(source: Source): Seq[AppendEvent] = {
-    ???
-  }
-}
-
-/*
-class RowSynthesizerImpl[Source](rowId: RowId, initSource: Source, initSess: PeerSessionId, initFilter: StreamFilter) extends RowSynthesizer[Source] with LazyLogging {
-
-  private var activeSession: PeerSessionId = initSess
-  private var activeFilter: StreamFilter = initFilter
-  private var standbySessions = Map.empty[PeerSessionId, StandbyStreamQueue]
-  private var sessionToSources: MapToUniqueValues[PeerSessionId, Source] = MapToUniqueValues((initSess, initSource))
-  private def currentSessionForSource: Map[Source, PeerSessionId] = sessionToSources.valToKey
-
-  def append(source: Source, event: AppendEvent): Seq[AppendEvent] = {
-    event match {
       case delta: StreamDelta => {
-        currentSessionForSource.get(source) match {
+        sessionToSources.valueGet(source) match {
           case None =>
-            logger.warn(s"$rowId got delta for inactive source link $initSource"); Seq()
-          case Some(sess) => {
-            if (sess == activeSession) {
-              activeFilter.handle(delta)
-                .map(v => Seq(v)).getOrElse(Seq())
-
-            } else {
-
-              standbySessions.get(sess) match {
-                case None => logger.error(s"$rowId got delta for inactive source link $initSource")
-                case Some(log) => log.append(delta)
+            logger.warn(s"got delta for inactive source link")
+            Seq()
+          case Some(sourceSess) => {
+            activeSessionOpt match {
+              case None => {
+                standbySessions.get(sourceSess) match {
+                  case None => logger.error(s"got delta for source with an inactive session link")
+                  case Some(queue) => queue.handle(event)
+                }
+                Seq()
               }
-              Seq()
+              case Some((activeSess, activeFilter)) =>
+                if (sourceSess == activeSess) {
+                  activeFilter.handle(event).map(v => Seq(v)).getOrElse(Seq())
+                } else {
+                  standbySessions.get(sourceSess) match {
+                    case None => logger.error(s"got delta for source with an inactive session link")
+                    case Some(queue) => queue.handle(event)
+                  }
+                  Seq()
+                }
             }
           }
-        }
-      }
-      case resync: ResyncSnapshot => {
-        currentSessionForSource.get(source) match {
-          case None =>
-            logger.warn(s"$rowId got snapshot for inactive source link $initSource"); Seq()
-          case Some(sess) => {
-            //snapshotForSession(sess, resync)
-            if (sess == activeSession) {
-              activeFilter.handle(resync)
-                .map(v => Seq(v)).getOrElse(Seq())
-            } else {
-              standbySessions.get(sess) match {
-                case None => logger.error(s"$rowId got snapshot for inactive source link $initSource")
-                case Some(log) => log.append(resync)
-              }
-              Seq()
-            }
-          }
-        }
-      }
-      case sessionResync: ResyncSession => {
-
-        // TODO: session succession logic by actually reading peer session id
-        val prevSessOpt = currentSessionForSource.get(source)
-
-        if (!prevSessOpt.contains(sessionResync.sessionId)) {
-          sessionToSources = sessionToSources.remove(source) + (sessionResync.sessionId -> source)
-        }
-
-        if (sessionResync.sessionId == activeSession) {
-
-          // gc sessions with no sources
-          prevSessOpt.foreach { prevSess =>
-            if (!sessionToSources.keyToVal.contains(prevSess)) {
-              standbySessions -= prevSess
-            }
-          }
-
-          activeFilter.handle(sessionResync)
-            .map(v => Seq(v))
-            .getOrElse(Seq())
-
-        } else {
-
-          standbySessions.get(sessionResync.sessionId) match {
-            case None => {
-              val standbyQueue = new GenStandbyStreamQueue(rowId.toString, sessionResync)
-              standbySessions += (sessionResync.sessionId -> standbyQueue)
-            }
-            case Some(log) => log.append(sessionResync)
-          }
-
-          activeSessionChangeCheck()
         }
       }
     }
   }
 
-  private def snapshotForSession(session: PeerSessionId, resync: ResyncSnapshot): Seq[AppendEvent] = {
-    if (session == activeSession) {
-      activeFilter.handle(resync)
-        .map(v => Seq(v)).getOrElse(Seq())
-    } else {
-      standbySessions.get(session) match {
-        case None => logger.error(s"$rowId got snapshot for inactive source link $initSource")
-        case Some(log) => log.append(resync)
-      }
-      Seq()
-    }
-  }
-
-  // TODO: need to mark succeeded sessions to prevent immediately reverting to a prev session propped up by a source who is just delayed
-  private def activeSessionChangeCheck(): Seq[AppendEvent] = {
-    if (!sessionToSources.keyToVal.contains(activeSession)) {
-
-      if (standbySessions.keySet.size == 1) {
-        val (nowActiveSession, log) = standbySessions.head
-        standbySessions -= nowActiveSession
-        activeSession = nowActiveSession
-        //val (events, db) = log.activate()
-        val resync = log.dequeue()
-        val events = Seq(resync)
-        val filter = new GenInitializedStreamFilter(rowId.toString, resync)
-        activeFilter = filter
-        events
-
+  // if the active session doesn't exist or has no sources, nominate a new session if it's the only one resolved
+  // TODO: need to mark succeeded sessions to prevent immediately reverting to a prev session propped up by a source who is still delayed
+  private def activeChangeCheck(): Seq[AppendEvent] = {
+    val aliveActiveSession = activeSessionOpt.exists { case (sess, _) => sessionToSources.contains(sess) }
+    if (!aliveActiveSession) {
+      val keys = sessionToSources.keySet()
+      if (keys.size == 1) {
+        val nominatedSession = keys.head
+        val queuedEvents = standbySessions.get(nominatedSession).map(q => q.dequeue()).getOrElse(Seq())
+        standbySessions -= nominatedSession
+        val filter = new StreamFilterImpl
+        queuedEvents.foreach(filter.handle)
+        activeSessionOpt = Some((nominatedSession, filter))
+        queuedEvents
       } else {
         Seq()
       }
-
     } else {
       Seq()
     }
   }
 
   def sourceRemoved(source: Source): Seq[AppendEvent] = {
-
-    val prevSessOpt = currentSessionForSource.get(source)
-    sessionToSources = sessionToSources.remove(source)
+    val prevSessOpt = sessionToSources.valueGet(source)
+    sessionToSources.removeValue(source)
 
     prevSessOpt match {
       case None => Seq()
       case Some(prevSess) =>
-        if (prevSess == activeSession) {
-          activeSessionChangeCheck()
+        if (activeSessionOpt.map(_._1).contains(prevSess)) {
+          activeChangeCheck()
         } else {
-          if (!sessionToSources.keyToVal.contains(prevSess)) {
+          if (!sessionToSources.contains(prevSess)) {
             standbySessions -= prevSess
           }
           Seq()
         }
     }
   }
-
 }
- */ 
