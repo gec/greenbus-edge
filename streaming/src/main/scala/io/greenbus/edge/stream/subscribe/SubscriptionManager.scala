@@ -40,21 +40,21 @@ case class MapUpdated(value: Map[TypeValue, TypeValue], removed: Set[TypeValue],
 
 case class RowUpdate(row: RowId, update: ValueUpdate)
 
-trait UpdateSynthesizer {
-  def delta(delta: Delta): Option[DataValueUpdate]
-  def resync(resync: Resync): Option[DataValueUpdate]
-  def get(): DataValueUpdate
+trait UpdateSynthesizer[A <: DataValueUpdate] {
+  def delta(delta: Delta): Option[A]
+  def resync(resync: Resync): Option[A]
+  def get(): A
 }
 
-class SetUpdateSynthesizer(orig: Set[TypeValue]) extends UpdateSynthesizer with LazyLogging {
+class SetUpdateSynthesizer(orig: Set[TypeValue]) extends UpdateSynthesizer[SetUpdated] with LazyLogging {
 
   private var current: Set[TypeValue] = orig
 
-  def get(): DataValueUpdate = {
+  def get(): SetUpdated = {
     SetUpdated(current, Set(), Set())
   }
 
-  def delta(delta: Delta): Option[DataValueUpdate] = {
+  def delta(delta: Delta): Option[SetUpdated] = {
 
     val start = current
 
@@ -78,7 +78,7 @@ class SetUpdateSynthesizer(orig: Set[TypeValue]) extends UpdateSynthesizer with 
     }
   }
 
-  def resync(resync: Resync): Option[DataValueUpdate] = {
+  def resync(resync: Resync): Option[SetUpdated] = {
     resync.snapshot match {
       case d: SetSnapshot => {
         val added = d.snapshot -- current
@@ -97,15 +97,15 @@ class SetUpdateSynthesizer(orig: Set[TypeValue]) extends UpdateSynthesizer with 
     }
   }
 }
-class MapUpdateSynthesizer(orig: Map[TypeValue, TypeValue]) extends UpdateSynthesizer with LazyLogging {
+class MapUpdateSynthesizer(orig: Map[TypeValue, TypeValue]) extends UpdateSynthesizer[MapUpdated] with LazyLogging {
 
   private var current: Map[TypeValue, TypeValue] = orig
 
-  def get(): DataValueUpdate = {
+  def get(): MapUpdated = {
     MapUpdated(current, Set(), Set(), Set())
   }
 
-  def delta(delta: Delta): Option[DataValueUpdate] = {
+  def delta(delta: Delta): Option[MapUpdated] = {
 
     val start = current
 
@@ -129,7 +129,7 @@ class MapUpdateSynthesizer(orig: Map[TypeValue, TypeValue]) extends UpdateSynthe
     }
   }
 
-  def resync(resync: Resync): Option[DataValueUpdate] = {
+  def resync(resync: Resync): Option[MapUpdated] = {
     resync.snapshot match {
       case d: MapSnapshot => {
         val (removed, added, modified) = MapDiffCalc.calculate(current, d.snapshot)
@@ -165,16 +165,16 @@ object AppendUpdateSynthesizer {
     prevs ++ diffToAppend(v.current.diff).map(Seq(_)).getOrElse(Seq())
   }
 }
-class AppendUpdateSynthesizer extends UpdateSynthesizer with LazyLogging {
+class AppendUpdateSynthesizer extends UpdateSynthesizer[Appended] with LazyLogging {
   import AppendUpdateSynthesizer._
 
   private var lastOpt = Option.empty[AppendValue]
 
-  def get(): DataValueUpdate = {
+  def get(): Appended = {
     Appended(lastOpt.map(Seq(_)).getOrElse(Seq()))
   }
 
-  def delta(delta: Delta): Option[DataValueUpdate] = {
+  def delta(delta: Delta): Option[Appended] = {
     val values = delta.diffs.flatMap { seqDiff =>
       diffToAppend(seqDiff.diff)
     }
@@ -187,7 +187,7 @@ class AppendUpdateSynthesizer extends UpdateSynthesizer with LazyLogging {
     }
   }
 
-  def resync(resync: Resync): Option[DataValueUpdate] = {
+  def resync(resync: Resync): Option[Appended] = {
     resync.snapshot match {
       case v: AppendSnapshot =>
 
@@ -207,7 +207,7 @@ class AppendUpdateSynthesizer extends UpdateSynthesizer with LazyLogging {
   }
 }
 
-class ConsumerUpdateFilter(cid: String, resync: ResyncSession, updates: UpdateSynthesizer) {
+class ConsumerUpdateFilter(cid: String, resync: ResyncSession, updates: UpdateSynthesizer[_ <: DataValueUpdate]) {
 
   private val filter = new GenInitializedStreamFilter(cid, resync)
   updates.resync(resync.resync) // TODO: manage the cache states better to not have to "warm this up"

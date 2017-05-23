@@ -20,6 +20,7 @@ package io.greenbus.edge.stream.engine2
 
 import io.greenbus.edge.flow._
 import io.greenbus.edge.stream._
+import io.greenbus.edge.stream.filter.FilteredStreamQueue
 import io.greenbus.edge.thread.CallMarshaller
 
 import scala.collection.mutable
@@ -89,7 +90,8 @@ class GenericChannelEngine(streamEngine: StreamEngine) {
 class PeerLinkSourceChannel(session: PeerSessionId, link: PeerLinkProxyChannel) extends GenericSourceChannel {
 
   private val routeManifestRow = PeerRouteSource.peerRouteRow(session)
-  private val routeLog = RouteManifestSet.build
+  private val manifestStream = new FilteredStreamQueue
+  //private val routeLog = RouteManifestSet.build
 
   def init(): Unit = {
     link.subscriptions.push(Set(routeManifestRow))
@@ -108,16 +110,16 @@ class PeerLinkSourceChannel(session: PeerSessionId, link: PeerLinkProxyChannel) 
   def events: Source[SourceEvents] = {
     new Source[SourceEvents] {
       def bind(handler: Handler[SourceEvents]): Unit = {
-        link.events.bind(handleStreamEvents)
+        link.events.bind(handleStreamEvents(_, handler))
       }
     }
   }
 
-  private def handleStreamEvents(events: Seq[StreamEvent]): Unit = {
+  private def handleStreamEvents(events: Seq[StreamEvent], handler: Handler[SourceEvents]): Unit = {
     events.foreach {
       case ev: RowAppendEvent =>
         if (ev.rowId == routeManifestRow) {
-          routeLog.handle(Seq(ev.appendEvent))
+          manifestStream.handle(ev.appendEvent)
         }
       case ev: RouteUnresolved =>
         if (ev.routingKey == routeManifestRow.routingKey) {
@@ -125,7 +127,9 @@ class PeerLinkSourceChannel(session: PeerSessionId, link: PeerLinkProxyChannel) 
         }
     }
 
-    routeLog.dequeue()
+    manifestStream.dequeue()
+
+    handler.handle(SourceEvents(None, events))
   }
 
   def requests: Sink[Seq[ServiceRequest]] = link.requests
