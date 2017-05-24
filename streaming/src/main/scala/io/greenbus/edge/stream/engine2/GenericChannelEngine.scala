@@ -21,15 +21,12 @@ package io.greenbus.edge.stream.engine2
 import io.greenbus.edge.flow._
 import io.greenbus.edge.stream._
 import io.greenbus.edge.stream.consume.ValueUpdateSynthesizerImpl
-import io.greenbus.edge.stream.filter.FilteredStreamQueue
 import io.greenbus.edge.stream.subscribe._
-import io.greenbus.edge.thread.CallMarshaller
 import io.greenbus.edge.util.EitherUtil
 
 import scala.collection.mutable
 
 trait GenericSource {
-
   def subscriptions: Sink[Set[RowId]]
   def events: Source[SourceEvents]
   def requests: Sink[Seq[ServiceRequest]]
@@ -88,6 +85,27 @@ class GenericChannelEngine(streamEngine: StreamEngine) {
 
     target.onClose.subscribe(() => streamEngine.targetRemoved(st))
   }
+}
+
+class GatewaySourceChannel(link: GatewayClientProxyChannel) extends GenericSourceChannel {
+  def onClose: LatchSubscribable = link.onClose
+
+  def subscriptions: Sink[Set[RowId]] = link.subscriptions
+
+  def events: Source[SourceEvents] = {
+    new Source[SourceEvents] {
+      def bind(handler: Handler[SourceEvents]): Unit = {
+        link.events.bind { events =>
+          val routeMapOpt = events.routesUpdate.map { set => set.map(route => (route, RouteManifestEntry(0))).toMap }
+          handler.handle(SourceEvents(routeMapOpt, events.events))
+        }
+      }
+    }
+  }
+
+  def requests: Sink[Seq[ServiceRequest]] = link.requests
+
+  def responses: Source[Seq[ServiceResponse]] = link.responses
 }
 
 class PeerLinkSourceChannel(session: PeerSessionId, link: PeerLinkProxyChannel) extends GenericSourceChannel {
