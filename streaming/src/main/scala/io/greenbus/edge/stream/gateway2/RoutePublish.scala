@@ -19,9 +19,10 @@
 package io.greenbus.edge.stream.gateway2
 
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.flow.{ QueuedDistributor, Sink, Source }
+import io.greenbus.edge.flow.{QueuedDistributor, Sink, Source}
 import io.greenbus.edge.stream._
-import io.greenbus.edge.stream.gateway.{ MapDiffCalc, RouteServiceRequest }
+import io.greenbus.edge.stream.engine2.{GenericSource, SourceEvents}
+import io.greenbus.edge.stream.gateway.{MapDiffCalc, RouteServiceRequest}
 
 import scala.collection.mutable
 
@@ -73,6 +74,17 @@ class GatewayPublisherSource extends GenericSource with LazyLogging {
   }
 }
 
+/*
+  route pub lifetime map
+    - * route mgrs
+    - set(routes)
+
+  single gateway proxy channel lifetime OR
+
+  generic source implementation, used by stream engine,
+  route set needs to find its way to gateway proxy channel implementation of generic target
+
+ */
 class PublisherRouteSetMgr(handle: GatewayPublishHandle) extends LazyLogging {
 
   private val publishedRoutes = mutable.Map.empty[TypeValue, PublisherRouteMgr]
@@ -101,9 +113,9 @@ class PublisherRouteSetMgr(handle: GatewayPublishHandle) extends LazyLogging {
   }
 }
 
-case class SourceEvents(routeUpdatesOpt: Option[Map[TypeValue, RouteManifestEntry]], events: Seq[StreamEvent])
+//case class SourceEvents(routeUpdatesOpt: Option[Map[TypeValue, RouteManifestEntry]], events: Seq[StreamEvent])
 
-trait GenericSource {
+/*trait GenericSource {
   def subscriptions: Sink[Set[RowId]]
   def events: Source[SourceEvents]
   def requests: Sink[Seq[ServiceRequest]]
@@ -112,9 +124,9 @@ trait GenericSource {
 
 trait GenericTarget {
   def events(events: Seq[StreamEvent]): Unit
-}
+}*/
 
-trait RouteSourcing {
+/*trait RouteSourcing {
   def observeForDelivery(events: Seq[StreamEvent]): Unit
   def issueServiceRequests(requests: Seq[ServiceRequest]): Unit
 }
@@ -129,8 +141,8 @@ trait StreamSourcingManager[Source, Target] {
   def targetUpdate(target: Target, rows: Set[RowId]): Unit
   def targetRemoved(target: Target): Unit
 
-}
-abstract class StreamEngine {
+}*/
+/*abstract class StreamEngine {
   // cache
   // sourcing map
 
@@ -142,7 +154,7 @@ abstract class StreamEngine {
   def targetSubscriptionUpdate(rows: Set[RowId]): Unit
   def targetRemoved(): Unit
 
-}
+}*/
 
 /*
 
@@ -221,6 +233,21 @@ trait StreamCacheTable {
   def sync(rows: Set[RowId]): Unit
   def removeRoute(route: TypeValue): Unit
 }
+
+/*class StreamCacheTableImpl extends StreamCacheTable {
+  private val routeMap = mutable.Map.empty[TypeValue, Map[TableRow,]]
+  def handleEvents(events: Seq[RowAppendEvent]): Unit = {
+
+  }
+
+  def sync(rows: Set[RowId]): Unit = {
+
+  }
+
+  def removeRoute(route: TypeValue): Unit = {
+
+  }
+}*/
 
 trait GatewayPublishHandle {
   def events(routeUpdates: Option[Set[TypeValue]], batch: Seq[StreamEvent]): Unit
