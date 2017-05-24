@@ -111,30 +111,3 @@ class RetailKeyStream extends KeyStreamObserver with CachingKeyStreamSubject {
     this.observers.foreach(_.handle(event))
   }
 }
-
-/*
-class GatewayKeyStream[Source] extends KeyStream[Source] {
-  private val retail = new RetailKeyStream
-  //private val synth = new SynthKeyStream[Source](retail)
-
-  def handle(source: Source, event: AppendEvent): Unit = {
-    retail.handle(event)
-  }
-
-  def sourceRemoved(source: Source): Unit = {
-    //retail.sourceRemoved(source)
-  }
-
-  def targeted(): Boolean = {
-    retail.targeted()
-  }
-
-  def targetAdded(observer: KeyStreamObserver): Unit = {
-    retail.targetAdded(observer)
-  }
-
-  def targetRemoved(observer: KeyStreamObserver): Unit = {
-    retail.targetRemoved(observer)
-  }
-}
-*/
