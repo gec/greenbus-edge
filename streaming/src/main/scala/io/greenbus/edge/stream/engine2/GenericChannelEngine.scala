@@ -20,8 +20,11 @@ package io.greenbus.edge.stream.engine2
 
 import io.greenbus.edge.flow._
 import io.greenbus.edge.stream._
+import io.greenbus.edge.stream.consume.ValueUpdateSynthesizerImpl
 import io.greenbus.edge.stream.filter.FilteredStreamQueue
+import io.greenbus.edge.stream.subscribe._
 import io.greenbus.edge.thread.CallMarshaller
+import io.greenbus.edge.util.EitherUtil
 
 import scala.collection.mutable
 
@@ -90,8 +93,7 @@ class GenericChannelEngine(streamEngine: StreamEngine) {
 class PeerLinkSourceChannel(session: PeerSessionId, link: PeerLinkProxyChannel) extends GenericSourceChannel {
 
   private val routeManifestRow = PeerRouteSource.peerRouteRow(session)
-  private val manifestStream = new FilteredStreamQueue
-  //private val routeLog = RouteManifestSet.build
+  private val manifestSynth = new ValueUpdateSynthesizerImpl
 
   def init(): Unit = {
     link.subscriptions.push(Set(routeManifestRow))
@@ -115,21 +117,60 @@ class PeerLinkSourceChannel(session: PeerSessionId, link: PeerLinkProxyChannel) 
     }
   }
 
+  private def handleManifest(ev: AppendEvent): Option[Map[TypeValue, RouteManifestEntry]] = {
+
+    val dvu = manifestSynth.handle(ev) match {
+      case None => None
+      case Some(ValueSync(_, value)) => Some(value)
+      case Some(ValueDelta(value)) => Some(value)
+
+    }
+
+    val optMapUpdate = dvu.flatMap {
+      case mu: MapUpdated => Some(mu)
+      case _ => None
+    }
+
+    optMapUpdate.map(_.value).flatMap { routeMap =>
+      val eitherEntries = routeMap.toSeq.map {
+        case (key, v) => RouteManifestEntry.fromTypeValue(v).map(rv => (key, rv))
+      }
+
+      EitherUtil.rightSequence(eitherEntries).toOption.map(_.toMap)
+    }
+  }
+
   private def handleStreamEvents(events: Seq[StreamEvent], handler: Handler[SourceEvents]): Unit = {
+
+    var manifestUpdateOpt = Option.empty[Map[TypeValue, RouteManifestEntry]]
+
     events.foreach {
       case ev: RowAppendEvent =>
         if (ev.rowId == routeManifestRow) {
-          manifestStream.handle(ev.appendEvent)
+          manifestUpdateOpt = handleManifest(ev.appendEvent)
         }
       case ev: RouteUnresolved =>
         if (ev.routingKey == routeManifestRow.routingKey) {
-
+          manifestUpdateOpt = Some(Map())
         }
     }
 
-    manifestStream.dequeue()
+    /*val manifestUpdateOpt = events.flatMap {
+      case ev: RowAppendEvent =>
+        if (ev.rowId == routeManifestRow) {
+          handleManifest(ev.appendEvent)
+        } else {
+          None
+        }
+      case ev: RouteUnresolved =>
+        if (ev.routingKey == routeManifestRow.routingKey) {
+          Some(Map.empty[TypeValue, RouteManifestEntry])
+        } else {
+          None
+        }
+    }.lastOption*/
 
-    handler.handle(SourceEvents(None, events))
+    handler.handle(SourceEvents(manifestUpdateOpt, events))
   }
 
   def requests: Sink[Seq[ServiceRequest]] = link.requests
