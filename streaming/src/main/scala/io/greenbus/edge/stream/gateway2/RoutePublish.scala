@@ -21,6 +21,8 @@ package io.greenbus.edge.stream.gateway2
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.flow.{ QueuedDistributor, Sink, Source }
 import io.greenbus.edge.stream._
+import io.greenbus.edge.stream.engine2._
+import io.greenbus.edge.stream.filter.{ StreamCache, StreamCacheImpl }
 import io.greenbus.edge.stream.gateway.{ MapDiffCalc, RouteServiceRequest }
 
 import scala.collection.mutable
@@ -40,39 +42,67 @@ case class RoutePublishConfig(
   mapKeys: Seq[(TableRow, SequenceCtx)],
   dynamicTables: Seq[(TableRow, DynamicTable)],
   handler: Sink[RouteServiceRequest])
+/*
+trait ProducerStream[A] {
+  protected def sequence(obj: A): Seq[AppendEvent]
+  def handle(values: Seq[TypeValue]): Seq[AppendEvent]
+  def resync(): Seq[AppendEvent]
+}*/
 
-object PublisherRouteMgr {
+class ProducerStreamContainer(rowId: RowId) extends CachingKeyStreamSubject {
+  private var streamOpt = Option.empty[StreamCache]
 
-  def build(route: TypeValue, cfg: RoutePublishConfig): PublisherRouteMgr = {
-    ???
+  protected def sync(): Seq[AppendEvent] = {
+    streamOpt.map(_.resync()).getOrElse(Seq())
   }
-}
-class PublisherRouteMgr(route: TypeValue, sequencer: RoutePublishSequencer) {
 
-  def handleBatch(batch: PublishBatch): Seq[RowAppendEvent] = {
-    sequencer.handleBatch(batch)
+  def bind(cache: StreamCache): Unit = {
+    streamOpt = Some(cache)
   }
-}
-
-class GatewayPublisherSource extends GenericSource with LazyLogging {
-
-  //private val subQueue = new QueuedDistributor[Set[RowId]]
-  private val eventQueue = new QueuedDistributor[SourceEvents]
-  private val responseQueue = new QueuedDistributor[Seq[ServiceResponse]]
-
-  def subscriptions: Sink[Set[RowId]] = ???
-  def events: Source[SourceEvents] = eventQueue
-  def requests: Sink[Seq[ServiceRequest]] = ???
-  def responses: Source[Seq[ServiceResponse]] = responseQueue
-
-  private def onRequests(requests: Seq[ServiceRequest]): Unit = {
-
-  }
-  private def onSubscription(requests: Seq[ServiceRequest]): Unit = {
-
+  def unbind(): Unit = {
+    streamOpt = None
   }
 }
 
+class ProducerStream[A](sequencer: A => Seq[AppendEvent]) /* extends CachingKeyStreamSubject */ {
+
+  protected val cache = new StreamCacheImpl
+
+  def handle(obj: A): Seq[AppendEvent] = {
+    val sequenced = sequencer(obj)
+    sequenced.foreach(cache.handle)
+    sequenced
+  }
+
+  def sync(): Seq[AppendEvent] = cache.resync()
+}
+
+/*class ProducerAppendStream(session: PeerSessionId, ctx: SequenceCtx) {
+  private val sequencer = new AppendSequencer(session, ctx)
+  private val cache = new StreamCacheImpl
+
+  def handle(values: Seq[TypeValue]): Seq[AppendEvent] = {
+    val sequenced = sequencer.handle(values)
+    sequenced.foreach(cache.handle)
+    sequenced
+  }
+
+  def resync(): Seq[AppendEvent] = {
+    cache.resync()
+  }
+}*/
+
+/*
+  route pub lifetime map
+    - * route mgrs
+    - set(routes)
+
+  single gateway proxy channel lifetime OR
+
+  generic source implementation, used by stream engine,
+  route set needs to find its way to gateway proxy channel implementation of generic target
+
+ */
 class PublisherRouteSetMgr(handle: GatewayPublishHandle) extends LazyLogging {
 
   private val publishedRoutes = mutable.Map.empty[TypeValue, PublisherRouteMgr]
@@ -99,11 +129,120 @@ class PublisherRouteSetMgr(handle: GatewayPublishHandle) extends LazyLogging {
         handle.events(None, events)
     }
   }
+
+  def flushNotifications: Source[Set[TypeValue]] = ???
+
+  def registerTargetObservers(target: StreamTarget, subscription: Map[TypeValue, RouteObservers]): Unit = ???
+
+  def targetRemoved(target: StreamTarget): Unit = {}
 }
 
-case class SourceEvents(routeUpdatesOpt: Option[Map[TypeValue, RouteManifestEntry]], events: Seq[StreamEvent])
+class RoutePublishingMgr(route: TypeValue,
+    appends: Map[TableRow, ProducerStream[Seq[TypeValue]]],
+    sets: Map[TableRow, ProducerStream[Set[TypeValue]]],
+    maps: Map[TableRow, ProducerStream[Map[TypeValue, TypeValue]]]) {
 
-trait GenericSource {
+  //private val subjectMap: Map[TableRow, Pro]
+
+  def handleBatch(batch: PublishBatch): Seq[RowAppendEvent] = {
+
+    val appendEvents = batch.appendUpdates.flatMap { update =>
+      appends.get(update.key)
+        .map(_.handle(update.values))
+        .getOrElse(Seq())
+        .map(ev => RowAppendEvent(update.key.toRowId(route), ev))
+    }
+    val setEvents = batch.setUpdates.flatMap { update =>
+      sets.get(update.key)
+        .map(_.handle(update.value))
+        .getOrElse(Seq())
+        .map(ev => RowAppendEvent(update.key.toRowId(route), ev))
+    }
+    val mapEvents = batch.mapUpdates.flatMap { update =>
+      maps.get(update.key)
+        .map(_.handle(update.value))
+        .getOrElse(Seq())
+        .map(ev => RowAppendEvent(update.key.toRowId(route), ev))
+    }
+
+    appendEvents ++ setEvents ++ mapEvents
+  }
+}
+
+/*
+class PublisherSourceMgr extends SourceManager {
+
+  def flushNotifications: Source[Set[TypeValue]] = ???
+
+  def registerTargetObservers(target: StreamTarget, subscription: Map[TypeValue, RouteObservers]): Unit = ???
+
+  def targetRemoved(target: StreamTarget): Unit = {}
+}
+*/
+
+/*
+class RoutePublishSequencer(route: TypeValue, appends: Map[TableRow, AppendSequencer], sets: Map[TableRow, SetSequencer], maps: Map[TableRow, MapSequencer]) {
+
+  def handleBatch(batch: PublishBatch): Seq[RowAppendEvent] = {
+
+    val appendEvents = batch.appendUpdates.flatMap { update =>
+      appends.get(update.key)
+        .map(_.handle(update.values))
+        .getOrElse(Seq())
+        .map(ev => RowAppendEvent(update.key.toRowId(route), ev))
+    }
+    val setEvents = batch.setUpdates.flatMap { update =>
+      sets.get(update.key)
+        .map(_.handle(update.value))
+        .getOrElse(Seq())
+        .map(ev => RowAppendEvent(update.key.toRowId(route), ev))
+    }
+    val mapEvents = batch.mapUpdates.flatMap { update =>
+      maps.get(update.key)
+        .map(_.handle(update.value))
+        .getOrElse(Seq())
+        .map(ev => RowAppendEvent(update.key.toRowId(route), ev))
+    }
+
+    appendEvents ++ setEvents ++ mapEvents
+  }
+}*/
+
+object PublisherRouteMgr {
+
+  def build(route: TypeValue, cfg: RoutePublishConfig): PublisherRouteMgr = {
+    ???
+  }
+}
+class PublisherRouteMgr(route: TypeValue, sequencer: RoutePublishingMgr) {
+
+  def handleBatch(batch: PublishBatch): Seq[RowAppendEvent] = {
+    sequencer.handleBatch(batch)
+  }
+}
+
+class GatewayPublisherSource extends GenericSource with LazyLogging {
+
+  //private val subQueue = new QueuedDistributor[Set[RowId]]
+  private val eventQueue = new QueuedDistributor[SourceEvents]
+  private val responseQueue = new QueuedDistributor[Seq[ServiceResponse]]
+
+  def subscriptions: Sink[Set[RowId]] = ???
+  def events: Source[SourceEvents] = eventQueue
+  def requests: Sink[Seq[ServiceRequest]] = ???
+  def responses: Source[Seq[ServiceResponse]] = responseQueue
+
+  private def onRequests(requests: Seq[ServiceRequest]): Unit = {
+
+  }
+  private def onSubscription(requests: Seq[ServiceRequest]): Unit = {
+
+  }
+}
+
+//case class SourceEvents(routeUpdatesOpt: Option[Map[TypeValue, RouteManifestEntry]], events: Seq[StreamEvent])
+
+/*trait GenericSource {
   def subscriptions: Sink[Set[RowId]]
   def events: Source[SourceEvents]
   def requests: Sink[Seq[ServiceRequest]]
@@ -112,9 +251,9 @@ trait GenericSource {
 
 trait GenericTarget {
   def events(events: Seq[StreamEvent]): Unit
-}
+}*/
 
-trait RouteSourcing {
+/*trait RouteSourcing {
   def observeForDelivery(events: Seq[StreamEvent]): Unit
   def issueServiceRequests(requests: Seq[ServiceRequest]): Unit
 }
@@ -129,8 +268,8 @@ trait StreamSourcingManager[Source, Target] {
   def targetUpdate(target: Target, rows: Set[RowId]): Unit
   def targetRemoved(target: Target): Unit
 
-}
-abstract class StreamEngine {
+}*/
+/*abstract class StreamEngine {
   // cache
   // sourcing map
 
@@ -142,7 +281,7 @@ abstract class StreamEngine {
   def targetSubscriptionUpdate(rows: Set[RowId]): Unit
   def targetRemoved(): Unit
 
-}
+}*/
 
 /*
 
@@ -222,6 +361,21 @@ trait StreamCacheTable {
   def removeRoute(route: TypeValue): Unit
 }
 
+/*class StreamCacheTableImpl extends StreamCacheTable {
+  private val routeMap = mutable.Map.empty[TypeValue, Map[TableRow,]]
+  def handleEvents(events: Seq[RowAppendEvent]): Unit = {
+
+  }
+
+  def sync(rows: Set[RowId]): Unit = {
+
+  }
+
+  def removeRoute(route: TypeValue): Unit = {
+
+  }
+}*/
+
 trait GatewayPublishHandle {
   def events(routeUpdates: Option[Set[TypeValue]], batch: Seq[StreamEvent]): Unit
   def respond(responses: Seq[ServiceResponse]): Unit
@@ -273,137 +427,4 @@ class PublisherMgr extends LazyLogging {
 
   }
 
-}
-
-case class AppendPublish(key: TableRow, values: Seq[TypeValue])
-case class SetPublish(key: TableRow, value: Set[TypeValue])
-case class MapPublish(key: TableRow, value: Map[TypeValue, TypeValue])
-case class PublishBatch(
-  appendUpdates: Seq[AppendPublish],
-  mapUpdates: Seq[MapPublish],
-  setUpdates: Seq[SetPublish])
-
-class RoutePublishSequencer(route: TypeValue, appends: Map[TableRow, AppendSequencer], sets: Map[TableRow, SetSequencer], maps: Map[TableRow, MapSequencer]) {
-
-  def handleBatch(batch: PublishBatch): Seq[RowAppendEvent] = {
-
-    val appendEvents = batch.appendUpdates.flatMap { update =>
-      appends.get(update.key)
-        .map(_.handle(update.values))
-        .getOrElse(Seq())
-        .map(ev => RowAppendEvent(update.key.toRowId(route), ev))
-    }
-    val setEvents = batch.setUpdates.flatMap { update =>
-      sets.get(update.key)
-        .map(_.handle(update.value))
-        .getOrElse(Seq())
-        .map(ev => RowAppendEvent(update.key.toRowId(route), ev))
-    }
-    val mapEvents = batch.mapUpdates.flatMap { update =>
-      maps.get(update.key)
-        .map(_.handle(update.value))
-        .getOrElse(Seq())
-        .map(ev => RowAppendEvent(update.key.toRowId(route), ev))
-    }
-
-    appendEvents ++ setEvents ++ mapEvents
-  }
-}
-
-class AppendSequencer(session: PeerSessionId, ctx: SequenceCtx) {
-  private var sequence: Long = 0
-  private var uninit = true
-
-  def handle(values: Seq[TypeValue]): Seq[AppendEvent] = {
-    assert(values.nonEmpty)
-
-    val start = sequence
-    val results = values.zipWithIndex.map {
-      case (v, i) => (Int64Val(start + i), v)
-    }
-    sequence += values.size
-
-    val diffs = results.map { case (i, v) => SequencedDiff(i, AppendValue(v)) }
-
-    if (uninit) {
-      val last = diffs.last
-      val init = diffs.init
-      val snap = AppendSnapshot(last, init)
-      uninit = false
-      Seq(ResyncSession(session, ctx, Resync(last.sequence, snap)))
-    } else {
-      Seq(StreamDelta(Delta(diffs)))
-    }
-  }
-}
-
-object SetSequencer {
-
-  def diff(next: Set[TypeValue], prev: Set[TypeValue]): SetDiff = {
-    val added = next -- prev
-    val removed = prev -- next
-    SetDiff(removes = removed, adds = added)
-  }
-
-  def toDelta(seq: Long, diff: SetDiff): Delta = {
-    Delta(Seq(SequencedDiff(Int64Val(seq), diff)))
-  }
-
-  def toSnapshot(seq: Long, current: Set[TypeValue]): Resync = {
-    Resync(Int64Val(seq), SetSnapshot(current))
-  }
-}
-class SetSequencer(session: PeerSessionId, ctx: SequenceCtx) {
-  import SetSequencer._
-
-  private var sequence: Long = 0
-  private var prevOpt = Option.empty[Set[TypeValue]]
-
-  def handle(value: Set[TypeValue]): Seq[AppendEvent] = {
-    val seq = sequence
-    sequence += 1
-
-    prevOpt match {
-      case None =>
-        Seq(ResyncSession(session, ctx, SetSequencer.toSnapshot(seq, value)))
-      case Some(prev) => {
-        Seq(StreamDelta(toDelta(seq, diff(value, prev))))
-      }
-    }
-  }
-}
-
-object MapSequencer {
-
-  def diff(next: Map[TypeValue, TypeValue], prev: Map[TypeValue, TypeValue]): MapDiff = {
-    val (removed, added, modified) = MapDiffCalc.calculate(prev, next)
-    MapDiff(removed, added, modified)
-  }
-
-  def toDelta(seq: Long, diff: MapDiff): Delta = {
-    Delta(Seq(SequencedDiff(Int64Val(seq), MapDiff(diff.removes, diff.adds, diff.modifies))))
-  }
-
-  def toSnapshot(seq: Long, current: Map[TypeValue, TypeValue]): Resync = {
-    Resync(Int64Val(seq), MapSnapshot(current))
-  }
-}
-class MapSequencer(session: PeerSessionId, ctx: SequenceCtx) {
-  import MapSequencer._
-
-  private var sequence: Long = 0
-  private var prevOpt = Option.empty[Map[TypeValue, TypeValue]]
-
-  def handle(value: Map[TypeValue, TypeValue]): Seq[AppendEvent] = {
-    val seq = sequence
-    sequence += 1
-
-    prevOpt match {
-      case None =>
-        Seq(ResyncSession(session, ctx, toSnapshot(seq, value)))
-      case Some(prev) => {
-        Seq(StreamDelta(toDelta(seq, diff(value, prev))))
-      }
-    }
-  }
 }

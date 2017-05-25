@@ -61,6 +61,21 @@ trait RouteSourcing {
   def issueServiceRequests(requests: Seq[ServiceRequest]): Unit
 }
 
+/*
+
+Source mgr
+<- register observers
+-> notify flush
+Target mgr
+
+ */
+
+trait SourceManager {
+  def flushNotifications: Source[Set[TypeValue]]
+  def registerTargetObservers(target: StreamTarget, subscription: Map[TypeValue, RouteObservers]): Unit
+  def targetRemoved(target: StreamTarget): Unit
+}
+
 class StreamEngine(
     sourceStrategyFactory: TypeValue => RouteSourcingStrategy,
     routeKeyStreamFactory: TypeValue => (TableRow => KeyStream[RouteStreamSource])) {

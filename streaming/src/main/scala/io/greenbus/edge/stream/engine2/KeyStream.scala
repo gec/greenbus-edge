@@ -40,7 +40,8 @@ trait KeyStream[Source] extends SourcedKeyStreamObserver[Source] {
 }
 
 trait CachingKeyStreamSubject {
-  protected val cache: filter.StreamCache
+  //protected val cache: filter.StreamCache
+  protected def sync(): Seq[AppendEvent]
   private val observerSet = mutable.Set.empty[KeyStreamObserver]
 
   protected def observers: Iterable[KeyStreamObserver] = observerSet
@@ -50,7 +51,7 @@ trait CachingKeyStreamSubject {
   def targetAdded(observer: KeyStreamObserver): Unit = {
     if (!observerSet.contains(observer)) {
       observerSet += observer
-      val emitted = cache.resync()
+      val emitted = sync()
       emitted.foreach(observer.handle)
     }
   }
@@ -105,6 +106,7 @@ class SynthKeyStream[Source](observer: KeyStreamObserver) extends SourcedKeyStre
 
 class RetailKeyStream extends KeyStreamObserver with CachingKeyStreamSubject {
   protected val cache = new filter.StreamCacheImpl
+  protected def sync(): Seq[AppendEvent] = cache.resync()
 
   def handle(event: AppendEvent): Unit = {
     cache.handle(event)
