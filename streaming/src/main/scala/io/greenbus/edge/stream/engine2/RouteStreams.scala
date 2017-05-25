@@ -22,6 +22,16 @@ import io.greenbus.edge.stream._
 
 import scala.collection.mutable
 
+/*trait RouteStreamManager[Source] {
+  def events(source: Source, events: Seq[StreamEvent]): Unit
+  def sourceAdded(source: Source, details: RouteManifestEntry): Unit
+  def sourceRemoved(source: Source): Unit
+
+  def targeted(): Boolean
+  def targetUpdate(target: StreamObserver, subscription: Map[TableRow, KeyStreamObserver]): Unit
+  def targetRemoved(target: StreamObserver): Unit
+}*/
+
 class RouteStreams(routingStrategy: RouteSourcingStrategy, streamFactory: TableRow => KeyStream[RouteStreamSource]) {
 
   private val streamMap = mutable.Map.empty[TableRow, KeyStream[RouteStreamSource]]
