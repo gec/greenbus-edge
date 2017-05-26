@@ -152,6 +152,52 @@ class StreamEngine(
   }
 }
 
+trait StreamTargetSubject[A <: RouteTargetSubject] {
+
+  protected val routeMap = mutable.Map.empty[TypeValue, A]
+  private val targetToRouteMap = mutable.Map.empty[StreamTarget, Map[TypeValue, RouteObservers]]
+
+  protected def buildRouteManager(route: TypeValue): A
+
+  def targetSubscriptionUpdate(target: StreamTarget, subscription: Map[TypeValue, RouteObservers]): Unit = {
+    val prev = targetToRouteMap.getOrElse(target, Map())
+
+    val removed = prev.keySet -- subscription.keySet
+    removed.foreach { route =>
+      prev.get(route).foreach { entry =>
+        routeMap.get(route).foreach { routeStreams =>
+          routeStreams.targetRemoved(entry.streamObserver)
+          if (!routeStreams.targeted()) {
+            routeMap -= route
+          }
+        }
+      }
+    }
+    subscription.foreach {
+      case (route, observers) =>
+        val routeStreams = routeMap.getOrElseUpdate(route, buildRouteManager(route))
+        routeStreams.targetUpdate(observers.streamObserver, observers.rowObserverMap)
+    }
+    targetToRouteMap.update(target, subscription)
+
+    // TODO: flush?
+    //target.flush()
+  }
+  def targetRemoved(target: StreamTarget): Unit = {
+    val prev = targetToRouteMap.getOrElse(target, Map())
+    prev.foreach {
+      case (route, obs) =>
+        routeMap.get(route).foreach { routeStreams =>
+          routeStreams.targetRemoved(obs.streamObserver)
+          if (!routeStreams.targeted()) {
+            routeMap -= route
+          }
+        }
+    }
+    targetToRouteMap -= target
+  }
+}
+
 trait StreamObserver {
   def handle(routeEvent: StreamEvent): Unit
 }
