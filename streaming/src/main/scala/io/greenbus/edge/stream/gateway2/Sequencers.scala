@@ -21,14 +21,6 @@ package io.greenbus.edge.stream.gateway2
 import io.greenbus.edge.stream._
 import io.greenbus.edge.stream.gateway.MapDiffCalc
 
-case class AppendPublish(key: TableRow, values: Seq[TypeValue])
-case class SetPublish(key: TableRow, value: Set[TypeValue])
-case class MapPublish(key: TableRow, value: Map[TypeValue, TypeValue])
-case class PublishBatch(
-  appendUpdates: Seq[AppendPublish],
-  mapUpdates: Seq[MapPublish],
-  setUpdates: Seq[SetPublish])
-
 class AppendSequencer(session: PeerSessionId, ctx: SequenceCtx) {
   private var sequence: Long = 0
   private var uninit = true

@@ -18,6 +18,8 @@
  */
 package io.greenbus.edge.stream.gateway2
 
+import java.util.UUID
+
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.flow.{ QueuedDistributor, Sink, Source }
 import io.greenbus.edge.stream._
@@ -27,55 +29,12 @@ import io.greenbus.edge.stream.gateway.{ MapDiffCalc, RouteServiceRequest }
 
 import scala.collection.mutable
 
-class RoutePublish {
-
-}
-
-trait DynamicTable {
-  def subscribed(key: TypeValue): Unit
-  def unsubscribed(key: TypeValue): Unit
-}
-
-case class RoutePublishConfig(
-  appendKeys: Seq[(TableRow, SequenceCtx)],
-  setKeys: Seq[(TableRow, SequenceCtx)],
-  mapKeys: Seq[(TableRow, SequenceCtx)],
-  dynamicTables: Seq[(TableRow, DynamicTable)],
-  handler: Sink[RouteServiceRequest])
 /*
 trait ProducerStream[A] {
   protected def sequence(obj: A): Seq[AppendEvent]
   def handle(values: Seq[TypeValue]): Seq[AppendEvent]
   def resync(): Seq[AppendEvent]
 }*/
-
-class ProducerStreamContainer(rowId: RowId) extends CachingKeyStreamSubject {
-  private var streamOpt = Option.empty[StreamCache]
-
-  protected def sync(): Seq[AppendEvent] = {
-    streamOpt.map(_.resync()).getOrElse(Seq())
-  }
-
-  def bind(cache: StreamCache): Unit = {
-    streamOpt = Some(cache)
-  }
-  def unbind(): Unit = {
-    streamOpt = None
-  }
-}
-
-class ProducerStream[A](sequencer: A => Seq[AppendEvent]) /* extends CachingKeyStreamSubject */ {
-
-  protected val cache = new StreamCacheImpl
-
-  def handle(obj: A): Seq[AppendEvent] = {
-    val sequenced = sequencer(obj)
-    sequenced.foreach(cache.handle)
-    sequenced
-  }
-
-  def sync(): Seq[AppendEvent] = cache.resync()
-}
 
 /*class ProducerAppendStream(session: PeerSessionId, ctx: SequenceCtx) {
   private val sequencer = new AppendSequencer(session, ctx)
@@ -103,7 +62,7 @@ class ProducerStream[A](sequencer: A => Seq[AppendEvent]) /* extends CachingKeyS
   route set needs to find its way to gateway proxy channel implementation of generic target
 
  */
-class PublisherRouteSetMgr(handle: GatewayPublishHandle) extends LazyLogging {
+/*class PublisherRouteSetMgr(handle: GatewayPublishHandle) extends LazyLogging {
 
   private val publishedRoutes = mutable.Map.empty[TypeValue, PublisherRouteMgr]
 
@@ -135,6 +94,19 @@ class PublisherRouteSetMgr(handle: GatewayPublishHandle) extends LazyLogging {
   def registerTargetObservers(target: StreamTarget, subscription: Map[TypeValue, RouteObservers]): Unit = ???
 
   def targetRemoved(target: StreamTarget): Unit = {}
+}*/
+
+class ProducerStream[A](sequencer: A => Seq[AppendEvent]) /* extends CachingKeyStreamSubject */ {
+
+  protected val cache = new StreamCacheImpl
+
+  def handle(obj: A): Seq[AppendEvent] = {
+    val sequenced = sequencer(obj)
+    sequenced.foreach(cache.handle)
+    sequenced
+  }
+
+  def sync(): Seq[AppendEvent] = cache.resync()
 }
 
 class RoutePublishingMgr(route: TypeValue,

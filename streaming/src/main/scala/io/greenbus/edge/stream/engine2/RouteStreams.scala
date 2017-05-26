@@ -32,7 +32,77 @@ import scala.collection.mutable
   def targetRemoved(target: StreamObserver): Unit
 }*/
 
-class RouteStreams(routingStrategy: RouteSourcingStrategy, streamFactory: TableRow => KeyStream[RouteStreamSource]) {
+trait RouteTargetSubject {
+
+  def targeted(): Boolean
+
+  def targetUpdate(target: StreamObserver, subscription: Map[TableRow, KeyStreamObserver]): Unit
+
+  def targetRemoved(target: StreamObserver): Unit
+}
+
+trait RouteTargetSubjectBasic[A <: KeyStreamSubject] extends RouteTargetSubject {
+  protected val streamMap = mutable.Map.empty[TableRow, A]
+  private val subscriptionMap = mutable.Map.empty[StreamObserver, Map[TableRow, KeyStreamObserver]]
+
+  protected def streamFactory(key: TableRow): A
+  protected def streamUpdate(update: Set[TableRow]): Unit = {}
+
+  def targeted(): Boolean = {
+    streamMap.keySet.nonEmpty
+  }
+
+  def targetUpdate(target: StreamObserver, subscription: Map[TableRow, KeyStreamObserver]): Unit = {
+    val previous = subscriptionMap.getOrElse(target, Map())
+    val removes = previous.keySet -- subscription.keySet
+
+    removes.flatMap(row => previous.get(row).map(obs => (row, obs))).foreach {
+      case (key, obs) => streamMap.get(key).foreach(_.targetRemoved(obs))
+    }
+
+    subscription.foreach {
+      case (key, obs) =>
+        streamMap.get(key) match {
+          case None => {
+            val stream = streamFactory(key)
+            streamMap.update(key, stream)
+            stream.targetAdded(obs)
+          }
+          case Some(stream) => stream.targetAdded(obs)
+        }
+    }
+
+    val untargetedStreams = removes.filter(key => streamMap.get(key).exists(!_.targeted()))
+    streamMap --= untargetedStreams
+
+    streamUpdate(streamMap.keySet.toSet)
+    /*val activeKeys = streamMap.keySet.toSet
+    routingStrategy.subscriptionUpdate(activeKeys)*/
+  }
+
+  def targetRemoved(target: StreamObserver): Unit = {
+    val previous = subscriptionMap.getOrElse(target, Map())
+
+    val untargetedStreams = previous.flatMap {
+      case (key, obs) =>
+        streamMap.get(key).flatMap { stream =>
+          stream.targetRemoved(obs)
+          if (stream.targeted()) {
+            None
+          } else {
+            Some(key)
+          }
+        }
+    }
+
+    streamMap --= untargetedStreams
+    //val activeKeys = streamMap.keySet.toSet
+    //routingStrategy.subscriptionUpdate(activeKeys)
+    streamUpdate(streamMap.keySet.toSet)
+  }
+}
+
+class RouteStreams(routingStrategy: RouteSourcingStrategy, streamFactory: TableRow => KeyStream[RouteStreamSource]) extends RouteTargetSubject {
 
   private val streamMap = mutable.Map.empty[TableRow, KeyStream[RouteStreamSource]]
   private val subscriptionMap = mutable.Map.empty[StreamObserver, Map[TableRow, KeyStreamObserver]]
