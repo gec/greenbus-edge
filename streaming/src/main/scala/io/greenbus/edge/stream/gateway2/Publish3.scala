@@ -43,7 +43,7 @@ case class RoutePublishConfig(
   appendKeys: Seq[(TableRow, SequenceCtx)],
   setKeys: Seq[(TableRow, SequenceCtx)],
   mapKeys: Seq[(TableRow, SequenceCtx)],
-  dynamicTables: Seq[(TableRow, DynamicTable)],
+  dynamicTables: Seq[(String, DynamicTable)],
   handler: Sink[RouteServiceRequest])
 
 class ProducerStreamContainer(rowId: RowId) extends CachingKeyStreamSubject {
@@ -123,9 +123,19 @@ class RoutePublisher(
   }
 }
 
+/*
+
+
+ */
+
+// TODO: the whole keep-it-alive thing is pointless when the "container" doesn't matter anyway
 class ProducerRouteManager(route: TypeValue) extends RouteTargetSubjectBasic[ProducerStreamContainer] {
 
   private var currentlyBound = Set.empty[TableRow]
+
+  def batch(publishBatch: PublishBatch): Unit = {
+
+  }
 
   def bindPublisher(publisher: RoutePublisher): Unit = {
 
