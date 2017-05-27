@@ -60,8 +60,8 @@ sealed trait RowEvent extends StreamEvent {
 case class RowAppendEvent(rowId: RowId, appendEvent: AppendEvent) extends RowEvent {
   def routingKey: TypeValue = rowId.routingKey
 }
-case class RowResolvedAbsent(rowId: RowId) extends RowEvent {
+/*case class RowResolvedAbsent(rowId: RowId) extends RowEvent {
   def routingKey: TypeValue = rowId.routingKey
-}
+}*/
 
 case class RouteUnresolved(routingKey: TypeValue) extends StreamEvent

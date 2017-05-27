@@ -46,7 +46,7 @@ case class RoutePublishConfig(
   dynamicTables: Seq[(String, DynamicTable)],
   handler: Sink[RouteServiceRequest])
 
-class ProducerStreamContainer(rowId: RowId) extends CachingKeyStreamSubject {
+class ProducerStreamSubject extends CachingKeyStreamSubject {
   private var streamOpt = Option.empty[StreamCache]
 
   protected def sync(): Seq[AppendEvent] = {
@@ -62,7 +62,7 @@ class ProducerStreamContainer(rowId: RowId) extends CachingKeyStreamSubject {
   }
 
   def targeted(): Boolean = {
-    observers.nonEmpty || streamOpt.nonEmpty
+    observers.nonEmpty /*|| streamOpt.nonEmpty*/
   }
 }
 
@@ -129,7 +129,7 @@ class RoutePublisher(
  */
 
 // TODO: the whole keep-it-alive thing is pointless when the "container" doesn't matter anyway
-class ProducerRouteManager(route: TypeValue) extends RouteTargetSubjectBasic[ProducerStreamContainer] {
+class ProducerRouteManager(route: TypeValue) extends RouteTargetSubjectBasic[ProducerStreamSubject] {
 
   private var currentlyBound = Set.empty[TableRow]
 
@@ -158,8 +158,8 @@ class ProducerRouteManager(route: TypeValue) extends RouteTargetSubjectBasic[Pro
     streamMap.foreach(_._2.unbind())
   }
 
-  protected def streamFactory(key: TableRow): ProducerStreamContainer = {
-    new ProducerStreamContainer(key.toRowId(route))
+  protected def streamFactory(key: TableRow): ProducerStreamSubject = {
+    new ProducerStreamSubject()
   }
 }
 

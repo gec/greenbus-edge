@@ -112,9 +112,9 @@ class RouteStreams(routingStrategy: RouteSourcingStrategy, streamFactory: TableR
       case append: RowAppendEvent => {
         streamMap.get(append.rowId.tableRow).foreach(_.handle(source, append.appendEvent))
       }
-      case absent: RowResolvedAbsent => {
+      /*case absent: RowResolvedAbsent => {
         // ???
-      }
+      }*/
       case un: RouteUnresolved => {
         streamMap.values.foreach(_.sourceRemoved(source))
       }
