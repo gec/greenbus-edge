@@ -16,16 +16,17 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.stream.gateway2
+package io.greenbus.edge.stream.gateway3
 
 import java.util.UUID
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.flow.Sink
-import io.greenbus.edge.stream.engine2.{ KeyStreamObserver, RouteTargetSubject, StreamObserver, StreamObserverSet }
 import io.greenbus.edge.stream._
+import io.greenbus.edge.stream.engine2._
 import io.greenbus.edge.stream.filter.{ StreamCache, StreamCacheImpl }
 import io.greenbus.edge.stream.gateway.RouteServiceRequest
+import io.greenbus.edge.stream.gateway2._
 
 import scala.collection.mutable
 
@@ -38,33 +39,6 @@ sealed trait ProducerKeyEvent
 case class AddRow(key: TableRow, ctx: SequenceCtx) extends ProducerKeyEvent
 case class RowUpdate(key: TableRow, update: ProducerDataUpdate) extends ProducerKeyEvent
 case class DrowRow(key: TableRow) extends ProducerKeyEvent
-
-/*class ProducerUpdateStream(sequencer: UpdateSequencer) {
-
-  private var observerOpt = Option.empty[StreamObserverSet]
-
-  protected val streamCache = new StreamCacheImpl
-
-  def cache: StreamCache = streamCache
-
-  def handle(update: ProducerDataUpdate): Unit = {
-    val sequenced = sequencer.handle(update)
-    sequenced.foreach(streamCache.handle)
-    observerOpt.foreach { set =>
-      set.observers.foreach { observer =>
-        sequenced.foreach(observer.handle)
-      }
-    }
-  }
-
-  def bind(set: StreamObserverSet): Unit = {
-    observerOpt = Some(set)
-  }
-
-  def unbind(): Unit = {
-    observerOpt = None
-  }
-}*/
 
 class ProducerUpdateStream(sessionId: PeerSessionId, ctx: SequenceCtx) {
 
@@ -154,14 +128,6 @@ class MapUpdateSequencer(session: PeerSessionId, ctx: SequenceCtx) extends Updat
     }
   }
 }
-
-/*sealed trait ProducerKeyEvent
-case class AppendPublishEvent(key: TableRow, values: Seq[TypeValue], ctxOpt: Option[SequenceCtx]) extends ProducerKeyEvent
-case class MapPublishEvent(key: TableRow, value: Set[TypeValue], ctxOpt: Option[SequenceCtx]) extends ProducerKeyEvent
-case class SetPublishEvent(key: TableRow, value: Map[TypeValue, TypeValue], ctxOpt: Option[SequenceCtx]) extends ProducerKeyEvent
-case class DrowRow(key: TableRow) extends ProducerKeyEvent*/
-
-//case class DynamicTableEvent()
 
 sealed trait ProducerEvent
 
@@ -331,9 +297,9 @@ class ProducerRouteMgr extends RouteTargetSubject {
   }
 }
 
-class ProducerMgr {
+class ProducerMgr extends StreamTargetSubject2[ProducerRouteMgr] {
 
-  private val routeMap = mutable.Map.empty[TypeValue, ProducerRouteMgr]
+  protected val routeMap = mutable.Map.empty[TypeValue, ProducerRouteMgr]
 
   def handleEvent(event: ProducerEvent): Unit = {
     event match {
@@ -345,9 +311,63 @@ class ProducerMgr {
         routeMap.get(ev.route).foreach(_.batch(ev.events))
       }
       case ev: RouteUnbindEvent =>
-        routeMap.get(ev.route).foreach(_.unbind())
+        routeMap.get(ev.route).foreach { routeMgr =>
+          routeMgr.unbind()
+          if (!routeMgr.targeted()) {
+            routeMap -= ev.route
+          }
+        }
     }
   }
 
+  protected def buildRouteManager(route: TypeValue): ProducerRouteMgr = {
+    new ProducerRouteMgr
+  }
+}
+
+trait StreamTargetSubject2[A <: RouteTargetSubject] {
+
+  protected val routeMap: mutable.Map[TypeValue, A]
+  private val targetToRouteMap = mutable.Map.empty[StreamTarget, Map[TypeValue, RouteObservers]]
+
+  protected def buildRouteManager(route: TypeValue): A
+
+  def targetSubscriptionUpdate(target: StreamTarget, subscription: Map[TypeValue, RouteObservers]): Unit = {
+    val prev = targetToRouteMap.getOrElse(target, Map())
+
+    val removed = prev.keySet -- subscription.keySet
+    removed.foreach { route =>
+      prev.get(route).foreach { entry =>
+        routeMap.get(route).foreach { routeStreams =>
+          routeStreams.targetRemoved(entry.streamObserver)
+          if (!routeStreams.targeted()) {
+            routeMap -= route
+          }
+        }
+      }
+    }
+    subscription.foreach {
+      case (route, observers) =>
+        val routeStreams = routeMap.getOrElseUpdate(route, buildRouteManager(route))
+        routeStreams.targetUpdate(observers.streamObserver, observers.rowObserverMap)
+    }
+    targetToRouteMap.update(target, subscription)
+
+    // TODO: flush?
+    //target.flush()
+  }
+  def targetRemoved(target: StreamTarget): Unit = {
+    val prev = targetToRouteMap.getOrElse(target, Map())
+    prev.foreach {
+      case (route, obs) =>
+        routeMap.get(route).foreach { routeStreams =>
+          routeStreams.targetRemoved(obs.streamObserver)
+          if (!routeStreams.targeted()) {
+            routeMap -= route
+          }
+        }
+    }
+    targetToRouteMap -= target
+  }
 }
 
