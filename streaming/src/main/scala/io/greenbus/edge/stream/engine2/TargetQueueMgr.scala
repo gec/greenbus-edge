@@ -60,7 +60,7 @@ class SimpleRouteTargetQueues(route: TypeValue) {
 }
 
 // TODO: notify dirty
-class TargetQueueMgr {
+class TargetQueueMgr extends StreamTarget {
 
   private val routeMap = mutable.Map.empty[TypeValue, SimpleRouteTargetQueues]
 
@@ -77,4 +77,6 @@ class TargetQueueMgr {
   def dequeue(): Seq[StreamEvent] = {
     routeMap.flatMap(_._2.dequeue()).toSeq
   }
+
+  def flush(): Unit = {}
 }

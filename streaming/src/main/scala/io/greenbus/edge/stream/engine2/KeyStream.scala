@@ -97,7 +97,7 @@ class SynthesizedKeyStream[Source] extends KeyStream[Source] {
 
 class SynthKeyStream[Source](observer: KeyStreamObserver) extends SourcedKeyStreamObserver[Source] {
 
-  private val rowSynthesizer: RowSynthesizer[Source] = null
+  private val rowSynthesizer: RowSynthesizer[Source] = new RowSynthImpl[Source]
 
   def handle(source: Source, event: AppendEvent): Unit = {
     val emitted = rowSynthesizer.append(source, event)

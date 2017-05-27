@@ -27,6 +27,7 @@ trait RouteSourcingStrategy {
   def subscriptionUpdate(keys: Set[TableRow]): Unit
   def sourceAdded(source: RouteStreamSource, details: RouteManifestEntry): Unit
   def sourceRemoved(source: RouteStreamSource): Seq[StreamEvent]
+  def resolved(): Boolean
 }
 
 class SingleSubscribeSourcingStrategy(route: TypeValue) extends RouteSourcingStrategy with LazyLogging {
@@ -43,7 +44,8 @@ class SingleSubscribeSourcingStrategy(route: TypeValue) extends RouteSourcingStr
   }
 
   def sourceAdded(source: RouteStreamSource, details: RouteManifestEntry): Unit = {
-    if (currentOpt.isEmpty) {
+    // TODO: Need smarter than this
+    if (currentOpt.isEmpty && sourcesMap.isEmpty) {
       currentOpt = Some(source)
       if (subscription.nonEmpty) {
         source.updateSourcing(route, subscription)
@@ -70,5 +72,9 @@ class SingleSubscribeSourcingStrategy(route: TypeValue) extends RouteSourcingStr
     } else {
       Seq()
     }
+  }
+
+  def resolved(): Boolean = {
+    currentOpt.nonEmpty
   }
 }

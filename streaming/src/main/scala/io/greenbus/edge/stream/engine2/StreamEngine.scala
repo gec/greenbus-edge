@@ -77,18 +77,17 @@ trait SourceManager {
 }
 
 class StreamEngine(
-    sourceStrategyFactory: TypeValue => RouteSourcingStrategy,
-    routeKeyStreamFactory: TypeValue => (TableRow => KeyStream[RouteStreamSource])) {
+    sourceStrategyFactory: TypeValue => RouteSourcingStrategy /*routeKeyStreamFactory: TypeValue => (TableRow => KeyStream[RouteStreamSource])*/ ) {
 
   private val routeMap = mutable.Map.empty[TypeValue, RouteStreams]
-  private val sourceToRouteMap = mutable.Map.empty[RouteStreamSource, Set[TypeValue]]
+  private val sourceToRouteMap = mutable.Map.empty[RouteStreamSource, Map[TypeValue, RouteManifestEntry]]
   private val targetToRouteMap = mutable.Map.empty[StreamTarget, Map[TypeValue, RouteObservers]]
 
   def sourceUpdate(source: RouteStreamSource, update: SourceEvents): Unit = {
     update.routeUpdatesOpt.foreach { routesUpdate =>
-      val prev = sourceToRouteMap.getOrElse(source, Set())
-      sourceToRouteMap.update(source, routesUpdate.keySet)
-      val removes = prev -- routesUpdate.keySet
+      val prev = sourceToRouteMap.getOrElse(source, Map())
+      sourceToRouteMap.update(source, routesUpdate)
+      val removes = prev.keySet -- routesUpdate.keySet
       removes.foreach(route => routeMap.get(route).foreach(_.sourceRemoved(source)))
       routesUpdate.foreach {
         case (route, details) => routeMap.get(route).foreach(_.sourceAdded(source, details))
@@ -106,11 +105,22 @@ class StreamEngine(
 
   def sourceRemoved(source: RouteStreamSource): Unit = {
     sourceToRouteMap.get(source).foreach { routes =>
-      routes.foreach { route => routeMap.get(route).foreach(_.sourceRemoved(source)) }
+      routes.keys.foreach { route => routeMap.get(route).foreach(_.sourceRemoved(source)) }
     }
     sourceToRouteMap -= source
 
     // TODO: flush
+  }
+
+  private def routeAdded(route: TypeValue): RouteStreams = {
+    val routeStream = new RouteStreams(route, sourceStrategyFactory(route), _ => new SynthesizedKeyStream[RouteStreamSource])
+    sourceToRouteMap.foreach {
+      case (source, map) => map.find(_._1 == route).foreach {
+        case (_, details) =>
+          routeStream.sourceAdded(source, details)
+      }
+    }
+    routeStream
   }
 
   def targetSubscriptionUpdate(target: StreamTarget, subscription: Map[TypeValue, RouteObservers]): Unit = {
@@ -129,7 +139,8 @@ class StreamEngine(
     }
     subscription.foreach {
       case (route, observers) =>
-        val routeStreams = routeMap.getOrElseUpdate(route, new RouteStreams(sourceStrategyFactory(route), routeKeyStreamFactory(route)))
+        val routeStreams = routeMap.getOrElseUpdate(route, routeAdded(route))
+        // TODO: add all current sources
         routeStreams.targetUpdate(observers.streamObserver, observers.rowObserverMap)
     }
     targetToRouteMap.update(target, subscription)
