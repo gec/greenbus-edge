@@ -102,7 +102,7 @@ trait RouteTargetSubjectBasic[A <: KeyStreamSubject] extends RouteTargetSubject 
   }
 }
 
-class RouteStreams(routingStrategy: RouteSourcingStrategy, streamFactory: TableRow => KeyStream[RouteStreamSource]) extends RouteTargetSubject {
+class RouteStreams(route: TypeValue, routingStrategy: RouteSourcingStrategy, streamFactory: TableRow => KeyStream[RouteStreamSource]) extends RouteTargetSubject {
 
   private val streamMap = mutable.Map.empty[TableRow, KeyStream[RouteStreamSource]]
   private val subscriptionMap = mutable.Map.empty[StreamObserver, Map[TableRow, KeyStreamObserver]]
@@ -160,6 +160,11 @@ class RouteStreams(routingStrategy: RouteSourcingStrategy, streamFactory: TableR
 
     val activeKeys = streamMap.keySet.toSet
     routingStrategy.subscriptionUpdate(activeKeys)
+    if (!routingStrategy.resolved()) {
+      target.handle(RouteUnresolved(route))
+    }
+
+    subscriptionMap.update(target, subscription)
   }
 
   def targetRemoved(target: StreamObserver): Unit = {
