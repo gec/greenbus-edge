@@ -19,14 +19,14 @@
 package io.greenbus.edge.stream.engine2
 
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.stream.{ MockPeerSource, MockSource, _ }
+import io.greenbus.edge.stream._
 import org.junit.runner.RunWith
 import org.scalatest.{ FunSuite, Matchers }
 import org.scalatest.junit.JUnitRunner
 
 import scala.collection.mutable
 
-object PeerTestFramework extends Matchers {
+object PeerTestFramework extends Matchers with LazyLogging {
 
   class MockSubscriber {
 
@@ -39,7 +39,7 @@ object PeerTestFramework extends Matchers {
     }
   }
   class MockPeer(val name: String, sessionOpt: Option[PeerSessionId] = None) {
-    val gateway = new MockRouteSource
+    val gateway = new MockRouteSource(s"src-$name")
     val session: PeerSessionId = sessionOpt.getOrElse(Helpers.sessId)
     val engine = new StreamEngine(name, session, route => new SingleSubscribeSourcingStrategy(route))
 
@@ -63,7 +63,7 @@ object PeerTestFramework extends Matchers {
   class MockPeerSource(val name: String, val source: MockPeer, val target: MockPeer) {
     private val routeMap = mutable.Map.empty[TypeValue, Set[TableRow]]
 
-    val sourcing = new MockRouteSource
+    val sourcing = new MockRouteSource(s"src-$name")
     val peerEventProcessor = new PeerLinkEventProcessor(source.session, target.engine.sourceUpdate(sourcing, _))
     val targetQueue = new TargetQueueMgr
 
@@ -85,6 +85,7 @@ object PeerTestFramework extends Matchers {
       sourcing.subUpdates.clear()
     }
     def checkAndPushSourceUpdates(f: Set[RowId] => Unit): Unit = {
+      logger.debug(s"CHECKANDPUSH: ${sourcing.subUpdates}")
       sourcing.subUpdates.foreach {
         case (route, rows) =>
           routeMap.update(route, rows)
@@ -102,6 +103,10 @@ object PeerTestFramework extends Matchers {
       val events = targetQueue.dequeue()
       f(events)
       peerEventProcessor.handleStreamEvents(events)
+    }
+
+    override def toString: String = {
+      s"MockPeerSource($name)"
     }
   }
 
@@ -227,7 +232,6 @@ object PeerTestFramework extends Matchers {
 
       // Manifest updates
       links.foreach { l =>
-        println(l.name)
         matchAndPushEventBatches(l, Seq(rowAppend(l.manifestRow, sessResyncManifest(l.sourceSession, 0, Map()))))
       }
     }
@@ -242,6 +246,23 @@ object PeerTestFramework extends Matchers {
       Seq(bToD, cToD).foreach { l =>
         matchAndPushEventBatches(l, Seq(rowAppend(l.manifestRow, manifestUpdate(1, Set(), Set((route1.route, 1)), Set()))))
       }
+    }
+
+    def transferPipe(p1: MockPeerSource, p2: MockPeerSource, all: Set[MockPeerSource], batch: Seq[RowAppendEvent]): Unit = {
+
+      peerA.gatewayPublish(None, batch)
+
+      (all - p1).foreach(checkLinkClear)
+      checkGatewaysClear()
+      matchAndPushEventBatches(p1, batch)
+
+      (all - p2).foreach(checkLinkClear)
+      checkGatewaysClear()
+      matchAndPushEventBatches(p2, batch)
+
+      checkGatewaysClear()
+      checkLinksClear()
+      matchAndClearEventBatches(subQ, batch)
     }
 
     def transferAtoBtoD(batch: Seq[RowAppendEvent]): Unit = {
@@ -268,7 +289,38 @@ class MultiPeerTests extends FunSuite with Matchers with LazyLogging {
 
   import PeerTestFramework._
 
-  ignore("four peer scenario, subscribe before source arrives") {
+  def simpleTwoBatchPropagate(s: ConnectedFourPeers): Unit = {
+    import s._
+
+    // Which one is choses is unstable
+    val (p1, p2) = if (bToD.sourcing.subUpdates.nonEmpty) {
+      cToD.sourcing.subUpdates.isEmpty shouldEqual true
+
+      matchAndPushSourceUpdate(bToD, route1.rowSet ++ Set(bToD.source.routeRow))
+      matchAndPushSourceUpdate(aToB, route1.rowSet ++ Set(aToB.source.routeRow))
+
+      (aToB, bToD)
+
+    } else {
+      bToD.sourcing.subUpdates.isEmpty shouldEqual true
+
+      matchAndPushSourceUpdate(cToD, route1.rowSet ++ Set(cToD.source.routeRow))
+      matchAndPushSourceUpdate(aToC, route1.rowSet ++ Set(aToC.source.routeRow))
+
+      (aToC, cToD)
+    }
+
+    checkLinksClear()
+    matchAndClearGatewayUpdate(peerA.gateway, route1.routeToTableRows)
+
+    transferPipe(p1, p2, links.toSet, route1.firstBatch(peerA.session))
+    checkAllClear()
+
+    transferPipe(p1, p2, links.toSet, route1.secondBatch())
+    checkAllClear()
+  }
+
+  test("four peer scenario, subscribe before source arrives") {
 
     val s = new ConnectedFourPeers
     import s._
@@ -282,16 +334,24 @@ class MultiPeerTests extends FunSuite with Matchers with LazyLogging {
 
     attachRoute1ToAAndPropagate()
 
-    matchAndPushSourceUpdate(bToD, route1.rowSet ++ Set(bToD.source.routeRow))
-    matchAndPushSourceUpdate(aToB, route1.rowSet ++ Set(aToB.source.routeRow))
-
-    checkLinksClear()
-    matchAndClearGatewayUpdate(peerA.gateway, route1.routeToTableRows)
-
-    transferAtoBtoD(route1.firstBatch(peerA.session))
-    checkAllClear()
-
-    transferAtoBtoD(route1.secondBatch())
-    checkAllClear()
+    simpleTwoBatchPropagate(s)
   }
+
+  test("four peer scenario, source arrives then subscribe") {
+
+    val s = new ConnectedFourPeers
+    import s._
+
+    checkAllClear()
+
+    attachRoute1ToAAndPropagate()
+
+    checkAllClear()
+
+    // now subscribe
+    peerD.subscribe(subQ, route1.rowSet)
+
+    simpleTwoBatchPropagate(s)
+  }
+
 }

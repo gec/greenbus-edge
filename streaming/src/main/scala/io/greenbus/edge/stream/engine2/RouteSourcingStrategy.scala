@@ -45,7 +45,9 @@ class SingleSubscribeSourcingStrategy(route: TypeValue) extends RouteSourcingStr
 
   def sourceAdded(source: RouteStreamSource, details: RouteManifestEntry): Unit = {
     // TODO: Need smarter than this
+    logger.debug(s"Source added: $source, $currentOpt, $sourcesMap")
     if (currentOpt.isEmpty && sourcesMap.isEmpty) {
+      logger.debug(s"Setting source to active")
       currentOpt = Some(source)
       if (subscription.nonEmpty) {
         source.updateSourcing(route, subscription)

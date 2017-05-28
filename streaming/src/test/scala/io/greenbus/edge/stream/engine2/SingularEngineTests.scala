@@ -26,15 +26,19 @@ import org.scalatest.{ FunSuite, Matchers }
 
 import scala.collection.mutable
 
-class MockRouteSource extends RouteStreamSource with LazyLogging {
+class MockRouteSource(name: String) extends RouteStreamSource with LazyLogging {
   val subUpdates: mutable.Queue[(TypeValue, Set[TableRow])] = mutable.Queue.empty[(TypeValue, Set[TableRow])]
 
   def updateSourcing(route: TypeValue, rows: Set[TableRow]): Unit = {
-    logger.debug("gateway got push: " + rows + ", prev: " + subUpdates)
+    logger.debug(s"gateway $name got push: " + rows + ", prev: " + subUpdates)
     subUpdates += ((route, rows))
   }
 
   def issueServiceRequests(requests: Seq[ServiceRequest]): Unit = {}
+
+  override def toString: String = {
+    s"MockRouteSource($name)"
+  }
 }
 
 @RunWith(classOf[JUnitRunner])
@@ -46,7 +50,7 @@ class SingularEngineTests extends FunSuite with Matchers with LazyLogging {
 
     val route1 = new SimpleRoute
 
-    val source = new MockRouteSource
+    val source = new MockRouteSource("sourceA")
 
     val sessA = sessId
 
