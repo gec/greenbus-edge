@@ -74,14 +74,14 @@ class SetSequencer(session: PeerSessionId, ctx: SequenceCtx) {
 
   def handle(value: Set[TypeValue]): Seq[AppendEvent] = {
     val seq = sequence
-    sequence += 1
-
     val results = prevOpt match {
       case None =>
+        sequence += 1
         Seq(ResyncSession(session, ctx, SetSequencer.toSnapshot(seq, value)))
       case Some(prev) => {
         val setDiff = diff(value, prev)
         if (setDiff.adds.nonEmpty || setDiff.removes.nonEmpty) {
+          sequence += 1
           Seq(StreamDelta(toDelta(seq, diff(value, prev))))
         } else {
           Seq()
@@ -118,14 +118,15 @@ class MapSequencer(session: PeerSessionId, ctx: SequenceCtx) {
 
   def handle(value: Map[TypeValue, TypeValue]): Seq[AppendEvent] = {
     val seq = sequence
-    sequence += 1
 
     val results = prevOpt match {
       case None =>
+        sequence += 1
         Seq(ResyncSession(session, ctx, toSnapshot(seq, value)))
       case Some(prev) => {
         val mapDiff = diff(value, prev)
         if (mapDiff.adds.nonEmpty || mapDiff.modifies.nonEmpty || mapDiff.removes.nonEmpty) {
+          sequence += 1
           Seq(StreamDelta(toDelta(seq, diff(value, prev))))
         } else {
           Seq()
