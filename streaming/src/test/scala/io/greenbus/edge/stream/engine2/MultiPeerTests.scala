@@ -41,7 +41,7 @@ object PeerTestFramework extends Matchers {
   class MockPeer(val name: String, sessionOpt: Option[PeerSessionId] = None) {
     val gateway = new MockRouteSource
     val session: PeerSessionId = sessionOpt.getOrElse(Helpers.sessId)
-    val engine = new StreamEngine(route => new SingleSubscribeSourcingStrategy(route))
+    val engine = new StreamEngine(name, session, route => new SingleSubscribeSourcingStrategy(route))
 
     def routeRow: RowId = {
       PeerRouteSource.peerRouteRow(session)
@@ -61,10 +61,14 @@ object PeerTestFramework extends Matchers {
     }
   }
   class MockPeerSource(val name: String, val source: MockPeer, val target: MockPeer) {
+    private val routeMap = mutable.Map.empty[TypeValue, Set[TableRow]]
+
     val sourcing = new MockRouteSource
+    val peerEventProcessor = new PeerLinkEventProcessor(source.session, target.engine.sourceUpdate(sourcing, _))
     val targetQueue = new TargetQueueMgr
 
-    private val routeMap = mutable.Map.empty[TypeValue, Set[TableRow]]
+    private val routeManifestRow = PeerRouteSource.peerRouteRow(source.session)
+    routeMap.update(routeManifestRow.routingKey, Set(routeManifestRow.tableRow))
 
     def sourceSession: PeerSessionId = source.session
     def manifestRow: RowId = PeerRouteSource.peerRouteRow(source.session)
@@ -76,8 +80,7 @@ object PeerTestFramework extends Matchers {
           val all = routeMap.flatMap {
             case (routingKey, routeRows) => routeRows.map(_.toRowId(routingKey))
           }
-          val observers = targetQueue.subscriptionUpdate(all.toSet)
-          source.engine.targetSubscriptionUpdate(targetQueue, observers)
+          source.subscribe(targetQueue, all.toSet)
       }
       sourcing.subUpdates.clear()
     }
@@ -85,20 +88,20 @@ object PeerTestFramework extends Matchers {
       sourcing.subUpdates.foreach {
         case (route, rows) =>
           routeMap.update(route, rows)
-          val all = routeMap.flatMap {
-            case (routingKey, routeRows) => routeRows.map(_.toRowId(routingKey))
-          }.toSet
-          f(all)
-          val observers = targetQueue.subscriptionUpdate(all)
-          source.engine.targetSubscriptionUpdate(targetQueue, observers)
       }
+      val all = routeMap.flatMap {
+        case (routingKey, routeRows) => routeRows.map(_.toRowId(routingKey))
+      }.toSet
+      f(all)
+      val observers = targetQueue.subscriptionUpdate(all)
+      source.engine.targetSubscriptionUpdate(targetQueue, observers)
       sourcing.subUpdates.clear()
     }
 
     def checkAndPushEvents(f: Seq[StreamEvent] => Unit): Unit = {
       val events = targetQueue.dequeue()
       f(events)
-      target.engine.sourceUpdate(sourcing, SourceEvents(None, events))
+      peerEventProcessor.handleStreamEvents(events)
     }
   }
 
@@ -219,13 +222,14 @@ object PeerTestFramework extends Matchers {
 
     def initialLinkExchanges(links: Seq[MockPeerSource]): Unit = {
 
-      /*// Manifest subscriptions
+      // Manifest subscriptions
       links.foreach(l => matchAndPushSourceUpdate(l, manifestRowsForPeer(l.sourceSession)))
 
       // Manifest updates
       links.foreach { l =>
+        println(l.name)
         matchAndPushEventBatches(l, Seq(rowAppend(l.manifestRow, sessResyncManifest(l.sourceSession, 0, Map()))))
-      }*/
+      }
     }
 
     def attachRoute1ToAAndPropagate(): Unit = {
