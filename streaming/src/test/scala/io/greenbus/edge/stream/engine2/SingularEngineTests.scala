@@ -26,7 +26,7 @@ import org.scalatest.{ FunSuite, Matchers }
 
 import scala.collection.mutable
 
-class MockSource extends RouteStreamSource with LazyLogging {
+class MockRouteSource extends RouteStreamSource with LazyLogging {
   val subUpdates: mutable.Queue[(TypeValue, Set[TableRow])] = mutable.Queue.empty[(TypeValue, Set[TableRow])]
 
   def updateSourcing(route: TypeValue, rows: Set[TableRow]): Unit = {
@@ -46,7 +46,7 @@ class SingularEngineTests extends FunSuite with Matchers with LazyLogging {
 
     val route1 = new SimpleRoute
 
-    val source = new MockSource
+    val source = new MockRouteSource
 
     val sessA = sessId
 
