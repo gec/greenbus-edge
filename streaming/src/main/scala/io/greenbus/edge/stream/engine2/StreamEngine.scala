@@ -77,13 +77,40 @@ trait SourceManager {
 }
 
 class StreamEngine(
-    sourceStrategyFactory: TypeValue => RouteSourcingStrategy /*routeKeyStreamFactory: TypeValue => (TableRow => KeyStream[RouteStreamSource])*/ ) {
+    logId: String,
+    session: PeerSessionId,
+    sourceStrategyFactory: TypeValue => RouteSourcingStrategy) extends LazyLogging {
 
-  private val routeMap = mutable.Map.empty[TypeValue, RouteStreams]
+  private val routeMap = mutable.Map.empty[TypeValue, RouteStreamMgr]
   private val sourceToRouteMap = mutable.Map.empty[RouteStreamSource, Map[TypeValue, RouteManifestEntry]]
   private val targetToRouteMap = mutable.Map.empty[StreamTarget, Map[TypeValue, RouteObservers]]
+  private val selfRouteMgr = new PeerManifestMgr(session)
+
+  routeMap.update(selfRouteMgr.route, selfRouteMgr.routeManager)
+  doManifestUpdate()
+
+  private def doManifestUpdate(): Unit = {
+    val result = mutable.Map.empty[TypeValue, RouteManifestEntry]
+    sourceToRouteMap.values.foreach { sourceEntry =>
+      sourceEntry.foreach {
+        case (route, entry) =>
+          result.get(route) match {
+            case None => result.update(route, RouteManifestEntry(entry.distance))
+            case Some(prev) =>
+              val dist = entry.distance
+              if (prev.distance < dist) {
+                result.update(route, RouteManifestEntry(dist))
+              }
+          }
+      }
+    }
+    val manifest = result.toMap
+    logger.debug(s"$logId did manifest update: " + manifest)
+    selfRouteMgr.update(manifest)
+  }
 
   def sourceUpdate(source: RouteStreamSource, update: SourceEvents): Unit = {
+    logger.debug(s"Source updates $source : $update")
     update.routeUpdatesOpt.foreach { routesUpdate =>
       val prev = sourceToRouteMap.getOrElse(source, Map())
       sourceToRouteMap.update(source, routesUpdate)
@@ -92,6 +119,7 @@ class StreamEngine(
       routesUpdate.foreach {
         case (route, details) => routeMap.get(route).foreach(_.sourceAdded(source, details))
       }
+      doManifestUpdate()
     }
 
     update.events.foreach {
@@ -104,15 +132,18 @@ class StreamEngine(
   }
 
   def sourceRemoved(source: RouteStreamSource): Unit = {
+    logger.debug(s"Source removed $source")
     sourceToRouteMap.get(source).foreach { routes =>
       routes.keys.foreach { route => routeMap.get(route).foreach(_.sourceRemoved(source)) }
     }
     sourceToRouteMap -= source
+    doManifestUpdate()
 
     // TODO: flush
   }
 
   private def routeAdded(route: TypeValue): RouteStreams = {
+    logger.trace(s"Route added $route")
     val routeStream = new RouteStreams(route, sourceStrategyFactory(route), _ => new SynthesizedKeyStream[RouteStreamSource])
     sourceToRouteMap.foreach {
       case (source, map) => map.find(_._1 == route).foreach {
@@ -124,6 +155,7 @@ class StreamEngine(
   }
 
   def targetSubscriptionUpdate(target: StreamTarget, subscription: Map[TypeValue, RouteObservers]): Unit = {
+    logger.debug(s"Target added $subscription")
     val prev = targetToRouteMap.getOrElse(target, Map())
 
     val removed = prev.keySet -- subscription.keySet
@@ -149,6 +181,7 @@ class StreamEngine(
     //target.flush()
   }
   def targetRemoved(target: StreamTarget): Unit = {
+    logger.debug(s"Target removed $target")
     val prev = targetToRouteMap.getOrElse(target, Map())
     prev.foreach {
       case (route, obs) =>

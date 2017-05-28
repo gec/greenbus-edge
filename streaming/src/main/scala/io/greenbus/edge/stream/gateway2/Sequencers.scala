@@ -26,24 +26,26 @@ class AppendSequencer(session: PeerSessionId, ctx: SequenceCtx) {
   private var uninit = true
 
   def handle(values: Seq[TypeValue]): Seq[AppendEvent] = {
-    assert(values.nonEmpty)
+    if (values.nonEmpty) {
+      val start = sequence
+      val results = values.zipWithIndex.map {
+        case (v, i) => (Int64Val(start + i), v)
+      }
+      sequence += values.size
 
-    val start = sequence
-    val results = values.zipWithIndex.map {
-      case (v, i) => (Int64Val(start + i), v)
-    }
-    sequence += values.size
+      val diffs = results.map { case (i, v) => SequencedDiff(i, AppendValue(v)) }
 
-    val diffs = results.map { case (i, v) => SequencedDiff(i, AppendValue(v)) }
-
-    if (uninit) {
-      val last = diffs.last
-      val init = diffs.init
-      val snap = AppendSnapshot(last, init)
-      uninit = false
-      Seq(ResyncSession(session, ctx, Resync(last.sequence, snap)))
+      if (uninit) {
+        val last = diffs.last
+        val init = diffs.init
+        val snap = AppendSnapshot(last, init)
+        uninit = false
+        Seq(ResyncSession(session, ctx, Resync(last.sequence, snap)))
+      } else {
+        Seq(StreamDelta(Delta(diffs)))
+      }
     } else {
-      Seq(StreamDelta(Delta(diffs)))
+      Seq()
     }
   }
 }
@@ -74,13 +76,22 @@ class SetSequencer(session: PeerSessionId, ctx: SequenceCtx) {
     val seq = sequence
     sequence += 1
 
-    prevOpt match {
+    val results = prevOpt match {
       case None =>
         Seq(ResyncSession(session, ctx, SetSequencer.toSnapshot(seq, value)))
       case Some(prev) => {
-        Seq(StreamDelta(toDelta(seq, diff(value, prev))))
+        val setDiff = diff(value, prev)
+        if (setDiff.adds.nonEmpty || setDiff.removes.nonEmpty) {
+          Seq(StreamDelta(toDelta(seq, diff(value, prev))))
+        } else {
+          Seq()
+        }
       }
     }
+
+    prevOpt = Some(value)
+
+    results
   }
 }
 
@@ -109,13 +120,22 @@ class MapSequencer(session: PeerSessionId, ctx: SequenceCtx) {
     val seq = sequence
     sequence += 1
 
-    prevOpt match {
+    val results = prevOpt match {
       case None =>
         Seq(ResyncSession(session, ctx, toSnapshot(seq, value)))
       case Some(prev) => {
-        Seq(StreamDelta(toDelta(seq, diff(value, prev))))
+        val mapDiff = diff(value, prev)
+        if (mapDiff.adds.nonEmpty || mapDiff.modifies.nonEmpty || mapDiff.removes.nonEmpty) {
+          Seq(StreamDelta(toDelta(seq, diff(value, prev))))
+        } else {
+          Seq()
+        }
       }
     }
+
+    prevOpt = Some(value)
+
+    results
   }
 }
 

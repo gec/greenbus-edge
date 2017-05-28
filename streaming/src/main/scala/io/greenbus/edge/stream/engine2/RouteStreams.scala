@@ -19,6 +19,8 @@
 package io.greenbus.edge.stream.engine2
 
 import io.greenbus.edge.stream._
+import io.greenbus.edge.stream.filter.StreamCacheImpl
+import io.greenbus.edge.stream.gateway2.MapSequencer
 
 import scala.collection.mutable
 
@@ -102,7 +104,13 @@ trait RouteTargetSubjectBasic[A <: KeyStreamSubject] extends RouteTargetSubject 
   }
 }
 
-class RouteStreams(route: TypeValue, routingStrategy: RouteSourcingStrategy, streamFactory: TableRow => KeyStream[RouteStreamSource]) extends RouteTargetSubject {
+trait RouteStreamMgr extends RouteTargetSubject {
+  def events(source: RouteStreamSource, events: Seq[StreamEvent]): Unit
+  def sourceAdded(source: RouteStreamSource, details: RouteManifestEntry): Unit
+  def sourceRemoved(source: RouteStreamSource): Unit
+}
+
+class RouteStreams(route: TypeValue, routingStrategy: RouteSourcingStrategy, streamFactory: TableRow => KeyStream[RouteStreamSource]) extends RouteStreamMgr {
 
   private val streamMap = mutable.Map.empty[TableRow, KeyStream[RouteStreamSource]]
   private val subscriptionMap = mutable.Map.empty[StreamObserver, Map[TableRow, KeyStreamObserver]]

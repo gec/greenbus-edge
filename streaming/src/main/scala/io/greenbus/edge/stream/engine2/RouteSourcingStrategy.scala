@@ -78,3 +78,15 @@ class SingleSubscribeSourcingStrategy(route: TypeValue) extends RouteSourcingStr
     currentOpt.nonEmpty
   }
 }
+
+class NullSourcingStrategy extends RouteSourcingStrategy {
+  def subscriptionUpdate(keys: Set[TableRow]): Unit = {}
+
+  def sourceAdded(source: RouteStreamSource, details: RouteManifestEntry): Unit = {}
+
+  def sourceRemoved(source: RouteStreamSource): Seq[StreamEvent] = {
+    Seq()
+  }
+
+  def resolved(): Boolean = true
+}

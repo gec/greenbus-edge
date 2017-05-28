@@ -108,32 +108,10 @@ class GatewaySourceChannel(link: GatewayClientProxyChannel) extends GenericSourc
   def responses: Source[Seq[ServiceResponse]] = link.responses
 }
 
-class PeerLinkSourceChannel(session: PeerSessionId, link: PeerLinkProxyChannel) extends GenericSourceChannel {
+class PeerLinkEventProcessor(session: PeerSessionId, handler: SourceEvents => Unit) {
 
   private val routeManifestRow = PeerRouteSource.peerRouteRow(session)
   private val manifestSynth = new ValueUpdateSynthesizerImpl
-
-  def init(): Unit = {
-    link.subscriptions.push(Set(routeManifestRow))
-  }
-
-  def onClose: LatchSubscribable = link.onClose
-
-  def subscriptions: Sink[Set[RowId]] = {
-    new Sink[Set[RowId]] {
-      def push(rows: Set[RowId]): Unit = {
-        link.subscriptions.push(rows + routeManifestRow)
-      }
-    }
-  }
-
-  def events: Source[SourceEvents] = {
-    new Source[SourceEvents] {
-      def bind(handler: Handler[SourceEvents]): Unit = {
-        link.events.bind(handleStreamEvents(_, handler))
-      }
-    }
-  }
 
   private def handleManifest(ev: AppendEvent): Option[Map[TypeValue, RouteManifestEntry]] = {
 
@@ -154,11 +132,15 @@ class PeerLinkSourceChannel(session: PeerSessionId, link: PeerLinkProxyChannel) 
         case (key, v) => RouteManifestEntry.fromTypeValue(v).map(rv => (key, rv))
       }
 
-      EitherUtil.rightSequence(eitherEntries).toOption.map(_.toMap)
+      EitherUtil.rightSequence(eitherEntries).toOption.map(_.toMap).map { m =>
+        m.map {
+          case (route, entry) => (route, entry.copy(distance = entry.distance + 1))
+        }
+      }
     }
   }
 
-  private def handleStreamEvents(events: Seq[StreamEvent], handler: Handler[SourceEvents]): Unit = {
+  def handleStreamEvents(events: Seq[StreamEvent]): Unit = {
 
     var manifestUpdateOpt = Option.empty[Map[TypeValue, RouteManifestEntry]]
 
@@ -173,22 +155,35 @@ class PeerLinkSourceChannel(session: PeerSessionId, link: PeerLinkProxyChannel) 
         }
     }
 
-    /*val manifestUpdateOpt = events.flatMap {
-      case ev: RowAppendEvent =>
-        if (ev.rowId == routeManifestRow) {
-          handleManifest(ev.appendEvent)
-        } else {
-          None
-        }
-      case ev: RouteUnresolved =>
-        if (ev.routingKey == routeManifestRow.routingKey) {
-          Some(Map.empty[TypeValue, RouteManifestEntry])
-        } else {
-          None
-        }
-    }.lastOption*/
+    handler(SourceEvents(manifestUpdateOpt, events))
+  }
+}
 
-    handler.handle(SourceEvents(manifestUpdateOpt, events))
+class PeerLinkSourceChannel(session: PeerSessionId, link: PeerLinkProxyChannel) extends GenericSourceChannel {
+
+  private val routeManifestRow = PeerRouteSource.peerRouteRow(session)
+
+  def init(): Unit = {
+    link.subscriptions.push(Set(routeManifestRow))
+  }
+
+  def onClose: LatchSubscribable = link.onClose
+
+  def subscriptions: Sink[Set[RowId]] = {
+    new Sink[Set[RowId]] {
+      def push(rows: Set[RowId]): Unit = {
+        link.subscriptions.push(rows + routeManifestRow)
+      }
+    }
+  }
+
+  def events: Source[SourceEvents] = {
+    new Source[SourceEvents] {
+      def bind(handler: Handler[SourceEvents]): Unit = {
+        val processor = new PeerLinkEventProcessor(session, handler.handle)
+        link.events.bind(processor.handleStreamEvents)
+      }
+    }
   }
 
   def requests: Sink[Seq[ServiceRequest]] = link.requests
