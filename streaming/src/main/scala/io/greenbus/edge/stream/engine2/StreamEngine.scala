@@ -48,7 +48,7 @@ import scala.collection.mutable
 case class SourceEvents(routeUpdatesOpt: Option[Map[TypeValue, RouteManifestEntry]], events: Seq[StreamEvent])
 
 trait StreamTarget {
-  def flush(): Unit
+  //def flush(): Unit
 }
 
 /*

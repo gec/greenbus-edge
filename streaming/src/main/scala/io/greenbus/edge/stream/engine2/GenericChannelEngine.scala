@@ -44,46 +44,53 @@ trait GenericTarget {
 
 trait GenericTargetChannel extends GenericTarget with CloseObservable
 
-class RouteStreamSourceImpl(source: GenericSource) extends RouteStreamSource {
-  private val routeMap = mutable.Map.empty[TypeValue, Set[TableRow]]
-
-  def updateSourcing(route: TypeValue, rows: Set[TableRow]): Unit = {
-    routeMap += (route -> rows)
-    pushSnapshot()
-  }
-
-  private def pushSnapshot(): Unit = {
-    val all = routeMap.flatMap {
-      case (routingKey, routeRows) => routeRows.map(_.toRowId(routingKey))
-    }
-    source.subscriptions.push(all.toSet)
-  }
-}
-
 class GenericChannelEngine(streamEngine: StreamEngine) {
+
+  private val queueSet = mutable.Map.empty[TargetQueueMgr, GenericTargetChannel]
 
   def sourceChannel(source: GenericSourceChannel): Unit = {
     val streamSource = new RouteStreamSourceImpl(source)
-    source.events.bind(events => streamEngine.sourceUpdate(streamSource, events))
+    source.events.bind(events => sourceUpdates(streamSource, events))
     source.onClose.subscribe(() => sourceChannelClosed(source, streamSource))
+    flush()
+  }
+
+  private def sourceUpdates(source: RouteStreamSource, events: SourceEvents): Unit = {
+    streamEngine.sourceUpdate(source, events)
+    flush()
   }
 
   private def sourceChannelClosed(source: GenericSourceChannel, handle: RouteStreamSource): Unit = {
     streamEngine.sourceRemoved(handle)
+    flush()
+  }
+
+  private def flush(): Unit = {
+    queueSet.foreach {
+      case (queue, channel) =>
+        val events = queue.dequeue()
+        if (events.nonEmpty) {
+          channel.events.push(events)
+        }
+    }
   }
 
   def targetChannel(target: GenericTargetChannel): Unit = {
 
     val queueMgr = new TargetQueueMgr
-
-    val st: StreamTarget = null
+    queueSet += (queueMgr -> target)
 
     target.subscriptions.bind { rows =>
       val observers = queueMgr.subscriptionUpdate(rows)
-      streamEngine.targetSubscriptionUpdate(st, observers)
+      streamEngine.targetSubscriptionUpdate(queueMgr, observers)
     }
 
-    target.onClose.subscribe(() => streamEngine.targetRemoved(st))
+    target.onClose.subscribe(() => targetRemoved(queueMgr))
+  }
+
+  private def targetRemoved(queueMgr: TargetQueueMgr): Unit = {
+    streamEngine.targetRemoved(queueMgr)
+    queueSet -= queueMgr
   }
 }
 
@@ -106,57 +113,6 @@ class GatewaySourceChannel(link: GatewayClientProxyChannel) extends GenericSourc
   def requests: Sink[Seq[ServiceRequest]] = link.requests
 
   def responses: Source[Seq[ServiceResponse]] = link.responses
-}
-
-class PeerLinkEventProcessor(session: PeerSessionId, handler: SourceEvents => Unit) {
-
-  private val routeManifestRow = PeerRouteSource.peerRouteRow(session)
-  private val manifestSynth = new ValueUpdateSynthesizerImpl
-
-  private def handleManifest(ev: AppendEvent): Option[Map[TypeValue, RouteManifestEntry]] = {
-
-    val dvu = manifestSynth.handle(ev) match {
-      case None => None
-      case Some(ValueSync(_, value)) => Some(value)
-      case Some(ValueDelta(value)) => Some(value)
-
-    }
-
-    val optMapUpdate = dvu.flatMap {
-      case mu: MapUpdated => Some(mu)
-      case _ => None
-    }
-
-    optMapUpdate.map(_.value).flatMap { routeMap =>
-      val eitherEntries = routeMap.toSeq.map {
-        case (key, v) => RouteManifestEntry.fromTypeValue(v).map(rv => (key, rv))
-      }
-
-      EitherUtil.rightSequence(eitherEntries).toOption.map(_.toMap).map { m =>
-        m.map {
-          case (route, entry) => (route, entry.copy(distance = entry.distance + 1))
-        }
-      }
-    }
-  }
-
-  def handleStreamEvents(events: Seq[StreamEvent]): Unit = {
-
-    var manifestUpdateOpt = Option.empty[Map[TypeValue, RouteManifestEntry]]
-
-    events.foreach {
-      case ev: RowAppendEvent =>
-        if (ev.rowId == routeManifestRow) {
-          manifestUpdateOpt = handleManifest(ev.appendEvent)
-        }
-      case ev: RouteUnresolved =>
-        if (ev.routingKey == routeManifestRow.routingKey) {
-          manifestUpdateOpt = Some(Map())
-        }
-    }
-
-    handler(SourceEvents(manifestUpdateOpt, events))
-  }
 }
 
 class PeerLinkSourceChannel(session: PeerSessionId, link: PeerLinkProxyChannel) extends GenericSourceChannel {
