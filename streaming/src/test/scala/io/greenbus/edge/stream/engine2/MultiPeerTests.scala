@@ -110,8 +110,12 @@ object PeerTestFramework extends Matchers with LazyLogging {
     }
   }
 
+  def checkAndPushEventBatches(sub: MockPeerSource, check: Seq[StreamEvent] => Unit): Unit = {
+    sub.checkAndPushEvents(check)
+  }
+
   def matchAndPushEventBatches(sub: MockPeerSource, events: Seq[StreamEvent]): Unit = {
-    sub.checkAndPushEvents(e => e should equal(events))
+    sub.checkAndPushEvents(e => e shouldEqual events)
   }
 
   def matchAndClearEventBatches(sub: TargetQueueMgr, events: Seq[StreamEvent]): Unit = {
@@ -438,6 +442,94 @@ class MultiPeerTests extends FunSuite with Matchers with LazyLogging {
     matchAndClearGatewayUpdate(peerA.gateway, (route1.route, Set()))
     checkAllClear()
     peerD.engine.sourceRemoved(p2y.sourcing)
+
+    matchAndClearEventBatches(subQ, Seq(RouteUnresolved(route1.route)))
+  }
+
+  test("four peer scenario, middle nodes have connectivity to A cut") {
+    import MockData._
+    val s = new ConnectedFourPeers
+    import s._
+
+    checkAllClear()
+
+    attachRoute1ToAAndPropagate()
+
+    checkAllClear()
+
+    // Now subscribe
+    peerD.subscribe(subQ, route1.rowSet)
+
+    val (p1x, p2x, p1y, p2y, midPeerX, midPeerY) = if (bToD.sourcing.subUpdates.nonEmpty) {
+      cToD.sourcing.subUpdates.isEmpty shouldEqual true
+      matchAndPushSourceUpdate(bToD, route1.rowSet ++ Set(bToD.source.routeRow))
+      matchAndPushSourceUpdate(aToB, route1.rowSet ++ Set(aToB.source.routeRow))
+      (aToB, bToD, aToC, cToD, peerB, peerC)
+    } else {
+      bToD.sourcing.subUpdates.isEmpty shouldEqual true
+      matchAndPushSourceUpdate(cToD, route1.rowSet ++ Set(cToD.source.routeRow))
+      matchAndPushSourceUpdate(aToC, route1.rowSet ++ Set(aToC.source.routeRow))
+      (aToC, cToD, aToB, bToD, peerC, peerB)
+    }
+
+    checkLinksClear()
+    matchAndClearGatewayUpdate(peerA.gateway, route1.routeToTableRows)
+
+    val firstBatch = route1.firstBatch(peerA.session)
+    transferPipe(p1x, p2x, links.toSet, route1.firstBatch(peerA.session))
+    checkAllClear()
+
+    // Disconnect A <-> B
+    logger.info("Removing B")
+    peerA.engine.targetRemoved(p1x.targetQueue)
+    matchAndClearGatewayUpdate(peerA.gateway, (route1.route, Set()))
+    checkAllClear()
+    midPeerX.engine.sourceRemoved(p1x.sourcing)
+
+    checkAndPushEventBatches(p2x, events => events.toSet shouldEqual Set(rowAppend(p2x.source.routeRow, manifestUpdate(2, Set(route1.route), Set(), Set())), RouteUnresolved(route1.route)))
+
+    checkSubsClear()
+
+    // Reorganization: D subscribes to C, C subscribes to A
+    matchAndPushSourceUpdate(p2y, route1.rowSet ++ Set(p2y.source.routeRow))
+    matchAndPushSourceUpdate(p1y, route1.rowSet ++ Set(p1y.source.routeRow))
+
+    matchAndClearGatewayUpdate(peerA.gateway, route1.routeToTableRows)
+
+    // This should be filtered by the synthesizer, so below in aToC we have one batch caused by source update above
+    peerA.gatewayPublish(None, firstBatch)
+
+    // Resync: C must get resynced, then forwards to D who squelches it before it goes to the subscriber, since it's not new
+    matchAndPushEventBatches(p1y, firstBatch)
+    matchAndPushEventBatches(p2y, firstBatch)
+
+    checkAllClear()
+
+    val all = Set(p1x, p2x, p1y, p2y)
+    // Transfer A to C to D
+    val batch = route1.secondBatch()
+    peerA.gatewayPublish(None, batch)
+
+    (all - p1y).foreach(checkLinkClear)
+    checkGatewaysClear()
+    matchAndPushEventBatches(p1y, batch)
+
+    (all - p2y).foreach(checkLinkClear)
+    checkGatewaysClear()
+    matchAndPushEventBatches(p2y, batch)
+
+    checkGatewaysClear()
+    checkLinksClear()
+    matchAndClearEventBatches(subQ, batch)
+
+    // Disconnect A <-> C
+    logger.info("Removing C")
+    peerA.engine.targetRemoved(p1y.targetQueue)
+    matchAndClearGatewayUpdate(peerA.gateway, (route1.route, Set()))
+    checkAllClear()
+    midPeerY.engine.sourceRemoved(p1y.sourcing)
+
+    checkAndPushEventBatches(p2y, events => events.toSet shouldEqual Set(rowAppend(p2y.source.routeRow, manifestUpdate(2, Set(route1.route), Set(), Set())), RouteUnresolved(route1.route)))
 
     matchAndClearEventBatches(subQ, Seq(RouteUnresolved(route1.route)))
   }
