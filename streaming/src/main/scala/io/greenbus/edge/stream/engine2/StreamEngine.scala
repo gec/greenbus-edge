@@ -110,7 +110,7 @@ class StreamEngine(
   }
 
   def sourceUpdate(source: RouteStreamSource, update: SourceEvents): Unit = {
-    logger.debug(s"Source updates $source : $update")
+    logger.debug(s"$logId source updates $source : $update")
     update.routeUpdatesOpt.foreach { routesUpdate =>
       val prev = sourceToRouteMap.getOrElse(source, Map())
       sourceToRouteMap.update(source, routesUpdate)
@@ -132,7 +132,7 @@ class StreamEngine(
   }
 
   def sourceRemoved(source: RouteStreamSource): Unit = {
-    logger.debug(s"Source removed $source")
+    logger.debug(s"$logId source removed $source")
     sourceToRouteMap.get(source).foreach { routes =>
       routes.keys.foreach { route => routeMap.get(route).foreach(_.sourceRemoved(source)) }
     }
@@ -143,7 +143,7 @@ class StreamEngine(
   }
 
   private def routeAdded(route: TypeValue): RouteStreams = {
-    logger.trace(s"Route added $route")
+    logger.trace(s"$logId route added $route")
     val routeStream = new RouteStreams(route, sourceStrategyFactory(route), _ => new SynthesizedKeyStream[RouteStreamSource])
     sourceToRouteMap.foreach {
       case (source, map) => map.find(_._1 == route).foreach {
@@ -155,7 +155,7 @@ class StreamEngine(
   }
 
   def targetSubscriptionUpdate(target: StreamTarget, subscription: Map[TypeValue, RouteObservers]): Unit = {
-    logger.debug(s"Target added $subscription")
+    logger.debug(s"$logId target added $subscription")
     val prev = targetToRouteMap.getOrElse(target, Map())
 
     val removed = prev.keySet -- subscription.keySet
@@ -181,7 +181,7 @@ class StreamEngine(
     //target.flush()
   }
   def targetRemoved(target: StreamTarget): Unit = {
-    logger.debug(s"Target removed $target")
+    logger.debug(s"$logId target removed $target")
     val prev = targetToRouteMap.getOrElse(target, Map())
     prev.foreach {
       case (route, obs) =>

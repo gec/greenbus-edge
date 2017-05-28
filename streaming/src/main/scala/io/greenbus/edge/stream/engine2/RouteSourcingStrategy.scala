@@ -37,10 +37,9 @@ class SingleSubscribeSourcingStrategy(route: TypeValue) extends RouteSourcingStr
   private var sourcesMap = mutable.Map.empty[RouteStreamSource, RouteManifestEntry]
 
   def subscriptionUpdate(keys: Set[TableRow]): Unit = {
+    logger.debug(s"Subscription update for route $route: $keys")
     subscription = keys
-    if (subscription.nonEmpty) {
-      currentOpt.foreach(_.updateSourcing(route, keys))
-    }
+    currentOpt.foreach(_.updateSourcing(route, keys))
   }
 
   def sourceAdded(source: RouteStreamSource, details: RouteManifestEntry): Unit = {
