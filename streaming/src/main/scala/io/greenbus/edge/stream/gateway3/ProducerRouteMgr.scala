@@ -20,8 +20,10 @@ package io.greenbus.edge.stream.gateway3
 
 import java.util.UUID
 
+import io.greenbus.edge.flow.Sink
 import io.greenbus.edge.stream.{ PeerSessionId, TableRow }
 import io.greenbus.edge.stream.engine2.{ KeyStreamObserver, RouteTargetSubject, StreamObserver }
+import io.greenbus.edge.stream.gateway.RouteServiceRequest
 import io.greenbus.edge.stream.gateway2.{ DynamicTable, ProducerStreamSubject }
 
 import scala.collection.mutable
@@ -31,19 +33,24 @@ class ProducerRouteMgr extends RouteTargetSubject {
   private var produced = false
   private val updateMap = mutable.Map.empty[TableRow, ProducerUpdateStream]
   private var dynamicTableMap = Map.empty[String, DynamicTable]
+  private var requestHandlerOpt = Option.empty[Sink[RouteServiceRequest]]
 
   private val subjectMap = mutable.Map.empty[TableRow, ProducerStreamSubject]
   private val subscriptionMap = mutable.Map.empty[StreamObserver, Map[TableRow, KeyStreamObserver]]
 
-  def bind(events: Seq[ProducerKeyEvent], dynamic: Map[String, DynamicTable]): Unit = {
+  def bind(events: Seq[ProducerKeyEvent], dynamic: Map[String, DynamicTable], handler: Sink[RouteServiceRequest]): Unit = {
     unbind()
     bindTables(dynamic)
     events.foreach(handleEvent)
+    requestHandlerOpt = Some(handler)
     produced = true
   }
 
   def batch(events: Seq[ProducerKeyEvent]): Unit = {
     events.foreach(handleEvent)
+  }
+  def request(request: RouteServiceRequest): Unit = {
+    requestHandlerOpt.foreach(_.push(request))
   }
 
   def unbind(): Unit = {

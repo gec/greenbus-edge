@@ -50,7 +50,7 @@ class ProducerMgr extends StreamTargetSubject2[ProducerRouteMgr] {
     event match {
       case ev: RouteBindEvent => {
         val mgr = routeMap.getOrElseUpdate(ev.route, new ProducerRouteMgr)
-        mgr.bind(ev.initialEvents, ev.dynamic)
+        mgr.bind(ev.initialEvents, ev.dynamic, ev.handler)
       }
       case ev: RouteBatchEvent => {
         routeMap.get(ev.route).foreach(_.batch(ev.events))
@@ -62,6 +62,13 @@ class ProducerMgr extends StreamTargetSubject2[ProducerRouteMgr] {
             routeMap -= ev.route
           }
         }
+    }
+  }
+
+  def handleRequests(requests: Seq[(TypeValue, RouteServiceRequest)]): Unit = {
+    requests.foreach {
+      case (route, req) =>
+        routeMap.get(route).foreach(_.request(req))
     }
   }
 
