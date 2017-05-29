@@ -47,6 +47,10 @@ class PeerSelfStreams(streams: Map[TableRow, StaticStream]) extends RouteStreamM
 
   def sourceRemoved(source: RouteStreamSource): Unit = {}
 
+  def sourced(sourcing: RouteSourcingMgr): Unit = {}
+
+  def unsourced(): Unit = {}
+
   protected def streamFactory(key: TableRow): StaticStream = {
     new StaticStream
   }

@@ -56,7 +56,7 @@ trait StreamTarget {
 def targetUpdate(target: StreamObserver, subscription: Map[TableRow, KeyStreamObserver]): Unit = {
  */
 
-trait RouteSourcing {
+trait RouteServiceProvider {
   //def observeForDelivery(events: Seq[StreamEvent]): Unit
   def issueServiceRequests(requests: Seq[ServiceRequest]): Unit
 }
@@ -70,10 +70,68 @@ Target mgr
 
  */
 
-trait SourceManager {
-  def flushNotifications: Source[Set[TypeValue]]
-  def registerTargetObservers(target: StreamTarget, subscription: Map[TypeValue, RouteObservers]): Unit
-  def targetRemoved(target: StreamTarget): Unit
+class RouteSourcingMgr(route: TypeValue) extends LazyLogging {
+
+  private val sourcesMap = mutable.Map.empty[RouteStreamSource, RouteManifestEntry]
+  private var subscription = Set.empty[TableRow]
+  private var streamOpt = Option.empty[RouteStreamMgr]
+  private var currentOpt = Option.empty[RouteStreamSource]
+
+  def isSourced: Boolean = sourcesMap.nonEmpty
+
+  def bind(streams: RouteStreamMgr): Unit = {
+    streamOpt = Some(streams)
+  }
+  def unbind(): Unit = {
+    streamOpt = None
+  }
+
+  def subscriptionUpdate(keys: Set[TableRow]): Unit = {
+    logger.debug(s"Subscription update for route $route: $keys")
+    subscription = keys
+    currentOpt.foreach(_.updateSourcing(route, keys))
+  }
+
+  //def issueServiceRequest()
+
+  private def sourceAdded(source: RouteStreamSource): Unit = {
+    if (currentOpt.isEmpty) {
+      currentOpt = Some(source)
+      if (subscription.nonEmpty) {
+        source.updateSourcing(route, subscription)
+      }
+    }
+  }
+
+  def sourceRegistered(source: RouteStreamSource, details: RouteManifestEntry): Unit = {
+    sourcesMap.get(source) match {
+      case None =>
+        sourcesMap.update(source, details)
+        sourceAdded(source)
+      case Some(prevEntry) =>
+        if (prevEntry != details) {
+          sourcesMap.update(source, details)
+        }
+    }
+  }
+  def sourceRemoved(source: RouteStreamSource): Unit = {
+    sourcesMap -= source
+    streamOpt.foreach(_.sourceRemoved(source))
+    logger.debug(s"Removed: $source, $currentOpt, $sourcesMap")
+    if (currentOpt.contains(source)) {
+      if (sourcesMap.isEmpty) {
+        currentOpt = None
+      } else {
+        val (nominated, _) = sourcesMap.minBy {
+          case (_, entry) => entry.distance
+        }
+        currentOpt = Some(nominated)
+        if (subscription.nonEmpty) {
+          nominated.updateSourcing(route, subscription)
+        }
+      }
+    }
+  }
 }
 
 class StreamEngine(
@@ -82,6 +140,7 @@ class StreamEngine(
     sourceStrategyFactory: TypeValue => RouteSourcingStrategy) extends LazyLogging {
 
   private val routeMap = mutable.Map.empty[TypeValue, RouteStreamMgr]
+  private val sourcingMap = mutable.Map.empty[TypeValue, RouteSourcingMgr]
   private val sourceToRouteMap = mutable.Map.empty[RouteStreamSource, Map[TypeValue, RouteManifestEntry]]
   private val targetToRouteMap = mutable.Map.empty[StreamTarget, Map[TypeValue, RouteObservers]]
   private val selfRouteMgr = new PeerManifestMgr(session)
@@ -109,16 +168,43 @@ class StreamEngine(
     selfRouteMgr.update(manifest)
   }
 
+  private def routeSourceAdded(source: RouteStreamSource, route: TypeValue, manifest: RouteManifestEntry): Unit = {
+    val mgr = new RouteSourcingMgr(route)
+    mgr.sourceRegistered(source, manifest)
+    sourcingMap.update(route, mgr)
+    routeMap.get(route).foreach { streamMgr =>
+      streamMgr.sourced(mgr)
+      mgr.bind(streamMgr)
+    }
+  }
+
+  private def routeSourceRemoved(source: RouteStreamSource, route: TypeValue): Unit = {
+    sourcingMap.get(route).foreach { mgr =>
+      mgr.sourceRemoved(source)
+      if (!mgr.isSourced) {
+        sourcingMap -= route
+        routeMap.get(route).foreach(_.unsourced())
+      }
+    }
+  }
+
   def sourceUpdate(source: RouteStreamSource, update: SourceEvents): Unit = {
     logger.debug(s"$logId source updates $source : $update")
     update.routeUpdatesOpt.foreach { routesUpdate =>
       val prev = sourceToRouteMap.getOrElse(source, Map())
       sourceToRouteMap.update(source, routesUpdate)
       val removes = prev.keySet -- routesUpdate.keySet
-      removes.foreach(route => routeMap.get(route).foreach(_.sourceRemoved(source)))
+
+      removes.foreach(route => routeSourceRemoved(source, route))
+
       routesUpdate.foreach {
-        case (route, details) => routeMap.get(route).foreach(_.sourceAdded(source, details))
+        case (route, manifest) =>
+          sourcingMap.get(route) match {
+            case None => routeSourceAdded(source, route, manifest)
+            case Some(mgr) => mgr.sourceRegistered(source, manifest)
+          }
       }
+
       doManifestUpdate()
     }
 
@@ -133,8 +219,8 @@ class StreamEngine(
 
   def sourceRemoved(source: RouteStreamSource): Unit = {
     logger.debug(s"$logId source removed $source")
-    sourceToRouteMap.get(source).foreach { routes =>
-      routes.keys.foreach { route => routeMap.get(route).foreach(_.sourceRemoved(source)) }
+    sourceToRouteMap.get(source).foreach { manifest =>
+      manifest.keys.foreach(route => routeSourceRemoved(source, route))
     }
     sourceToRouteMap -= source
     doManifestUpdate()
@@ -144,14 +230,17 @@ class StreamEngine(
 
   private def routeAdded(route: TypeValue): RouteStreams = {
     logger.trace(s"$logId route added $route")
-    val routeStream = new RouteStreams(route, sourceStrategyFactory(route), _ => new SynthesizedKeyStream[RouteStreamSource])
-    sourceToRouteMap.foreach {
-      case (source, map) => map.find(_._1 == route).foreach {
-        case (_, details) =>
-          routeStream.sourceAdded(source, details)
-      }
+    val routeStream = new RouteStreams(route, _ => new SynthesizedKeyStream[RouteStreamSource])
+    sourcingMap.get(route).foreach { src =>
+      routeStream.sourced(src)
+      src.bind(routeStream)
     }
     routeStream
+  }
+
+  private def routeRemoved(route: TypeValue, routeStreams: RouteStreamMgr): Unit = {
+    routeMap -= route
+    sourcingMap.get(route).foreach(_.unbind())
   }
 
   def targetSubscriptionUpdate(target: StreamTarget, subscription: Map[TypeValue, RouteObservers]): Unit = {
@@ -164,7 +253,7 @@ class StreamEngine(
         routeMap.get(route).foreach { routeStreams =>
           routeStreams.targetRemoved(entry.streamObserver)
           if (!routeStreams.targeted()) {
-            routeMap -= route
+            routeRemoved(route, routeStreams)
           }
         }
       }
@@ -188,7 +277,7 @@ class StreamEngine(
         routeMap.get(route).foreach { routeStreams =>
           routeStreams.targetRemoved(obs.streamObserver)
           if (!routeStreams.targeted()) {
-            routeMap -= route
+            routeRemoved(route, routeStreams)
           }
         }
     }
@@ -246,7 +335,7 @@ trait StreamObserver {
   def handle(routeEvent: StreamEvent): Unit
 }
 
-trait RouteStreamSource {
+trait RouteStreamSource extends RouteServiceProvider {
   def updateSourcing(route: TypeValue, rows: Set[TableRow]): Unit
 }
 
