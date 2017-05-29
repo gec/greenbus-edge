@@ -70,83 +70,23 @@ Target mgr
 
  */
 
-class RouteSourcingMgr(route: TypeValue) extends LazyLogging {
-
-  private val sourcesMap = mutable.Map.empty[RouteStreamSource, RouteManifestEntry]
-  private var subscription = Set.empty[TableRow]
-  private var streamOpt = Option.empty[RouteStreamMgr]
-  private var currentOpt = Option.empty[RouteStreamSource]
-
-  def isSourced: Boolean = sourcesMap.nonEmpty
-
-  def bind(streams: RouteStreamMgr): Unit = {
-    streamOpt = Some(streams)
-  }
-  def unbind(): Unit = {
-    streamOpt = None
-  }
-
-  def subscriptionUpdate(keys: Set[TableRow]): Unit = {
-    logger.debug(s"Subscription update for route $route: $keys")
-    subscription = keys
-    currentOpt.foreach(_.updateSourcing(route, keys))
-  }
-
-  //def issueServiceRequest()
-
-  private def sourceAdded(source: RouteStreamSource): Unit = {
-    if (currentOpt.isEmpty) {
-      currentOpt = Some(source)
-      if (subscription.nonEmpty) {
-        source.updateSourcing(route, subscription)
-      }
-    }
-  }
-
-  def sourceRegistered(source: RouteStreamSource, details: RouteManifestEntry): Unit = {
-    sourcesMap.get(source) match {
-      case None =>
-        sourcesMap.update(source, details)
-        sourceAdded(source)
-      case Some(prevEntry) =>
-        if (prevEntry != details) {
-          sourcesMap.update(source, details)
-        }
-    }
-  }
-  def sourceRemoved(source: RouteStreamSource): Unit = {
-    sourcesMap -= source
-    streamOpt.foreach(_.sourceRemoved(source))
-    logger.debug(s"Removed: $source, $currentOpt, $sourcesMap")
-    if (currentOpt.contains(source)) {
-      if (sourcesMap.isEmpty) {
-        currentOpt = None
-      } else {
-        val (nominated, _) = sourcesMap.minBy {
-          case (_, entry) => entry.distance
-        }
-        currentOpt = Some(nominated)
-        if (subscription.nonEmpty) {
-          nominated.updateSourcing(route, subscription)
-        }
-      }
-    }
-  }
-}
-
 class StreamEngine(
     logId: String,
     session: PeerSessionId,
     sourceStrategyFactory: TypeValue => RouteSourcingStrategy) extends LazyLogging {
 
-  private val routeMap = mutable.Map.empty[TypeValue, RouteStreamMgr]
+  private val streamMap = mutable.Map.empty[TypeValue, RouteStreamMgr]
   private val sourcingMap = mutable.Map.empty[TypeValue, RouteSourcingMgr]
   private val sourceToRouteMap = mutable.Map.empty[RouteStreamSource, Map[TypeValue, RouteManifestEntry]]
   private val targetToRouteMap = mutable.Map.empty[StreamTarget, Map[TypeValue, RouteObservers]]
   private val selfRouteMgr = new PeerManifestMgr(session)
 
-  routeMap.update(selfRouteMgr.route, selfRouteMgr.routeManager)
+  streamMap.update(selfRouteMgr.route, selfRouteMgr.routeManager)
   doManifestUpdate()
+
+  def getSourcing(route: TypeValue): Option[RouteServiceProvider] = {
+    sourcingMap.get(route)
+  }
 
   private def doManifestUpdate(): Unit = {
     val result = mutable.Map.empty[TypeValue, RouteManifestEntry]
@@ -172,7 +112,7 @@ class StreamEngine(
     val mgr = new RouteSourcingMgr(route)
     mgr.sourceRegistered(source, manifest)
     sourcingMap.update(route, mgr)
-    routeMap.get(route).foreach { streamMgr =>
+    streamMap.get(route).foreach { streamMgr =>
       streamMgr.sourced(mgr)
       mgr.bind(streamMgr)
     }
@@ -183,7 +123,7 @@ class StreamEngine(
       mgr.sourceRemoved(source)
       if (!mgr.isSourced) {
         sourcingMap -= route
-        routeMap.get(route).foreach(_.unsourced())
+        streamMap.get(route).foreach(_.unsourced())
       }
     }
   }
@@ -209,9 +149,9 @@ class StreamEngine(
     }
 
     update.events.foreach {
-      case ev: RowAppendEvent => routeMap.get(ev.rowId.routingKey).foreach(_.events(source, Seq(ev))) // TODO: fix this seq
+      case ev: RowAppendEvent => streamMap.get(ev.rowId.routingKey).foreach(_.events(source, Seq(ev))) // TODO: fix this seq
       //case ev: RowResolvedAbsent => routeMap.get(ev.rowId.routingKey).foreach(_.events(source, Seq(ev))) // TODO: fix this seq
-      case ev: RouteUnresolved => routeMap.get(ev.routingKey).foreach(_.events(source, Seq(ev)))
+      case ev: RouteUnresolved => streamMap.get(ev.routingKey).foreach(_.events(source, Seq(ev)))
     }
 
     // TODO: flush
@@ -239,7 +179,7 @@ class StreamEngine(
   }
 
   private def routeRemoved(route: TypeValue, routeStreams: RouteStreamMgr): Unit = {
-    routeMap -= route
+    streamMap -= route
     sourcingMap.get(route).foreach(_.unbind())
   }
 
@@ -250,7 +190,7 @@ class StreamEngine(
     val removed = prev.keySet -- subscription.keySet
     removed.foreach { route =>
       prev.get(route).foreach { entry =>
-        routeMap.get(route).foreach { routeStreams =>
+        streamMap.get(route).foreach { routeStreams =>
           routeStreams.targetRemoved(entry.streamObserver)
           if (!routeStreams.targeted()) {
             routeRemoved(route, routeStreams)
@@ -260,7 +200,7 @@ class StreamEngine(
     }
     subscription.foreach {
       case (route, observers) =>
-        val routeStreams = routeMap.getOrElseUpdate(route, routeAdded(route))
+        val routeStreams = streamMap.getOrElseUpdate(route, routeAdded(route))
         // TODO: add all current sources
         routeStreams.targetUpdate(observers.streamObserver, observers.rowObserverMap)
     }
@@ -274,7 +214,7 @@ class StreamEngine(
     val prev = targetToRouteMap.getOrElse(target, Map())
     prev.foreach {
       case (route, obs) =>
-        routeMap.get(route).foreach { routeStreams =>
+        streamMap.get(route).foreach { routeStreams =>
           routeStreams.targetRemoved(obs.streamObserver)
           if (!routeStreams.targeted()) {
             routeRemoved(route, routeStreams)

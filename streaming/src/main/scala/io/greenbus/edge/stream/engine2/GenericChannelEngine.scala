@@ -44,13 +44,14 @@ trait GenericTarget {
 
 trait GenericTargetChannel extends GenericTarget with CloseObservable
 
-class GenericChannelEngine(streamEngine: StreamEngine) {
+class GenericChannelEngine(streamEngine: StreamEngine, serviceEngine: ServiceEngine) {
 
   private val queueSet = mutable.Map.empty[TargetQueueMgr, GenericTargetChannel]
 
   def sourceChannel(source: GenericSourceChannel): Unit = {
     val streamSource = new RouteStreamSourceImpl(source)
     source.events.bind(events => sourceUpdates(streamSource, events))
+    source.responses.bind(serviceEngine.handleResponses)
     source.onClose.subscribe(() => sourceChannelClosed(source, streamSource))
     flush()
   }
@@ -85,12 +86,24 @@ class GenericChannelEngine(streamEngine: StreamEngine) {
       streamEngine.targetSubscriptionUpdate(queueMgr, observers)
     }
 
-    target.onClose.subscribe(() => targetRemoved(queueMgr))
+    val issuer = new TargetRequestIssuer(target)
+    target.requests.bind(serviceEngine.requestsIssued(issuer, _))
+
+    target.onClose.subscribe(() => {
+      targetRemoved(queueMgr)
+      serviceEngine.issuerClosed(issuer)
+    })
   }
 
   private def targetRemoved(queueMgr: TargetQueueMgr): Unit = {
     streamEngine.targetRemoved(queueMgr)
     queueSet -= queueMgr
+  }
+}
+
+class TargetRequestIssuer(proxy: GenericTargetChannel) extends ServiceIssuer {
+  def handleResponses(responses: Seq[ServiceResponse]): Unit = {
+    proxy.responses.push(responses)
   }
 }
 
