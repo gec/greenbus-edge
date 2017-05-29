@@ -24,16 +24,6 @@ import io.greenbus.edge.stream.gateway2.MapSequencer
 
 import scala.collection.mutable
 
-/*trait RouteStreamManager[Source] {
-  def events(source: Source, events: Seq[StreamEvent]): Unit
-  def sourceAdded(source: Source, details: RouteManifestEntry): Unit
-  def sourceRemoved(source: Source): Unit
-
-  def targeted(): Boolean
-  def targetUpdate(target: StreamObserver, subscription: Map[TableRow, KeyStreamObserver]): Unit
-  def targetRemoved(target: StreamObserver): Unit
-}*/
-
 trait RouteTargetSubject {
 
   def targeted(): Boolean
@@ -78,8 +68,6 @@ trait RouteTargetSubjectBasic[A <: KeyStreamSubject] extends RouteTargetSubject 
     streamMap --= untargetedStreams
 
     streamUpdate(streamMap.keySet.toSet)
-    /*val activeKeys = streamMap.keySet.toSet
-    routingStrategy.subscriptionUpdate(activeKeys)*/
   }
 
   def targetRemoved(target: StreamObserver): Unit = {
@@ -98,22 +86,22 @@ trait RouteTargetSubjectBasic[A <: KeyStreamSubject] extends RouteTargetSubject 
     }
 
     streamMap --= untargetedStreams
-    //val activeKeys = streamMap.keySet.toSet
-    //routingStrategy.subscriptionUpdate(activeKeys)
     streamUpdate(streamMap.keySet.toSet)
   }
 }
 
 trait RouteStreamMgr extends RouteTargetSubject {
   def events(source: RouteStreamSource, events: Seq[StreamEvent]): Unit
-  def sourceAdded(source: RouteStreamSource, details: RouteManifestEntry): Unit
   def sourceRemoved(source: RouteStreamSource): Unit
+  def sourced(sourcing: RouteSourcingMgr): Unit
+  def unsourced(): Unit
 }
 
-class RouteStreams(route: TypeValue, routingStrategy: RouteSourcingStrategy, streamFactory: TableRow => KeyStream[RouteStreamSource]) extends RouteStreamMgr {
+class RouteStreams(route: TypeValue, streamFactory: TableRow => KeyStream[RouteStreamSource]) extends RouteStreamMgr {
 
   private val streamMap = mutable.Map.empty[TableRow, KeyStream[RouteStreamSource]]
   private val subscriptionMap = mutable.Map.empty[StreamObserver, Map[TableRow, KeyStreamObserver]]
+  private var sourcingOpt = Option.empty[RouteSourcingMgr]
 
   def events(source: RouteStreamSource, events: Seq[StreamEvent]): Unit = {
     events.foreach {
@@ -129,14 +117,19 @@ class RouteStreams(route: TypeValue, routingStrategy: RouteSourcingStrategy, str
     }
   }
 
-  def sourceAdded(source: RouteStreamSource, details: RouteManifestEntry): Unit = {
-    routingStrategy.sourceAdded(source, details)
+  def sourced(sourcing: RouteSourcingMgr): Unit = {
+    sourcingOpt = Some(sourcing)
+    if (streamMap.nonEmpty) {
+      sourcing.subscriptionUpdate(streamMap.keySet.toSet)
+    }
+  }
+  def unsourced(): Unit = {
+    sourcingOpt = None
+    subscriptionMap.keys.foreach(_.handle(RouteUnresolved(route)))
   }
 
   def sourceRemoved(source: RouteStreamSource): Unit = {
     streamMap.values.foreach(_.sourceRemoved(source))
-    val emitted = routingStrategy.sourceRemoved(source)
-    emitted.foreach(ev => subscriptionMap.keys.foreach(_.handle(ev)))
   }
 
   def targeted(): Boolean = {
@@ -167,8 +160,9 @@ class RouteStreams(route: TypeValue, routingStrategy: RouteSourcingStrategy, str
     streamMap --= untargetedStreams
 
     val activeKeys = streamMap.keySet.toSet
-    routingStrategy.subscriptionUpdate(activeKeys)
-    if (!routingStrategy.resolved()) {
+
+    sourcingOpt.foreach(_.subscriptionUpdate(activeKeys))
+    if (sourcingOpt.isEmpty) {
       target.handle(RouteUnresolved(route))
     }
 
@@ -191,7 +185,8 @@ class RouteStreams(route: TypeValue, routingStrategy: RouteSourcingStrategy, str
     }
 
     streamMap --= untargetedStreams
+
     val activeKeys = streamMap.keySet.toSet
-    routingStrategy.subscriptionUpdate(activeKeys)
+    sourcingOpt.foreach(_.subscriptionUpdate(activeKeys))
   }
 }

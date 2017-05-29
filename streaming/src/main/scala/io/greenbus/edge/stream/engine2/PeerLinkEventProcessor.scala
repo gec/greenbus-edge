@@ -90,5 +90,9 @@ class RouteStreamSourceImpl(source: GenericSource) extends RouteStreamSource {
     }
     source.subscriptions.push(all.toSet)
   }
+
+  def issueServiceRequests(requests: Seq[ServiceRequest]): Unit = {
+    source.requests.push(requests)
+  }
 }
 
