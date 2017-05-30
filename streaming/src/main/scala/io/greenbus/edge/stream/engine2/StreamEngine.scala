@@ -48,7 +48,7 @@ import scala.collection.mutable
 case class SourceEvents(routeUpdatesOpt: Option[Map[TypeValue, RouteManifestEntry]], events: Seq[StreamEvent])
 
 trait StreamTarget {
-  //def flush(): Unit
+  def flush(): Unit
 }
 
 /*
@@ -72,8 +72,7 @@ Target mgr
 
 class StreamEngine(
     logId: String,
-    session: PeerSessionId,
-    sourceStrategyFactory: TypeValue => RouteSourcingStrategy) extends LazyLogging {
+    session: PeerSessionId) extends LazyLogging {
 
   private val streamMap = mutable.Map.empty[TypeValue, RouteStreamMgr]
   private val sourcingMap = mutable.Map.empty[TypeValue, RouteSourcingMgr]
