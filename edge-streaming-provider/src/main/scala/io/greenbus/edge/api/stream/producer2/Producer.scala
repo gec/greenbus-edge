@@ -98,7 +98,28 @@ class OutputStatusPublisher(key: TableRow, updates: Sink[RowUpdate]) extends Out
   }
 }
 
-class EndpointBuilderImpl(endpointId: EndpointId, gatewayThread: CallMarshaller, gateway: GatewayEventHandler) {
+/*
+trait EndpointBuilder {
+
+  def setIndexes(paramIndexes: Map[Path, IndexableValue]): Unit
+  def setMetadata(paramMetadata: Map[Path, Value]): Unit
+
+  def seriesValue(key: Path, metadata: KeyMetadata = KeyMetadata()): SeriesValueHandle
+
+  def latestKeyValue(key: Path, metadata: KeyMetadata = KeyMetadata()): LatestKeyValueHandle
+
+  def topicEventValue(key: Path, metadata: KeyMetadata = KeyMetadata()): TopicEventHandle
+
+  def activeSet(key: Path, metadata: KeyMetadata = KeyMetadata()): ActiveSetHandle
+
+  def outputStatus(key: Path, metadata: KeyMetadata = KeyMetadata()): OutputStatusHandle
+
+  def registerOutput(key: Path): Receiver[OutputParams, OutputResult]
+
+  def build(seriesBuffersSize: Int, eventBuffersSize: Int): ProducerHandle
+}*/
+
+class EndpointBuilderImpl(endpointId: EndpointId, gatewayThread: CallMarshaller, gateway: GatewayEventHandler) extends EndpointBuilder {
   private val updateBuffer = new RowUpdateBuffer
   private val initEvents = Vector.newBuilder[ProducerKeyEvent]
 
@@ -167,7 +188,7 @@ class EndpointBuilderImpl(endpointId: EndpointId, gatewayThread: CallMarshaller,
     rcvImpl
   }
 
-  def build(): ProducerHandle = {
+  def build(seriesBuffersSize: Int, eventBuffersSize: Int): ProducerHandle = {
     val desc = EndpointDescriptor(indexes, metadata, data.toMap, outputStatuses.toMap)
     addDescriptor(desc)
     val route = EdgeCodecCommon.endpointIdToRoute(endpointId)
