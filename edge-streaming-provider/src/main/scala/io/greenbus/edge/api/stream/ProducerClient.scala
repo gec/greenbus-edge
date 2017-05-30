@@ -45,7 +45,7 @@ trait EndpointBuilder {
 
   def outputStatus(key: Path, metadata: KeyMetadata = KeyMetadata()): OutputStatusHandle
 
-  def outputRequests(key: Path, handler: Responder[OutputParams, OutputResult]): Unit
+  //def outputRequests(key: Path, handler: Responder[OutputParams, OutputResult]): Unit
 
   def registerOutput(key: Path): Receiver[OutputParams, OutputResult]
 

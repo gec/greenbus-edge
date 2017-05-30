@@ -22,10 +22,20 @@ import io.greenbus.edge.api._
 import io.greenbus.edge.api.stream._
 import io.greenbus.edge.flow.{ Handler, Source }
 import io.greenbus.edge.stream.RowId
-import io.greenbus.edge.stream.consume.{ StreamPeer, StreamUserSubscription }
+import io.greenbus.edge.stream.peer.{ StreamPeer, StreamUserSubscription }
 import io.greenbus.edge.stream.subscribe._
 
 import scala.collection.mutable
+
+class SubShim(client: EdgeSubscriptionClient2) extends EdgeSubscriptionClient {
+  def subscribe(params: SubscriptionParams): EdgeSubscription = {
+    val p2 = EdgeSubscriptionParams(
+      params.descriptors.toSet,
+      (params.dataKeys.series ++ params.dataKeys.keyValues ++ params.dataKeys.topicEvent ++ params.dataKeys.activeSet).toSet,
+      params.outputKeys.toSet)
+    client.subscribe(p2)
+  }
+}
 
 case class EdgeSubscriptionParams(
   endpointDescriptors: Set[EndpointId],
@@ -56,7 +66,7 @@ class EdgeSubImpl(sub: StreamUserSubscription, map: Map[RowId, EdgeKeyUpdateTran
   }
 }
 
-class EdgeSubscriptionProvider(peer: StreamPeer) {
+class EdgeSubscriptionProvider(peer: StreamPeer) extends EdgeSubscriptionClient2 {
 
   def subscribe(params: EdgeSubscriptionParams): EdgeSubscription = {
 
