@@ -25,7 +25,11 @@ import io.greenbus.edge.thread.CallMarshaller
 
 import scala.collection.mutable
 
-class GatewayEngine(engineThread: CallMarshaller) {
+trait GatewayEventHandler {
+  def handleEvent(event: ProducerEvent): Unit
+}
+
+class GatewayEngine(engineThread: CallMarshaller) extends GatewayEventHandler {
 
   private val mgr = new ProducerMgr
   private val queueSet = mutable.Map.empty[TargetQueueMgr, GatewayProxyChannel]
