@@ -21,9 +21,11 @@ package io.greenbus.edge.api.stream.producer2
 import io.greenbus.edge.api._
 import io.greenbus.edge.api.stream._
 import io.greenbus.edge.data.{ IndexableValue, SampleValue, Value }
-import io.greenbus.edge.flow.Sink
-import io.greenbus.edge.stream.{ SequenceCtx, TableRow, TypeValue }
+import io.greenbus.edge.flow._
+import io.greenbus.edge.stream.gateway.RouteServiceRequest
+import io.greenbus.edge.stream.{ SequenceCtx, TableRow, TextVal, TypeValue }
 import io.greenbus.edge.stream.gateway3._
+import io.greenbus.edge.thread.CallMarshaller
 
 import scala.collection.mutable
 
@@ -96,14 +98,16 @@ class OutputStatusPublisher(key: TableRow, updates: Sink[RowUpdate]) extends Out
   }
 }
 
-class EndpointBuilderImpl(endpointId: EndpointId, gateway: GatewayEventHandler) {
+class EndpointBuilderImpl(endpointId: EndpointId, gatewayThread: CallMarshaller, gateway: GatewayEventHandler) {
   private val updateBuffer = new RowUpdateBuffer
-  private val adds = Vector.newBuilder[AddRow]
+  private val initEvents = Vector.newBuilder[ProducerKeyEvent]
 
   private var indexes = Map.empty[Path, IndexableValue]
   private var metadata = Map.empty[Path, Value]
   private val data = mutable.Map.empty[Path, DataKeyDescriptor]
   private val outputStatuses = mutable.Map.empty[Path, OutputKeyDescriptor]
+
+  private val outputEntries = mutable.ArrayBuffer.empty[ProducerOutputEntry]
 
   def setIndexes(paramIndexes: Map[Path, IndexableValue]): Unit = {
     indexes = paramIndexes
@@ -117,7 +121,7 @@ class EndpointBuilderImpl(endpointId: EndpointId, gateway: GatewayEventHandler) 
     val handle = new SeriesPublisher(rowId.tableRow, updateBuffer)
     val desc = TimeSeriesValueDescriptor(metadata.indexes, metadata.metadata)
     data += (key -> desc)
-    adds += AddRow(rowId.tableRow, SequenceCtx(None, Some(EdgeCodecCommon.writeDataKeyDescriptor(desc))))
+    initEvents += AddRow(rowId.tableRow, SequenceCtx(None, Some(EdgeCodecCommon.writeDataKeyDescriptor(desc))))
     handle
   }
 
@@ -126,7 +130,7 @@ class EndpointBuilderImpl(endpointId: EndpointId, gateway: GatewayEventHandler) 
     val handle = new LatestKeyValuePublisher(rowId.tableRow, updateBuffer)
     val desc = LatestKeyValueDescriptor(metadata.indexes, metadata.metadata)
     data += (key -> desc)
-    adds += AddRow(rowId.tableRow, SequenceCtx(None, Some(EdgeCodecCommon.writeDataKeyDescriptor(desc))))
+    initEvents += AddRow(rowId.tableRow, SequenceCtx(None, Some(EdgeCodecCommon.writeDataKeyDescriptor(desc))))
     handle
   }
 
@@ -135,7 +139,7 @@ class EndpointBuilderImpl(endpointId: EndpointId, gateway: GatewayEventHandler) 
     val handle = new TopicEventPublisher(rowId.tableRow, updateBuffer)
     val desc = EventTopicValueDescriptor(metadata.indexes, metadata.metadata)
     data += (key -> desc)
-    adds += AddRow(rowId.tableRow, SequenceCtx(None, Some(EdgeCodecCommon.writeDataKeyDescriptor(desc))))
+    initEvents += AddRow(rowId.tableRow, SequenceCtx(None, Some(EdgeCodecCommon.writeDataKeyDescriptor(desc))))
     handle
   }
 
@@ -144,7 +148,7 @@ class EndpointBuilderImpl(endpointId: EndpointId, gateway: GatewayEventHandler) 
     val handle = new ActiveSetPublisher(rowId.tableRow, updateBuffer)
     val desc = ActiveSetValueDescriptor(metadata.indexes, metadata.metadata)
     data += (key -> desc)
-    adds += AddRow(rowId.tableRow, SequenceCtx(None, Some(EdgeCodecCommon.writeDataKeyDescriptor(desc))))
+    initEvents += AddRow(rowId.tableRow, SequenceCtx(None, Some(EdgeCodecCommon.writeDataKeyDescriptor(desc))))
     handle
   }
 
@@ -153,18 +157,63 @@ class EndpointBuilderImpl(endpointId: EndpointId, gateway: GatewayEventHandler) 
     val handle = new OutputStatusPublisher(rowId.tableRow, updateBuffer)
     val desc = OutputKeyDescriptor(metadata.indexes, metadata.metadata)
     outputStatuses += (key -> desc)
-    adds += AddRow(rowId.tableRow, SequenceCtx(None, Some(EdgeCodecCommon.writeOutputKeyDescriptor(desc))))
+    initEvents += AddRow(rowId.tableRow, SequenceCtx(None, Some(EdgeCodecCommon.writeOutputKeyDescriptor(desc))))
     handle
+  }
+
+  def registerOutput(key: Path): Receiver[OutputParams, OutputResult] = {
+    val rcvImpl = new RemoteBoundQueueingReceiverImpl[OutputParams, OutputResult](gatewayThread)
+    outputEntries += ProducerOutputEntry(key, rcvImpl)
+    rcvImpl
   }
 
   def build(): ProducerHandle = {
     val desc = EndpointDescriptor(indexes, metadata, data.toMap, outputStatuses.toMap)
+    addDescriptor(desc)
     val route = EdgeCodecCommon.endpointIdToRoute(endpointId)
+
+    val requests = registerRequests()
+
+    gateway.handleEvent(RouteBindEvent(route, initEvents.result(), Map(), requests))
+
     new EndpointProducer(route, gateway, updateBuffer)
+  }
+
+  private def addDescriptor(desc: EndpointDescriptor): Unit = {
+    val row = EdgeCodecCommon.endpointIdToEndpointDescriptorTableRow(endpointId)
+    initEvents += AddRow(row, SequenceCtx(None, None))
+    initEvents += RowUpdate(row, AppendProducerUpdate(Seq(EdgeCodecCommon.writeEndpointDescriptor(desc))))
+  }
+
+  private def registerRequests(): Sink[RouteServiceRequest] = {
+    val dist = new RemoteBoundQueuedDistributor[RouteServiceRequest](gatewayThread)
+
+    val requestHandlers: Map[TableRow, Responder[OutputParams, OutputResult]] = {
+      outputEntries.map { entry =>
+        val rowKey = EdgeCodecCommon.writePath(entry.path)
+        val tableRow = TableRow(EdgeTables.outputTable, rowKey)
+        (tableRow, entry.responder)
+      }.toMap
+    }
+
+    dist.bind { req =>
+      EdgeCodecCommon.readOutputRequest(req.value) match {
+        case Left(err) => req.respond(TextVal(s"Expecting edge output request protobuf: " + err))
+        case Right(converted) =>
+          requestHandlers.get(req.row) match {
+            case None => req.respond(EdgeCodecCommon.writeOutputResult(OutputFailure(s"key not handled")))
+            case Some(rcv) =>
+              rcv.handle(converted, result => req.respond(EdgeCodecCommon.writeOutputResult(result)))
+          }
+      }
+    }
+
+    dist
   }
 }
 
 class EndpointProducer(route: TypeValue, gateway: GatewayEventHandler, updateBuffer: RowUpdateBuffer) extends ProducerHandle {
+
   def flush(): Unit = {
     val events = updateBuffer.dequeue()
     gateway.handleEvent(RouteBatchEvent(route, events))
