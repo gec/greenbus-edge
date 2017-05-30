@@ -38,6 +38,7 @@ object EdgeTables {
   val eventTopicValueTable = "edm.events"
   val activeSetValueTable = "edm.set"
 
+  val dataKeyTable = "edm.data"
   val outputTable = "edm.output"
 
   val endpointPrefixTable = "edm.prefix.endpoint"
@@ -319,6 +320,10 @@ object EdgeCodecCommon {
   }
   def writeEndpointDescriptor(desc: EndpointDescriptor): TypeValue = {
     BytesVal(Conversions.toProto(desc).toByteArray)
+  }
+
+  def dataKeyRowId(endpointPath: EndpointPath): RowId = {
+    keyRowId(endpointPath, EdgeTables.dataKeyTable)
   }
 
   def outputKeyRowId(endpointPath: EndpointPath): RowId = {

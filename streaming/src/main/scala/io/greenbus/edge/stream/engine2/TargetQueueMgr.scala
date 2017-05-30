@@ -77,4 +77,6 @@ class TargetQueueMgr extends StreamTarget {
   def dequeue(): Seq[StreamEvent] = {
     routeMap.flatMap(_._2.dequeue()).toSeq
   }
+
+  def flush(): Unit = {}
 }
