@@ -20,6 +20,7 @@ package io.greenbus.edge.stream.gateway3
 
 import java.util.UUID
 
+import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.flow.Sink
 import io.greenbus.edge.stream.{ PeerSessionId, TableRow }
 import io.greenbus.edge.stream.engine2.{ KeyStreamObserver, RouteTargetSubject, StreamObserver }
@@ -28,7 +29,7 @@ import io.greenbus.edge.stream.gateway2.{ DynamicTable, ProducerStreamSubject }
 
 import scala.collection.mutable
 
-class ProducerRouteMgr extends RouteTargetSubject {
+class ProducerRouteMgr extends RouteTargetSubject with LazyLogging {
 
   private var produced = false
   private val updateMap = mutable.Map.empty[TableRow, ProducerUpdateStream]
@@ -155,6 +156,7 @@ class ProducerRouteMgr extends RouteTargetSubject {
   }
 
   def targetUpdate(target: StreamObserver, subscription: Map[TableRow, KeyStreamObserver]): Unit = {
+    logger.debug(s"targetUpdate: $subscription")
     val previous = subscriptionMap.getOrElse(target, Map())
     val removes = previous.keySet -- subscription.keySet
 

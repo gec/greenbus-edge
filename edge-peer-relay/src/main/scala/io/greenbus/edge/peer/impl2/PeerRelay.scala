@@ -32,7 +32,7 @@ import scala.concurrent.Future
 class PeerRelay(sessionId: PeerSessionId) {
 
   private val service = AmqpService.build(Some("server"))
-  private val peer = new EdgePeer("peer", service.eventLoop)
+  private val peer = new EdgePeer("peer", sessionId, service.eventLoop)
 
   private val channelHandler = new ChannelHandler(peer.channelHandler)
   private val serialization = new ProtoSerializationProvider

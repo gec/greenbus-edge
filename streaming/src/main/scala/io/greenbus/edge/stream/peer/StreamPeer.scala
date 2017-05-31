@@ -20,6 +20,7 @@ package io.greenbus.edge.stream.peer
 
 import java.util.UUID
 
+import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.flow.{ Handler, RemoteBoundQueuedDistributor, Sink, Source }
 import io.greenbus.edge.stream._
 import io.greenbus.edge.stream.consume.UserSubscriptionSynth
@@ -59,9 +60,8 @@ class StreamSub(queue: TargetQueueMgr, dist: Sink[Seq[StreamEvent]]) {
   }
 }
 
-class StreamPeer(id: String, engineThread: CallMarshaller) {
-  private val session = PeerSessionId(UUID.randomUUID(), 0)
-  private val streamEngine = new StreamEngine(id, session)
+class StreamPeer(id: String, sessionId: PeerSessionId, engineThread: CallMarshaller) extends LazyLogging {
+  private val streamEngine = new StreamEngine(id, sessionId)
   private val serviceEngine = new ServiceEngine(id, streamEngine.getSourcing)
 
   private val channelManager = new GenericChannelEngine(streamEngine, serviceEngine, eventNotify)
@@ -69,6 +69,7 @@ class StreamPeer(id: String, engineThread: CallMarshaller) {
   private val userHandles = mutable.Set.empty[StreamSub]
 
   private def eventNotify(): Unit = {
+    logger.debug(s"eventNotify()")
     userHandles.foreach(_.flush())
     channelManager.flush()
   }
@@ -82,13 +83,16 @@ class StreamPeer(id: String, engineThread: CallMarshaller) {
   def subscribe(rows: Set[RowId]): StreamUserSubscription = {
     val target = new TargetQueueMgr
     val dist = new RemoteBoundQueuedDistributor[Seq[StreamEvent]](engineThread)
-
-    val observers = target.subscriptionUpdate(rows)
-
-    streamEngine.targetSubscriptionUpdate(target, observers)
-
     val sub = new StreamSub(target, dist)
-    userHandles += sub
+
+    engineThread.marshal {
+      val observers = target.subscriptionUpdate(rows)
+
+      streamEngine.targetSubscriptionUpdate(target, observers)
+      sub.flush()
+
+      userHandles += sub
+    }
 
     def onClose(): Unit = {
       engineThread.marshal {

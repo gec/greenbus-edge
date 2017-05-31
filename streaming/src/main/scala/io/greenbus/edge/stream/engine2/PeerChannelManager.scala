@@ -24,6 +24,7 @@ import io.greenbus.edge.stream._
 class PeerChannelManager(generic: GenericChannelEngine) extends PeerChannelHandler {
   def peerOpened(peerSessionId: PeerSessionId, proxy: PeerLinkProxyChannel): Unit = {
     val channel = new PeerLinkSourceChannel(peerSessionId, proxy)
+    channel.init()
     generic.sourceChannel(channel)
   }
 

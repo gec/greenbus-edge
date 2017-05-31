@@ -18,6 +18,7 @@
  */
 package io.greenbus.edge.api.stream.subscribe2
 
+import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.api._
 import io.greenbus.edge.api.stream._
 import io.greenbus.edge.flow.{ Handler, Source }
@@ -46,12 +47,18 @@ trait EdgeSubscriptionClient2 {
   def subscribe(params: EdgeSubscriptionParams): EdgeSubscription
 }
 
-class EdgeSubImpl(sub: StreamUserSubscription, map: Map[RowId, EdgeKeyUpdateTranslator]) extends EdgeSubscription {
+class EdgeSubImpl(sub: StreamUserSubscription, initial: Seq[IdentifiedEdgeUpdate], map: Map[RowId, EdgeKeyUpdateTranslator]) extends EdgeSubscription with LazyLogging {
+
+  private var initialIssued = false
 
   def updates: Source[Seq[IdentifiedEdgeUpdate]] = {
     new Source[Seq[IdentifiedEdgeUpdate]] {
       def bind(handler: Handler[Seq[IdentifiedEdgeUpdate]]): Unit = {
         sub.events.bind { rowUpdates =>
+          if (!initialIssued) {
+            handler.handle(initial)
+            initialIssued = true
+          }
           val edgeUpdates = rowUpdates.flatMap { up =>
             map.get(up.row).map(_.handle(up.update)).getOrElse(Seq())
           }
@@ -71,22 +78,26 @@ class EdgeSubscriptionProvider(peer: StreamPeer) extends EdgeSubscriptionClient2
   def subscribe(params: EdgeSubscriptionParams): EdgeSubscription = {
 
     val transMap = mutable.Map.empty[RowId, EdgeKeyUpdateTranslator]
+    val initial = Vector.newBuilder[IdentifiedEdgeUpdate]
 
     params.endpointDescriptors.foreach { id =>
       val keyTranslator = new EdgeKeyUpdateTranslator(new EndpointDescSubCodec(id.toString, id))
       val row = EdgeCodecCommon.endpointIdToEndpointDescriptorRow(id)
+      initial += IdEndpointUpdate(id, Pending)
       transMap += (row -> keyTranslator)
     }
 
     params.dataKeys.foreach { id =>
       val keyTranslator = new EdgeKeyUpdateTranslator(new DynamicDataKeyCodec(id.toString, id))
       val row = EdgeCodecCommon.dataKeyRowId(id)
+      initial += IdDataKeyUpdate(id, Pending)
       transMap += (row -> keyTranslator)
     }
 
     params.outputKeys.foreach { id =>
       val keyTranslator = new EdgeKeyUpdateTranslator(new AppendOutputKeySubCodec(id.toString, id, AppendOutputKeyCodec))
       val row = EdgeCodecCommon.outputKeyRowId(id)
+      initial += IdOutputKeyUpdate(id, Pending)
       transMap += (row -> keyTranslator)
     }
 
@@ -94,7 +105,7 @@ class EdgeSubscriptionProvider(peer: StreamPeer) extends EdgeSubscriptionClient2
 
     val streamSub = peer.subscribe(transMapResult.keySet)
 
-    new EdgeSubImpl(streamSub, transMap.toMap)
+    new EdgeSubImpl(streamSub, initial.result(), transMap.toMap)
   }
 
 }

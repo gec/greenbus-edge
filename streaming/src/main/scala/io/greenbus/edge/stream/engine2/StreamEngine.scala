@@ -108,6 +108,7 @@ class StreamEngine(
   }
 
   private def routeSourceAdded(source: RouteStreamSource, route: TypeValue, manifest: RouteManifestEntry): Unit = {
+    logger.debug(s"$logId route source added: $route - $source")
     val mgr = new RouteSourcingMgr(route)
     mgr.sourceRegistered(source, manifest)
     sourcingMap.update(route, mgr)
@@ -118,6 +119,7 @@ class StreamEngine(
   }
 
   private def routeSourceRemoved(source: RouteStreamSource, route: TypeValue): Unit = {
+    logger.debug(s"$logId route source removed: $route - $source")
     sourcingMap.get(route).foreach { mgr =>
       mgr.sourceRemoved(source)
       if (!mgr.isSourced) {

@@ -20,6 +20,7 @@ package io.greenbus.edge.stream.gateway2
 
 import java.util.UUID
 
+import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.flow.Sink
 import io.greenbus.edge.stream.engine2.{ CachingKeyStreamSubject, RouteTargetSubjectBasic, StreamObserverSet, StreamTargetSubject }
 import io.greenbus.edge.stream.filter.{ StreamCache, StreamCacheImpl }
@@ -46,11 +47,15 @@ case class RoutePublishConfig(
   dynamicTables: Seq[(String, DynamicTable)],
   handler: Sink[RouteServiceRequest])
 
-class ProducerStreamSubject extends CachingKeyStreamSubject {
+class ProducerStreamSubject extends CachingKeyStreamSubject with LazyLogging {
   private var streamOpt = Option.empty[StreamCache]
 
   protected def sync(): Seq[AppendEvent] = {
-    streamOpt.map(_.resync()).getOrElse(Seq()) // TODO: row absent?
+    logger.debug(s"ProducerStreamSubject sync()")
+    streamOpt.map(_.resync()).getOrElse {
+      logger.debug(s"No sync event on subscribe")
+      Seq()
+    } // TODO: row absent?
   }
 
   def bind(cache: StreamCache): Unit = {

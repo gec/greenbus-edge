@@ -18,6 +18,7 @@
  */
 package io.greenbus.edge.stream.gateway3
 
+import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.flow.Sink
 import io.greenbus.edge.stream._
 import io.greenbus.edge.stream.engine2._
@@ -42,11 +43,14 @@ case class RouteBindEvent(route: TypeValue,
 
 case class RouteUnbindEvent(route: TypeValue) extends ProducerEvent
 
-class ProducerMgr extends StreamTargetSubject2[ProducerRouteMgr] {
+class ProducerMgr extends StreamTargetSubject2[ProducerRouteMgr] with LazyLogging {
 
   protected val routeMap = mutable.Map.empty[TypeValue, ProducerRouteMgr]
 
+  def routeSet: Set[TypeValue] = routeMap.keySet.toSet
+
   def handleEvent(event: ProducerEvent): Unit = {
+    logger.debug(s"Producer event: $event")
     event match {
       case ev: RouteBindEvent => {
         val mgr = routeMap.getOrElseUpdate(ev.route, new ProducerRouteMgr)
@@ -77,7 +81,7 @@ class ProducerMgr extends StreamTargetSubject2[ProducerRouteMgr] {
   }
 }
 
-trait StreamTargetSubject2[A <: RouteTargetSubject] {
+trait StreamTargetSubject2[A <: RouteTargetSubject] extends LazyLogging {
 
   protected val routeMap: mutable.Map[TypeValue, A]
   private val targetToRouteMap = mutable.Map.empty[StreamTarget, Map[TypeValue, RouteObservers]]
@@ -85,6 +89,7 @@ trait StreamTargetSubject2[A <: RouteTargetSubject] {
   protected def buildRouteManager(route: TypeValue): A
 
   def targetSubscriptionUpdate(target: StreamTarget, subscription: Map[TypeValue, RouteObservers]): Unit = {
+    logger.debug(s"targetSubscriptionUpdate: $subscription")
     val prev = targetToRouteMap.getOrElse(target, Map())
 
     val removed = prev.keySet -- subscription.keySet
@@ -100,6 +105,7 @@ trait StreamTargetSubject2[A <: RouteTargetSubject] {
     }
     subscription.foreach {
       case (route, observers) =>
+        logger.debug(s"sub for route: $route, obs: $observers")
         val routeStreams = routeMap.getOrElseUpdate(route, buildRouteManager(route))
         routeStreams.targetUpdate(observers.streamObserver, observers.rowObserverMap)
     }

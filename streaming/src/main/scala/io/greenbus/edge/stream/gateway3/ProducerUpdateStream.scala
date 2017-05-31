@@ -32,7 +32,6 @@ class ProducerUpdateStream(sessionId: PeerSessionId, ctx: SequenceCtx) {
   def cache: StreamCache = streamCache
 
   def handle(update: ProducerDataUpdate): Unit = {
-
     val sequencer = sequencerOpt.getOrElse {
       val seq = UpdateSequencer.build(update, sessionId, ctx)
       sequencerOpt = Some(seq)

@@ -39,7 +39,6 @@ trait BaseEdgeIntegration {
 
   private var relayOpt = Option.empty[PeerRelay]
   private var serverOpt = Option.empty[AmqpListener]
-  private var serviceConnections = Vector.empty[EdgeServices]
   private var executors = Vector.empty[EventThreadService]
   private var closeables = Vector.empty[Closeable]
 
@@ -101,8 +100,6 @@ trait BaseEdgeIntegration {
 
   override protected def afterEach(): Unit = {
     stopRelay()
-    serviceConnections.foreach(_.shutdown())
-    serviceConnections = Vector()
     executors.foreach(_.close())
     executors = Vector()
     closeables.foreach(_.close())
