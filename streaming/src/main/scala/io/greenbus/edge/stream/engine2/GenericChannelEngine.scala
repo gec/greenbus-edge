@@ -18,6 +18,7 @@
  */
 package io.greenbus.edge.stream.engine2
 
+import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.flow._
 import io.greenbus.edge.stream._
 import io.greenbus.edge.stream.consume.ValueUpdateSynthesizerImpl
@@ -44,11 +45,12 @@ trait GenericTarget {
 
 trait GenericTargetChannel extends GenericTarget with CloseObservable
 
-class GenericChannelEngine(streamEngine: StreamEngine, serviceEngine: ServiceEngine, eventNotify: () => Unit) {
+class GenericChannelEngine(streamEngine: StreamEngine, serviceEngine: ServiceEngine, eventNotify: () => Unit) extends LazyLogging {
 
   private val queueSet = mutable.Map.empty[TargetQueueMgr, GenericTargetChannel]
 
   def sourceChannel(source: GenericSourceChannel): Unit = {
+    logger.debug(s"source channel added: $source")
     val streamSource = new RouteStreamSourceImpl(source)
     source.events.bind(events => sourceUpdates(streamSource, events))
     source.responses.bind(serviceEngine.handleResponses)
@@ -57,16 +59,19 @@ class GenericChannelEngine(streamEngine: StreamEngine, serviceEngine: ServiceEng
   }
 
   private def sourceUpdates(source: RouteStreamSource, events: SourceEvents): Unit = {
+    logger.debug(s"source channel added: $source")
     streamEngine.sourceUpdate(source, events)
     eventNotify()
   }
 
   private def sourceChannelClosed(source: GenericSourceChannel, handle: RouteStreamSource): Unit = {
+    logger.debug(s"source channel added: $source")
     streamEngine.sourceRemoved(handle)
     eventNotify()
   }
 
   def flush(): Unit = {
+    logger.debug(s"flush()")
     queueSet.foreach {
       case (queue, channel) =>
         val events = queue.dequeue()
@@ -77,6 +82,7 @@ class GenericChannelEngine(streamEngine: StreamEngine, serviceEngine: ServiceEng
   }
 
   def targetChannel(target: GenericTargetChannel): Unit = {
+    logger.debug(s"targetChannel: $target")
 
     val queueMgr = new TargetQueueMgr
     queueSet += (queueMgr -> target)
@@ -84,6 +90,7 @@ class GenericChannelEngine(streamEngine: StreamEngine, serviceEngine: ServiceEng
     target.subscriptions.bind { rows =>
       val observers = queueMgr.subscriptionUpdate(rows)
       streamEngine.targetSubscriptionUpdate(queueMgr, observers)
+      eventNotify()
     }
 
     val issuer = new TargetRequestIssuer(target)
