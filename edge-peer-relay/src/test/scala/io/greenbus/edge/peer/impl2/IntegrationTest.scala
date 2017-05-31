@@ -187,7 +187,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
         }), 5000)*/
   }
 
-  ignore("Two consumers, producer first, one unsubscribes") {
+  test("Two consumers, producer first, one unsubscribes") {
     import EdgeSubHelpers._
 
     val params = SubscriptionParams(
@@ -248,6 +248,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
           case up: IdDataKeyUpdate => up.data == DataUnresolved
         }), 5000)
 
+    logger.info(s"Connecting B")
     consB.connect()
 
     consB.queue.awaitListen(

@@ -75,7 +75,9 @@ class StreamPeer(id: String, sessionId: PeerSessionId, engineThread: CallMarshal
   }
 
   def connectRemotePeer(sessionId: PeerSessionId, channel: PeerLinkProxyChannel): Unit = {
-    handler.peerOpened(sessionId, channel)
+    engineThread.marshal {
+      handler.peerOpened(sessionId, channel)
+    }
   }
 
   def channelHandler: PeerChannelHandler = handler
