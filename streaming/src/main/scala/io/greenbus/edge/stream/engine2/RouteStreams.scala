@@ -18,6 +18,7 @@
  */
 package io.greenbus.edge.stream.engine2
 
+import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.stream._
 import io.greenbus.edge.stream.filter.StreamCacheImpl
 import io.greenbus.edge.stream.gateway2.MapSequencer
@@ -97,7 +98,7 @@ trait RouteStreamMgr extends RouteTargetSubject {
   def unsourced(): Unit
 }
 
-class RouteStreams(route: TypeValue, streamFactory: TableRow => KeyStream[RouteStreamSource]) extends RouteStreamMgr {
+class RouteStreams(route: TypeValue, streamFactory: TableRow => KeyStream[RouteStreamSource]) extends RouteStreamMgr with LazyLogging {
 
   private val streamMap = mutable.Map.empty[TableRow, KeyStream[RouteStreamSource]]
   private val subscriptionMap = mutable.Map.empty[StreamObserver, Map[TableRow, KeyStreamObserver]]
@@ -137,7 +138,9 @@ class RouteStreams(route: TypeValue, streamFactory: TableRow => KeyStream[RouteS
   }
 
   def targetUpdate(target: StreamObserver, subscription: Map[TableRow, KeyStreamObserver]): Unit = {
+    logger.debug(s"targetUpdate: $target, sub: $subscription")
     val previous = subscriptionMap.getOrElse(target, Map())
+    subscriptionMap.update(target, subscription)
     val removes = previous.keySet -- subscription.keySet
 
     removes.flatMap(row => previous.get(row).map(obs => (row, obs))).foreach {
@@ -162,11 +165,11 @@ class RouteStreams(route: TypeValue, streamFactory: TableRow => KeyStream[RouteS
     val activeKeys = streamMap.keySet.toSet
 
     sourcingOpt.foreach(_.subscriptionUpdate(activeKeys))
+    logger.debug(s"sourcing: $sourcingOpt")
     if (sourcingOpt.isEmpty) {
       target.handle(RouteUnresolved(route))
     }
 
-    subscriptionMap.update(target, subscription)
   }
 
   def targetRemoved(target: StreamObserver): Unit = {

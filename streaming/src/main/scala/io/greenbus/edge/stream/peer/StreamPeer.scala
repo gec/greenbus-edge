@@ -91,6 +91,7 @@ class StreamPeer(id: String, sessionId: PeerSessionId, engineThread: CallMarshal
       val observers = target.subscriptionUpdate(rows)
 
       streamEngine.targetSubscriptionUpdate(target, observers)
+      logger.debug(s"Sub.flush()")
       sub.flush()
 
       userHandles += sub
