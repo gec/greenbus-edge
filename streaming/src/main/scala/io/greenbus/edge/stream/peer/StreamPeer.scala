@@ -60,12 +60,12 @@ class StreamSub(queue: TargetQueueMgr, dist: Sink[Seq[StreamEvent]]) {
   }
 }
 
-class StreamPeer(id: String, sessionId: PeerSessionId, engineThread: CallMarshaller) extends LazyLogging {
+class StreamPeer(id: String, sessionId: PeerSessionId, engineThread: CallMarshaller, remoteIo: Boolean = true) extends LazyLogging {
   private val streamEngine = new StreamEngine(id, sessionId)
   private val serviceEngine = new ServiceEngine(id, streamEngine.getSourcing)
 
   private val channelManager = new GenericChannelEngine(streamEngine, serviceEngine, eventNotify)
-  private val handler = new PeerChannelManager(channelManager)
+  private val handler = new PeerChannelManager(channelManager, if (remoteIo) Some(engineThread) else None)
   private val userHandles = mutable.Set.empty[StreamSub]
 
   private def eventNotify(): Unit = {

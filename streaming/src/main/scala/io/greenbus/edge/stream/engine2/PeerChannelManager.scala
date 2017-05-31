@@ -18,14 +18,27 @@
  */
 package io.greenbus.edge.stream.engine2
 
-import io.greenbus.edge.flow.{ LatchSubscribable, Sink, Source }
+import io.greenbus.edge.flow._
 import io.greenbus.edge.stream._
+import io.greenbus.edge.thread.CallMarshaller
 
-class PeerChannelManager(generic: GenericChannelEngine) extends PeerChannelHandler {
+class PeerChannelManager(generic: GenericChannelEngine, marshalOpt: Option[CallMarshaller]) extends PeerChannelHandler {
   def peerOpened(peerSessionId: PeerSessionId, proxy: PeerLinkProxyChannel): Unit = {
     val channel = new PeerLinkSourceChannel(peerSessionId, proxy)
-    channel.init()
-    generic.sourceChannel(channel)
+
+    val wrapped = marshalOpt match {
+      case None =>
+        channel.init()
+        channel
+      case Some(eventThread) => {
+        eventThread.marshal {
+          channel.init()
+        }
+        new MarshaledGenericSource(channel, eventThread)
+      }
+    }
+
+    generic.sourceChannel(wrapped)
   }
 
   def subscriberOpened(proxy: SubscriberProxyChannel): Unit = {
@@ -49,4 +62,36 @@ class SubscriberProxyTarget(proxy: SubscriberProxyChannel) extends GenericTarget
   def requests: Source[Seq[ServiceRequest]] = proxy.requests
 
   def responses: Sink[Seq[ServiceResponse]] = proxy.responses
+}
+
+class MarshaledSource[A](eventThread: CallMarshaller, source: Source[A]) extends Source[A] {
+  def bind(handler: Handler[A]): Unit = {
+    source.bind(obj => eventThread.marshal {
+      handler.handle(obj)
+    })
+  }
+}
+
+class MarshaledGenericSource(source: GenericSourceChannel, eventThread: CallMarshaller) extends GenericSourceChannel {
+
+  def onClose: LatchSubscribable = {
+    new LatchSubscribable {
+      def subscribe(handler: LatchHandler): Closeable = {
+        val sub = source.onClose.subscribe { () =>
+          eventThread.marshal { handler.handle() }
+        }
+        new Closeable {
+          def close(): Unit = sub.close()
+        }
+      }
+    }
+  }
+
+  def subscriptions: Sink[Set[RowId]] = source.subscriptions
+
+  def events: Source[SourceEvents] = new MarshaledSource[SourceEvents](eventThread, source.events)
+
+  def requests: Sink[Seq[ServiceRequest]] = source.requests
+
+  def responses: Source[Seq[ServiceResponse]] = new MarshaledSource[Seq[ServiceResponse]](eventThread, source.responses)
 }
