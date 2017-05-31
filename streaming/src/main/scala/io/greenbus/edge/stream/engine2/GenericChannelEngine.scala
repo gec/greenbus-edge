@@ -46,18 +46,6 @@ trait GenericTarget {
 
 trait GenericTargetChannel extends GenericTarget with CloseObservable
 
-class MarshaledSource
-
-class MarshaledGenericSource(source: GenericSource, eventThread: CallMarshaller) extends GenericSource {
-  def subscriptions: Sink[Set[RowId]] = ???
-
-  def events: Source[SourceEvents] = ???
-
-  def requests: Sink[Seq[ServiceRequest]] = ???
-
-  def responses: Source[Seq[ServiceResponse]] = ???
-}
-
 class GenericChannelEngine(streamEngine: StreamEngine, serviceEngine: ServiceEngine, eventNotify: () => Unit) extends LazyLogging {
 
   private val queueSet = mutable.Map.empty[TargetQueueMgr, GenericTargetChannel]

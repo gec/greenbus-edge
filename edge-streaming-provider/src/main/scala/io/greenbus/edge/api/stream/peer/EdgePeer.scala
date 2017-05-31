@@ -23,9 +23,9 @@ import io.greenbus.edge.stream.{ PeerChannelHandler, PeerLinkProxyChannel, PeerS
 import io.greenbus.edge.stream.peer.StreamPeer
 import io.greenbus.edge.thread.CallMarshaller
 
-class EdgePeer(logId: String, sessionId: PeerSessionId, engineThread: CallMarshaller) {
+class EdgePeer(logId: String, sessionId: PeerSessionId, engineThread: CallMarshaller, remoteIo: Boolean = true) {
 
-  private val peer = new StreamPeer(logId, sessionId, engineThread)
+  private val peer = new StreamPeer(logId, sessionId, engineThread, remoteIo)
   private val subProvider = new EdgeSubscriptionProvider(peer)
 
   def connectRemotePeer(peerSessionId: PeerSessionId, channel: PeerLinkProxyChannel): Unit = {
