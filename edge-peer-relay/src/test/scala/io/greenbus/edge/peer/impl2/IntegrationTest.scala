@@ -64,7 +64,7 @@ object EdgeMatchers {
   }
 }
 
-//@RunWith(classOf[JUnitRunner])
+@RunWith(classOf[JUnitRunner])
 class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach with BaseEdgeIntegration with LazyLogging {
   import EdgeMatchers._
 
@@ -89,25 +89,27 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
           case up: IdDataKeyUpdate => up.data == Pending
         },
         fixed {
-          case up: IdDataKeyUpdate => up.data == Disconnected
+          case up: IdDataKeyUpdate => up.data == DataUnresolved
         }), 5000)
 
     startRelay()
 
     connectConsumer(consumer)
 
-    flatQueue.awaitListen(
+    /*flatQueue.awaitListen(
       prefixMatcher(
         fixed {
           case up: IdDataKeyUpdate => up.data == DataUnresolved
-        }), 5000)
+        }), 5000)*/
 
     val producerMgr = buildProducer()
     val producer = new Producer1(producerMgr)
     connectProducer(producerMgr)
 
+    logger.info("UPDATE:")
     producer.updateAndFlush(2.33, 5)
 
+    logger.info("WAITING:")
     flatQueue.awaitListen(
       prefixMatcher(
         fixed {
@@ -137,11 +139,11 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     logger.info("stopping relay")
     stopRelay()
 
-    flatQueue.awaitListen(
+    /*flatQueue.awaitListen(
       prefixMatcher(
         fixed {
           case up: IdDataKeyUpdate => up.data == Disconnected
-        }), 5000)
+        }), 5000)*/
   }
 }
 

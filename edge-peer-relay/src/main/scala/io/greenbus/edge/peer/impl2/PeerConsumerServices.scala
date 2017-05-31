@@ -18,6 +18,8 @@
  */
 package io.greenbus.edge.peer.impl2
 
+import java.util.UUID
+
 import io.greenbus.edge.api.stream.peer.EdgePeer
 import io.greenbus.edge.api.stream.subscribe2.SubShim
 import io.greenbus.edge.api.{ EdgeSubscriptionClient, ServiceClient, ServiceClientChannel }
@@ -27,7 +29,8 @@ import io.greenbus.edge.stream.{ PeerLinkProxyChannel, PeerSessionId }
 import io.greenbus.edge.thread.CallMarshaller
 
 class PeerConsumerServices(logId: String, eventThread: CallMarshaller) extends ConsumerServices {
-  private val peer = new EdgePeer(logId, eventThread)
+  private val session = new PeerSessionId(UUID.randomUUID(), 0)
+  private val peer = new EdgePeer(logId, session, eventThread)
 
   def connected(session: PeerSessionId, channel: PeerLinkProxyChannel): Unit = {
     peer.connectRemotePeer(session, channel)
@@ -41,32 +44,3 @@ class PeerConsumerServices(logId: String, eventThread: CallMarshaller) extends C
 
   def queuingServiceClient: ServiceClient = ???
 }
-
-/*
-
-class StreamConsumerManagerImpl(eventThread: SchedulableCallMarshaller) extends StreamConsumerManager {
-
-  private val streamSubMgr = new DynamicSubscriptionManager(eventThread)
-  private val edgeSubMgr = new EdgeSubscriptionManager(eventThread, streamSubMgr)
-
-  private val serviceDist = new RemoteBoundLatestSource[ServiceClientChannel](eventThread)
-  private val requestQueuer = new QueuingServiceChannel(eventThread)
-
-  def connected(session: PeerSessionId, channel: PeerLinkProxyChannel): Unit = {
-    streamSubMgr.connected(session, channel)
-
-    val streamServices = new StreamServiceClientImpl(channel, eventThread)
-    val edgeServices = new ServiceClientImpl(streamServices)
-    serviceDist.push(edgeServices)
-    requestQueuer.connected(edgeServices)
-  }
-
-  def subscriptionClient: EdgeSubscriptionClient = edgeSubMgr
-
-  def serviceChannelSource: Source[ServiceClientChannel] = serviceDist
-
-  def queuingServiceClient: ServiceClient = requestQueuer
-
-}
-
- */ 

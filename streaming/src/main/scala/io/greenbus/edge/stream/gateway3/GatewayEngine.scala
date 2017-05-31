@@ -20,7 +20,7 @@ package io.greenbus.edge.stream.gateway3
 
 import io.greenbus.edge.stream.engine2.TargetQueueMgr
 import io.greenbus.edge.stream.gateway.RouteServiceRequest
-import io.greenbus.edge.stream.{ GatewayProxyChannel, ServiceResponse, TypeValue }
+import io.greenbus.edge.stream.{ GatewayEvents, GatewayProxyChannel, ServiceResponse, TypeValue }
 import io.greenbus.edge.thread.CallMarshaller
 
 import scala.collection.mutable
@@ -33,10 +33,32 @@ class GatewayEngine(engineThread: CallMarshaller) extends GatewayEventHandler {
 
   private val mgr = new ProducerMgr
   private val queueSet = mutable.Map.empty[TargetQueueMgr, GatewayProxyChannel]
+  private var routeSet = Set.empty[TypeValue]
 
   def handleEvent(event: ProducerEvent): Unit = {
-    engineThread.marshal(
-      mgr.handleEvent(event))
+    engineThread.marshal {
+      mgr.handleEvent(event)
+
+      val set = mgr.routeSet
+      val setUpOpt = if (set != routeSet) {
+        routeSet = set
+        Some(set)
+      } else {
+        None
+      }
+
+      onEvents(setUpOpt)
+    }
+  }
+
+  private def onEvents(setUpdate: Option[Set[TypeValue]]): Unit = {
+    queueSet.foreach {
+      case (queue, proxy) =>
+        val events = queue.dequeue()
+        if (events.nonEmpty || setUpdate.nonEmpty) {
+          proxy.events.send(GatewayEvents(setUpdate, events), _ => {})
+        }
+    }
   }
 
   def connected(channel: GatewayProxyChannel): Unit = {
@@ -44,26 +66,35 @@ class GatewayEngine(engineThread: CallMarshaller) extends GatewayEventHandler {
     val queueMgr = new TargetQueueMgr
     queueSet += (queueMgr -> channel)
 
+    engineThread.marshal {
+      channel.events.send(GatewayEvents(Some(routeSet), Seq()), _ => {})
+    }
+
     channel.subscriptions.bind { rows =>
-      val observers = queueMgr.subscriptionUpdate(rows)
-      mgr.targetSubscriptionUpdate(queueMgr, observers)
+      engineThread.marshal {
+        val observers = queueMgr.subscriptionUpdate(rows)
+        mgr.targetSubscriptionUpdate(queueMgr, observers)
+        onEvents(None)
+      }
     }
 
     channel.requests.bind(requests => {
-      val wrapped = requests.map { req =>
-        def respond(tv: TypeValue): Unit = {
-          val resp = ServiceResponse(req.row, tv, req.correlation)
-          channel.responses.push(Seq(resp))
+      engineThread.marshal {
+        val wrapped = requests.map { req =>
+          def respond(tv: TypeValue): Unit = {
+            val resp = ServiceResponse(req.row, tv, req.correlation)
+            channel.responses.push(Seq(resp))
+          }
+
+          (req.row.routingKey, RouteServiceRequest(req.row.tableRow, req.value, respond))
         }
 
-        (req.row.routingKey, RouteServiceRequest(req.row.tableRow, req.value, respond))
+        mgr.handleRequests(wrapped)
       }
-
-      mgr.handleRequests(wrapped)
     })
 
     channel.onClose.subscribe(() => {
-      targetRemoved(queueMgr)
+      engineThread.marshal { targetRemoved(queueMgr) }
     })
   }
 
