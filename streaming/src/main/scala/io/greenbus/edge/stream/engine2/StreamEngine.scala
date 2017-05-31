@@ -187,6 +187,7 @@ class StreamEngine(
   def targetSubscriptionUpdate(target: StreamTarget, subscription: Map[TypeValue, RouteObservers]): Unit = {
     logger.debug(s"$logId target added $subscription")
     val prev = targetToRouteMap.getOrElse(target, Map())
+    targetToRouteMap.update(target, subscription)
 
     val removed = prev.keySet -- subscription.keySet
     removed.foreach { route =>
@@ -205,7 +206,6 @@ class StreamEngine(
         // TODO: add all current sources
         routeStreams.targetUpdate(observers.streamObserver, observers.rowObserverMap)
     }
-    targetToRouteMap.update(target, subscription)
 
     // TODO: flush?
     //target.flush()

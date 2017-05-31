@@ -23,6 +23,7 @@ import io.greenbus.edge.flow._
 import io.greenbus.edge.stream._
 import io.greenbus.edge.stream.consume.ValueUpdateSynthesizerImpl
 import io.greenbus.edge.stream.subscribe._
+import io.greenbus.edge.thread.CallMarshaller
 import io.greenbus.edge.util.EitherUtil
 
 import scala.collection.mutable
@@ -44,6 +45,18 @@ trait GenericTarget {
 }
 
 trait GenericTargetChannel extends GenericTarget with CloseObservable
+
+class MarshaledSource
+
+class MarshaledGenericSource(source: GenericSource, eventThread: CallMarshaller) extends GenericSource {
+  def subscriptions: Sink[Set[RowId]] = ???
+
+  def events: Source[SourceEvents] = ???
+
+  def requests: Sink[Seq[ServiceRequest]] = ???
+
+  def responses: Source[Seq[ServiceResponse]] = ???
+}
 
 class GenericChannelEngine(streamEngine: StreamEngine, serviceEngine: ServiceEngine, eventNotify: () => Unit) extends LazyLogging {
 
