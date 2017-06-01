@@ -32,7 +32,7 @@ object StreamFilterImpl {
   case object Uninit extends State
   case class Init(session: PeerSessionId, seqFilter: GenSequenceFilter) extends State
 }
-class StreamFilterImpl extends StreamFilter {
+class StreamFilterImpl extends StreamFilter with LazyLogging {
   import StreamFilterImpl._
   private var state: State = Uninit
 
@@ -41,7 +41,9 @@ class StreamFilterImpl extends StreamFilter {
       case Uninit => {
         event match {
           case rs: ResyncSession =>
-            val filter = new GenSequenceFilter("filter", rs.resync.sequence)
+            logger.debug(s"StreamFilter resync init: $rs")
+            val filter = new GenSequenceFilter("filter")
+            filter.resync(rs.resync)
             state = Init(rs.sessionId, filter)
             Some(rs)
           case snap: ResyncSnapshot => None
@@ -52,14 +54,23 @@ class StreamFilterImpl extends StreamFilter {
         event match {
           case rs: ResyncSession =>
             if (rs.sessionId == session) {
-              filter.resync(rs.resync).map(r => rs.copy(resync = r))
+              logger.debug(s"StreamFilter resync same session: $rs")
+              filter.resync(rs.resync).map {
+                case r: Resync => rs.copy(resync = r)
+                case d: Delta => StreamDelta(d)
+              }
             } else {
-              val filter = new GenSequenceFilter("filter", rs.resync.sequence)
+              logger.debug(s"StreamFilter resync new session: $rs")
+              val filter = new GenSequenceFilter("filter")
+              filter.resync(rs.resync)
               state = Init(rs.sessionId, filter)
               Some(rs)
             }
           case snap: ResyncSnapshot =>
-            filter.resync(snap.resync).map(r => snap.copy(resync = r))
+            filter.resync(snap.resync).map {
+              case r: Resync => snap.copy(resync = r)
+              case d: Delta => StreamDelta(d)
+            }
           case sd: StreamDelta =>
             filter.delta(sd.update).map(StreamDelta)
         }
@@ -70,52 +81,39 @@ class StreamFilterImpl extends StreamFilter {
 
 trait SequenceFilter {
   def delta(delta: Delta): Option[Delta]
-  def resync(resync: Resync): Option[Resync]
+  def resync(resync: Resync): Option[SequenceEvent]
 }
 
-class GenSequenceFilter(cid: String, startSequence: SequencedTypeValue) extends SequenceFilter with LazyLogging {
-
-  private var sequence: SequencedTypeValue = startSequence
+object GenSequenceFilter {
+  sealed trait State
+  case object Uninit extends State
+  case class Init(var sequence: SequencedTypeValue, var snap: SequenceSnapshot) extends State
+}
+class GenSequenceFilter(cid: String) extends SequenceFilter {
+  import GenSequenceFilter._
+  private var state: State = Uninit
 
   def delta(delta: Delta): Option[Delta] = {
-
-    logger.trace(s"$cid got $delta at $sequence")
-
-    var seqVar = sequence
-
-    val passed = delta.diffs.filter { diff =>
-      if (seqVar.precedes(diff.sequence)) {
-        seqVar = seqVar.next
-        true
-      } else {
-        false
-      }
-    }
-
-    sequence = seqVar
-
-    if (passed.nonEmpty) {
-      Some(Delta(passed))
-    } else {
-      None
+    state match {
+      case Uninit => None
+      case st: Init =>
+        val (endSeq, endSnap, eventOpt) = FilteringStreamOps.filteredDeltaFold(st.sequence, st.snap, delta)
+        st.sequence = endSeq
+        st.snap = endSnap
+        eventOpt
     }
   }
 
-  def resync(resync: Resync): Option[Resync] = {
-
-    logger.debug(s"$cid got $resync at $sequence")
-
-    if (resync.sequence == sequence) {
-      None
-    } else if (sequence.precedes(resync.sequence)) {
-      // Translating sequential resyncs into a delta would go here
-      sequence = resync.sequence
-      Some(resync)
-    } else if (sequence.isLessThan(resync.sequence).contains(true)) {
-      sequence = resync.sequence
-      Some(resync)
-    } else {
-      None
+  def resync(resync: Resync): Option[SequenceEvent] = {
+    state match {
+      case Uninit =>
+        state = Init(resync.sequence, resync.snapshot)
+        Some(resync)
+      case st: Init =>
+        val (endSeq, endSnap, eventOpt) = FilteringStreamOps.filteredResyncFold(st.sequence, st.snap, resync)
+        st.sequence = endSeq
+        st.snap = endSnap
+        eventOpt
     }
   }
 }
