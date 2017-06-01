@@ -187,7 +187,6 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
         }), 5000)*/
   }
 
-  // ignored due to de-duplicate on reconnect not implemented
   test("Producer comes up after consumer, relay reboots, consumer connects before producer") {
     import EdgeSubHelpers._
 
@@ -292,16 +291,16 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
           case up: IdDataKeyUpdate => up.id == nonexistentEndPath && up.data == Pending
         },
         fixed {
-          case up: IdDataKeyUpdate => up.id == nonexistentEndPath && up.data == Disconnected
+          case up: IdDataKeyUpdate => up.id == nonexistentEndPath && up.data == DataUnresolved
         }), 5000)
 
     consA.connect()
 
-    consA.queue.awaitListen(
+    /*consA.queue.awaitListen(
       prefixMatcher(
         fixed {
           case up: IdDataKeyUpdate => up.id == nonexistentEndPath && up.data == DataUnresolved
-        }), 5000)
+        }), 5000)*/
 
     producerA.connect()
 
@@ -401,7 +400,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
         matchSeriesUpdates(updates4): _*), 5000)
   }
 
-  ignore("Subscription reconnect") {
+  test("Subscription reconnect") {
     import EdgeSubHelpers._
 
     startRelay()
@@ -424,7 +423,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
           case up: IdDataKeyUpdate => up.data == Pending
         },
         fixed {
-          case up: IdDataKeyUpdate => up.data == Disconnected
+          case up: IdDataKeyUpdate => up.data == DataUnresolved
         }), 5000)
 
     consA.connect()
@@ -449,7 +448,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     consA.queue.awaitListen(
       prefixMatcher(
         fixed {
-          case up: IdDataKeyUpdate => up.data == Disconnected
+          case up: IdDataKeyUpdate => up.data == DataUnresolved
         }), 5000)
 
     val updates3 = Seq[(Double, Long)]((10.33, 13), (12.33, 15))
@@ -459,7 +458,6 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     producer.updateAndFlush(updates4)
 
     Thread.sleep(500)
-    logger.debug(s"!!! RECONNECT")
     consA.connect()
 
     consA.queue.awaitListen(
@@ -713,7 +711,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
   }
 
   // need to fix added showing up on first resolve
-  ignore("active sets updates") {
+  test("active sets updates") {
     import EdgeSubHelpers._
 
     startRelay()

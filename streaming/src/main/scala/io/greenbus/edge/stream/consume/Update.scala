@@ -36,8 +36,8 @@ class ValueUpdateSynthesizerImpl extends ValueUpdateSynthesizer {
         activeSynthOpt match {
           case None => {
             val (update, updateFilter) = ev.resync.snapshot match {
-              case s: SetSnapshot => (SetUpdated(s.snapshot, Set(), Set()), new SetUpdateSynthesizer(s.snapshot))
-              case s: MapSnapshot => (MapUpdated(s.snapshot, Set(), Set(), Set()), new MapUpdateSynthesizer(s.snapshot))
+              case s: SetSnapshot => (SetUpdated(s.snapshot, Set(), s.snapshot), new SetUpdateSynthesizer(s.snapshot))
+              case s: MapSnapshot => (MapUpdated(s.snapshot, Set(), s.snapshot.toSet, Set()), new MapUpdateSynthesizer(s.snapshot))
               case s: AppendSnapshot =>
                 val all = AppendUpdateSynthesizer.snapToAppends(s)
                 val synth = new AppendUpdateSynthesizer
