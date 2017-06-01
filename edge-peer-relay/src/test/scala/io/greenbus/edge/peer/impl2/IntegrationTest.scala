@@ -188,7 +188,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
   }
 
   // ignored due to de-duplicate on reconnect not implemented
-  ignore("Producer comes up after consumer, relay reboots, consumer connects before producer") {
+  test("Producer comes up after consumer, relay reboots, consumer connects before producer") {
     import EdgeSubHelpers._
 
     val consumer = buildConsumer()
@@ -210,18 +210,18 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
           case up: IdDataKeyUpdate => up.data == Pending
         },
         fixed {
-          case up: IdDataKeyUpdate => up.data == Disconnected
+          case up: IdDataKeyUpdate => up.data == DataUnresolved
         }), 5000)
 
     startRelay()
 
     connectConsumer(consumer)
 
-    flatQueue.awaitListen(
+    /*flatQueue.awaitListen(
       prefixMatcher(
         fixed {
           case up: IdDataKeyUpdate => up.data == DataUnresolved
-        }), 5000)
+        }), 5000)*/
 
     val producerMgr = buildProducer()
     val producer = new Producer1(producerMgr)
@@ -242,7 +242,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     flatQueue.awaitListen(
       prefixMatcher(
         fixed {
-          case up: IdDataKeyUpdate => up.data == Disconnected
+          case up: IdDataKeyUpdate => up.data == DataUnresolved
         }), 5000)
 
     producer.updateAndFlush(4.11, 7)
@@ -252,11 +252,11 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     logger.info("connecting consumer")
     connectConsumer(consumer)
 
-    flatQueue.awaitListen(
+    /*flatQueue.awaitListen(
       prefixMatcher(
         fixed {
           case up: IdDataKeyUpdate => up.data == DataUnresolved
-        }), 5000)
+        }), 5000)*/
 
     logger.info("connecting producer")
     connectProducer(producerMgr)
