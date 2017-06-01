@@ -18,50 +18,10 @@
  */
 package io.greenbus.edge.stream.filter
 
+import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.stream._
-import io.greenbus.edge.stream.gateway.MapDiffCalc
 
 import scala.collection.mutable.ArrayBuffer
-
-/*
-
-(abstract)
-sequencer -> cache -> channel queue
-
-sequencer -> mgr [cache, observable] -> channel queue
-
-(really abstract)
-source (synth | sequencer) -> mgr [cache, observable?] -> channel queue (<- pop)
-
-THREE 1/2 PLACES:
-- producer (gateway client)
-- peer synthesis
-  - synth keeps logs around until they become active, then is a filter
-  - "retail cache"
-- subscriber (volatile link to peer)
-  - needs to do deep equality on session change
-
-
-cache:
-producer cache is always the same session/ctx
-peer cache changes ctx; could keep multiple contexts around for history resync
-
-
-
- */
-
-/*class AppendSequencerIsh[A] {
-  private var sequence: Long = 0
-
-  def append(values: A*): Iterable[(Long, A)] = {
-    val start = sequence
-    val results = values.toIterable.zipWithIndex.map {
-      case (v, i) => (start + i, v)
-    }
-    sequence += values.size
-    results
-  }
-}*/
 
 trait SequenceCache {
   def append(event: SequenceEvent): Unit
@@ -77,7 +37,8 @@ object StreamCacheImpl {
 
   sealed trait State
   case object Uninit extends State
-  case class Init(ctx: SessionContext, current: Resync) extends State
+  case class InitSessioned(ctx: SessionContext, current: Resync) extends State
+  case object InitAbsent extends State
 }
 class StreamCacheImpl extends StreamCache {
   import StreamCacheImpl._
@@ -88,19 +49,32 @@ class StreamCacheImpl extends StreamCache {
       case Uninit => {
         event match {
           case rs: ResyncSession =>
-            state = Init(SessionContext(rs.sessionId, rs.context), rs.resync)
-          case snap: ResyncSnapshot => throw new IllegalStateException(s"No resync session for unitialized queue")
-          case sd: StreamDelta => throw new IllegalStateException(s"No resync session for unitialized queue")
+            state = InitSessioned(SessionContext(rs.sessionId, rs.context), rs.resync)
+          case snap: ResyncSnapshot => throw new IllegalStateException(s"No resync session for unitialized cache")
+          case sd: StreamDelta => throw new IllegalStateException(s"No resync session for unitialized cache")
+          case StreamAbsent =>
+            state = InitAbsent
         }
       }
-      case st: Init => {
+      case st: InitSessioned => {
         event match {
           case rs: ResyncSession =>
-            state = Init(SessionContext(rs.sessionId, rs.context), rs.resync)
+            state = InitSessioned(SessionContext(rs.sessionId, rs.context), rs.resync)
           case snap: ResyncSnapshot =>
-            state = Init(st.ctx, snap.resync)
+            state = InitSessioned(st.ctx, snap.resync)
           case sd: StreamDelta =>
-            state = Init(st.ctx, StreamTypes.foldResync(st.current, sd.update)) // TODO: infinite append!
+            state = InitSessioned(st.ctx, StreamTypes.foldResync(st.current, sd.update)) // TODO: infinite append!
+          case StreamAbsent =>
+            state = InitAbsent
+        }
+      }
+      case InitAbsent => {
+        event match {
+          case rs: ResyncSession =>
+            state = InitSessioned(SessionContext(rs.sessionId, rs.context), rs.resync)
+          case snap: ResyncSnapshot => throw new IllegalStateException(s"No resync session for absent cache")
+          case sd: StreamDelta => throw new IllegalStateException(s"No resync session for absent cache")
+          case StreamAbsent =>
         }
       }
     }
@@ -109,7 +83,8 @@ class StreamCacheImpl extends StreamCache {
   def resync(): Seq[AppendEvent] = {
     state match {
       case Uninit => Seq()
-      case Init(ctx, resync) => Seq(ResyncSession(ctx.sessionId, ctx.context, resync))
+      case InitSessioned(ctx, resync) => Seq(ResyncSession(ctx.sessionId, ctx.context, resync))
+      case InitAbsent => Seq(StreamAbsent)
     }
   }
 }
@@ -127,8 +102,11 @@ object StreamQueueImpl {
   case class Idle(ctx: SessionContext) extends State
   case class AccumulatingDeltas(ctx: SessionContext, current: Delta) extends State
   case class Resynced(ctx: SessionContext, current: Resync, prev: ArrayBuffer[AppendEvent]) extends State
+
+  case object AbsentIdle extends State
+  case class Absented(prev: Seq[AppendEvent]) extends State
 }
-class StreamQueueImpl extends StreamQueue {
+class StreamQueueImpl extends StreamQueue with LazyLogging {
 
   import StreamQueueImpl._
 
@@ -142,6 +120,8 @@ class StreamQueueImpl extends StreamQueue {
             state = Resynced(SessionContext(rs.sessionId, rs.context), rs.resync, ArrayBuffer())
           case snap: ResyncSnapshot => throw new IllegalStateException(s"No resync session for unitialized queue")
           case sd: StreamDelta => throw new IllegalStateException(s"No resync session for unitialized queue")
+          case StreamAbsent =>
+            state = Absented(Seq())
         }
       }
       case st: Idle => {
@@ -152,6 +132,8 @@ class StreamQueueImpl extends StreamQueue {
             state = Resynced(st.ctx, snap.resync, ArrayBuffer())
           case sd: StreamDelta =>
             state = AccumulatingDeltas(st.ctx, sd.update)
+          case StreamAbsent =>
+            state = Absented(Seq())
         }
       }
       case st: AccumulatingDeltas => {
@@ -162,6 +144,8 @@ class StreamQueueImpl extends StreamQueue {
             state = Resynced(st.ctx, snap.resync, ArrayBuffer(StreamDelta(st.current)))
           case sd: StreamDelta =>
             state = AccumulatingDeltas(st.ctx, StreamTypes.foldDelta(st.current, sd.update)) // TODO: infinite append!
+          case StreamAbsent =>
+            state = Absented(Seq(StreamDelta(st.current)))
         }
       }
       case st: Resynced => {
@@ -174,8 +158,27 @@ class StreamQueueImpl extends StreamQueue {
             state = Resynced(st.ctx, snap.resync, st.prev)
           case sd: StreamDelta =>
             state = Resynced(st.ctx, StreamTypes.foldResync(st.current, sd.update), st.prev) // TODO: infinite append!
+          case StreamAbsent =>
+            state = Absented(st.prev :+ ResyncSession(st.ctx.sessionId, st.ctx.context, st.current))
         }
       }
+      case AbsentIdle =>
+        event match {
+          case rs: ResyncSession =>
+            state = Resynced(SessionContext(rs.sessionId, rs.context), rs.resync, ArrayBuffer())
+          case snap: ResyncSnapshot => logger.warn(s"No resync session for absent queue")
+          case sd: StreamDelta => logger.warn(s"No resync session for absent queue")
+          case StreamAbsent =>
+            state = Absented(Seq())
+        }
+      case st: Absented =>
+        event match {
+          case rs: ResyncSession =>
+            state = Resynced(SessionContext(rs.sessionId, rs.context), rs.resync, ArrayBuffer(st.prev :+ StreamAbsent: _*))
+          case snap: ResyncSnapshot => logger.warn(s"No resync session for absent queue")
+          case sd: StreamDelta => logger.warn(s"No resync session for absent queue")
+          case StreamAbsent =>
+        }
     }
   }
 
@@ -189,6 +192,10 @@ class StreamQueueImpl extends StreamQueue {
       case st: Resynced =>
         state = Idle(st.ctx)
         st.prev.toVector ++ Seq(ResyncSession(st.ctx.sessionId, st.ctx.context, st.current))
+      case AbsentIdle => Seq()
+      case st: Absented =>
+        state = AbsentIdle
+        st.prev :+ StreamAbsent
     }
   }
 }

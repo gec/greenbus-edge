@@ -290,6 +290,7 @@ object StreamConversions {
       case AppendTypesCase.STREAM_DELTA => streamDeltaFromProto(msg.getStreamDelta)
       case AppendTypesCase.RESYNC_SNAPSHOT => resyncSnapshotFromProto(msg.getResyncSnapshot)
       case AppendTypesCase.RESYNC_SESSION => resyncSessionFromProto(msg.getResyncSession)
+      case AppendTypesCase.STREAM_ABSENT => Right(StreamAbsent)
       case _ => Left("Unrecognizable AppendEvent type")
     }
   }
@@ -299,6 +300,7 @@ object StreamConversions {
       case v: stream.StreamDelta => b.setStreamDelta(streamDeltaToProto(v))
       case v: stream.ResyncSnapshot => b.setResyncSnapshot(resyncSnapshotToProto(v))
       case v: stream.ResyncSession => b.setResyncSession(resyncSessionToProto(v))
+      case stream.StreamAbsent => b.setStreamAbsent(true)
       case _ => throw new IllegalArgumentException("Unrecognized AppendEvent type")
     }
     b.build()

@@ -57,6 +57,9 @@ class ValueUpdateSynthesizerImpl extends ValueUpdateSynthesizer {
       case ev: StreamDelta => {
         activeSynthOpt.flatMap(_._2.delta(ev.update)).map(dv => ValueDelta(dv))
       }
+      case StreamAbsent => {
+        Some(ValueAbsent)
+      }
     }
   }
 

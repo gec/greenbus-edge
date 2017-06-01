@@ -183,7 +183,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     /*flatQueue.awaitListen(
       prefixMatcher(
         fixed {
-          case up: IdDataKeyUpdate => up.data == Disconnected
+          case up: IdDataKeyUpdate => up.data == DataUnresolved
         }), 5000)*/
   }
 
@@ -269,7 +269,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
         }), 5000)
   }
 
-  ignore("Resolved absent lifecycle") {
+  test("Resolved absent lifecycle") {
     import EdgeSubHelpers._
 
     startRelay()

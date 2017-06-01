@@ -48,6 +48,8 @@ class StreamFilterImpl extends StreamFilter with LazyLogging {
             Some(rs)
           case snap: ResyncSnapshot => None
           case sd: StreamDelta => None
+          case StreamAbsent =>
+            Some(event)
         }
       }
       case Init(session, filter) => {
@@ -73,6 +75,8 @@ class StreamFilterImpl extends StreamFilter with LazyLogging {
             }
           case sd: StreamDelta =>
             filter.delta(sd.update).map(StreamDelta)
+          case StreamAbsent =>
+            Some(event)
         }
       }
     }

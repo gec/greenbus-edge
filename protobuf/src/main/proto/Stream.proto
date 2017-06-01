@@ -112,6 +112,7 @@ message AppendEvent {
         StreamDelta stream_delta = 1;
         ResyncSnapshot resync_snapshot = 2;
         ResyncSession resync_Session = 3;
+        bool stream_absent = 4;
     }
 }
 
