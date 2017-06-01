@@ -20,7 +20,7 @@ package io.greenbus.edge.stream.engine2
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.stream.filter.{ FilteredStreamQueue, StreamFilter, StreamFilterImpl, StreamQueue }
-import io.greenbus.edge.stream.{ AppendEvent, PeerSessionId, ResyncSession, StreamDelta }
+import io.greenbus.edge.stream._
 
 import scala.collection.mutable
 
@@ -29,6 +29,9 @@ trait RowSynthesizer[Source] {
   def sourceRemoved(source: Source): Seq[AppendEvent]
 }
 
+/*
+  A -> Set[B], where a B is only ever associated with one A, and rebindings "steal" it
+ */
 class UniqueValueMultiMap[A, B] {
   private val keyToValueMap = mutable.Map.empty[A, Set[B]]
   private val valueToKeyMap = mutable.Map.empty[B, A]
@@ -43,7 +46,7 @@ class UniqueValueMultiMap[A, B] {
     doValueRemove(v)
     keyToValueMap.get(key) match {
       case None => keyToValueMap.update(key, Set(v))
-      case Some(prev) => keyToValueMap.update(key, prev)
+      case Some(prev) => keyToValueMap.update(key, prev + v)
     }
     valueToKeyMap.update(v, key)
   }
@@ -65,32 +68,51 @@ class UniqueValueMultiMap[A, B] {
   }
 }
 
-class RowSynthImpl[Source] extends RowSynthesizer[Source] with LazyLogging {
+object RowSynthImpl {
+  sealed trait SynthState
+  case object Inactive extends SynthState
+  case object ActiveAbsent extends SynthState
+  case class ActiveSessioned(session: PeerSessionId, filter: StreamFilter) extends SynthState
 
-  private var activeSessionOpt = Option.empty[(PeerSessionId, StreamFilter)]
+  sealed trait SourceState
+  case class SourceSessioned(session: PeerSessionId) extends SourceState
+  case object SourceStreamAbsent extends SourceState
+}
+class RowSynthImpl[Source] extends RowSynthesizer[Source] with LazyLogging {
+  import RowSynthImpl._
+
+  //private var activeSessionOpt = Option.empty[(PeerSessionId, StreamFilter)]
+  private var synthState: SynthState = Inactive
   private val standbySessions = mutable.Map.empty[PeerSessionId, StreamQueue]
   private val sessionToSources = new UniqueValueMultiMap[PeerSessionId, Source]
+  private val sourceStates = mutable.Map.empty[Source, SourceState]
+
+  private def activeSessionOpt: Option[(PeerSessionId, StreamFilter)] = {
+    synthState match {
+      case ActiveSessioned(sess, filter) => Some(sess, filter)
+      case _ => None
+    }
+  }
 
   def append(source: Source, event: AppendEvent): Seq[AppendEvent] = {
     event match {
       case resync: ResyncSession => {
-        val prevSessOpt = sessionToSources.valueGet(source)
-        if (!prevSessOpt.contains(resync.sessionId)) {
+
+        if (!sourceStates.get(source).contains(SourceSessioned(resync.sessionId))) {
           sessionToSources.put(resync.sessionId, source)
+          sourceStates.put(source, SourceSessioned(resync.sessionId))
         }
 
-        activeSessionOpt match {
-          case None => {
+        synthState match {
+          case Inactive | ActiveAbsent =>
             val filter = new StreamFilterImpl
             filter.handle(resync)
-            activeSessionOpt = Some((resync.sessionId, filter))
+            synthState = ActiveSessioned(resync.sessionId, filter)
             Seq(resync)
-          }
-          case Some((activeSession, activeFilter)) => {
+          case ActiveSessioned(activeSession, activeFilter) =>
             if (resync.sessionId == activeSession) {
               activeFilter.handle(event).map(r => Seq(r)).getOrElse(Seq())
             } else {
-
               standbySessions.get(resync.sessionId) match {
                 case None => {
                   val queue = new FilteredStreamQueue
@@ -102,35 +124,88 @@ class RowSynthImpl[Source] extends RowSynthesizer[Source] with LazyLogging {
 
               activeChangeCheck()
             }
-          }
         }
       }
       case delta: StreamDelta => {
-        sessionToSources.valueGet(source) match {
+        sourceStates.get(source) match {
           case None =>
             logger.warn(s"got delta for inactive source link")
             Seq()
-          case Some(sourceSess) => {
-            activeSessionOpt match {
-              case None => {
-                standbySessions.get(sourceSess) match {
-                  case None => logger.error(s"got delta for source with an inactive session link")
-                  case Some(queue) => queue.handle(event)
-                }
-                Seq()
-              }
-              case Some((activeSess, activeFilter)) =>
-                if (sourceSess == activeSess) {
-                  activeFilter.handle(event).map(v => Seq(v)).getOrElse(Seq())
-                } else {
-                  standbySessions.get(sourceSess) match {
-                    case None => logger.error(s"got delta for source with an inactive session link")
-                    case Some(queue) => queue.handle(event)
+          case Some(ss) =>
+            ss match {
+              case SourceSessioned(sourceSess) =>
+                activeSessionOpt match {
+                  case None => {
+                    standbySessions.get(sourceSess) match {
+                      case None => logger.error(s"got delta for source with an inactive session link")
+                      case Some(queue) => queue.handle(event)
+                    }
+                    Seq()
                   }
+                  case Some((activeSess, activeFilter)) =>
+                    if (sourceSess == activeSess) {
+                      activeFilter.handle(event).map(v => Seq(v)).getOrElse(Seq())
+                    } else {
+                      standbySessions.get(sourceSess) match {
+                        case None => logger.error(s"got delta for source with an inactive session link")
+                        case Some(queue) => queue.handle(event)
+                      }
+                      Seq()
+                    }
+                }
+
+              case SourceStreamAbsent =>
+                logger.warn(s"got delta for absent source stream")
+                Seq()
+            }
+        }
+      }
+      case StreamAbsent => {
+
+        sourceStates.get(source) match {
+          case None =>
+            sourceStates.put(source, SourceStreamAbsent)
+            synthState match {
+              case Inactive =>
+                synthState = ActiveAbsent
+                Seq(StreamAbsent)
+              case ActiveAbsent =>
+                Seq()
+              case _: ActiveSessioned =>
+                logger.debug(s"got initial absent in source for a currently active session")
+                Seq()
+            }
+
+          case Some(ss) =>
+            sourceStates.put(source, SourceStreamAbsent)
+            ss match {
+              case SourceSessioned(prevSourceSession) =>
+                sessionToSources.removeValue(source)
+
+                synthState match {
+                  case Inactive =>
+                    logger.warn(s"synth state was inactive on an event for an already registered source")
+                    synthState = ActiveAbsent
+                    Seq(StreamAbsent)
+                  case ActiveAbsent =>
+                    Seq()
+                  case ActiveSessioned(sess, _) => {
+                    if (sess == prevSourceSession) {
+                      activeChangeCheck()
+                    } else {
+                      Seq()
+                    }
+                  }
+                }
+
+                if (activeSessionOpt.exists(_._1 == prevSourceSession)) {
+                  activeChangeCheck()
+                } else {
                   Seq()
                 }
+              case SourceStreamAbsent =>
+                Seq()
             }
-          }
         }
       }
     }
@@ -148,10 +223,15 @@ class RowSynthImpl[Source] extends RowSynthesizer[Source] with LazyLogging {
         standbySessions -= nominatedSession
         val filter = new StreamFilterImpl
         queuedEvents.foreach(filter.handle)
-        activeSessionOpt = Some((nominatedSession, filter))
+        synthState = ActiveSessioned(nominatedSession, filter)
         queuedEvents
       } else {
-        Seq()
+        if (keys.isEmpty && sourceStates.nonEmpty && sourceStates.forall(_._2 == SourceStreamAbsent)) {
+          synthState = ActiveAbsent
+          Seq(StreamAbsent)
+        } else {
+          Seq()
+        }
       }
     } else {
       Seq()
@@ -161,6 +241,7 @@ class RowSynthImpl[Source] extends RowSynthesizer[Source] with LazyLogging {
   def sourceRemoved(source: Source): Seq[AppendEvent] = {
     val prevSessOpt = sessionToSources.valueGet(source)
     sessionToSources.removeValue(source)
+    sourceStates.remove(source)
 
     prevSessOpt match {
       case None => Seq()

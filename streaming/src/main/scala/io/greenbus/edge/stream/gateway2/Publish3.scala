@@ -54,7 +54,7 @@ class ProducerStreamSubject extends CachingKeyStreamSubject with LazyLogging {
     logger.debug(s"ProducerStreamSubject sync()")
     streamOpt.map(_.resync()).getOrElse {
       logger.debug(s"No sync event on subscribe")
-      Seq()
+      Seq(StreamAbsent)
     } // TODO: row absent?
   }
 
