@@ -83,8 +83,8 @@ class EndpointBuilderImpl(endpointId: EndpointId, gatewayThread: CallMarshaller,
   private var metadata = Map.empty[Path, Value]
   private val data = mutable.Map.empty[Path, DataKeyDescriptor]
   private val outputStatuses = mutable.Map.empty[Path, OutputKeyDescriptor]
-
   private val outputEntries = mutable.ArrayBuffer.empty[ProducerOutputEntry]
+  private val dynamicTables = mutable.Map.empty[String, DynamicTable]
 
   def setIndexes(paramIndexes: Map[Path, IndexableValue]): Unit = {
     indexes = paramIndexes
@@ -142,6 +142,32 @@ class EndpointBuilderImpl(endpointId: EndpointId, gatewayThread: CallMarshaller,
     val rcvImpl = new RemoteBoundQueueingReceiverImpl[OutputParams, OutputResult](gatewayThread)
     outputEntries += ProducerOutputEntry(key, rcvImpl)
     rcvImpl
+  }
+
+  def dynamic(set: String, callbacks: DynamicDataKey): Unit = {
+
+    val table = new DynamicTable {
+      def subscribed(key: TypeValue): Unit = {
+        EdgeCodecCommon.readPath(key) match {
+          case Left(err) => println(err)
+          case Right(path) =>
+            println(path)
+            callbacks.subscribed(path)
+        }
+      }
+
+      def unsubscribed(key: TypeValue): Unit = {
+        println(s"unsubscribed: $key")
+        EdgeCodecCommon.readPath(key) match {
+          case Left(err) => println(err)
+          case Right(path) =>
+            println(path)
+            callbacks.unsubscribed(path)
+        }
+      }
+    }
+
+    dynamicTables.put(set, table)
   }
 
   def build(seriesBuffersSize: Int, eventBuffersSize: Int): ProducerHandle = {
