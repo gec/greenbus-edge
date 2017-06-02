@@ -29,29 +29,6 @@ import io.greenbus.edge.thread.CallMarshaller
 
 import scala.collection.mutable
 
-/*
-
-sealed trait ProducerKeyEvent
-case class AddRow(key: TableRow, ctx: SequenceCtx) extends ProducerKeyEvent
-case class RowUpdate(key: TableRow, update: ProducerDataUpdate) extends ProducerKeyEvent
-case class DrowRow(key: TableRow) extends ProducerKeyEvent
-
-sealed trait ProducerEvent
-
-case class RouteBatchEvent(route: TypeValue, events: Seq[ProducerKeyEvent]) extends ProducerEvent
-
-case class RouteBindEvent(route: TypeValue,
-  initialEvents: Seq[ProducerKeyEvent],
-  dynamic: Map[String, DynamicTable],
-  handler: Sink[RouteServiceRequest]) extends ProducerEvent
-
-case class RouteUnbindEvent(route: TypeValue) extends ProducerEvent
- */
-
-class Producer {
-
-}
-
 class RowUpdateBuffer extends Sink[RowUpdate] {
   private var buffer = Vector.newBuilder[RowUpdate]
 
@@ -97,27 +74,6 @@ class OutputStatusPublisher(key: TableRow, updates: Sink[RowUpdate]) extends Out
     updates.push(RowUpdate(key, AppendProducerUpdate(Seq(v))))
   }
 }
-
-/*
-trait EndpointBuilder {
-
-  def setIndexes(paramIndexes: Map[Path, IndexableValue]): Unit
-  def setMetadata(paramMetadata: Map[Path, Value]): Unit
-
-  def seriesValue(key: Path, metadata: KeyMetadata = KeyMetadata()): SeriesValueHandle
-
-  def latestKeyValue(key: Path, metadata: KeyMetadata = KeyMetadata()): LatestKeyValueHandle
-
-  def topicEventValue(key: Path, metadata: KeyMetadata = KeyMetadata()): TopicEventHandle
-
-  def activeSet(key: Path, metadata: KeyMetadata = KeyMetadata()): ActiveSetHandle
-
-  def outputStatus(key: Path, metadata: KeyMetadata = KeyMetadata()): OutputStatusHandle
-
-  def registerOutput(key: Path): Receiver[OutputParams, OutputResult]
-
-  def build(seriesBuffersSize: Int, eventBuffersSize: Int): ProducerHandle
-}*/
 
 class EndpointBuilderImpl(endpointId: EndpointId, gatewayThread: CallMarshaller, gateway: GatewayEventHandler) extends EndpointBuilder {
   private val updateBuffer = new RowUpdateBuffer

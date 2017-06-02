@@ -20,7 +20,7 @@ package io.greenbus.edge.stream.engine2
 
 import io.greenbus.edge.stream._
 import io.greenbus.edge.stream.filter.StreamCacheImpl
-import io.greenbus.edge.stream.gateway2.MapSequencer
+import io.greenbus.edge.stream.gateway3.MapSequencer
 
 class StaticStream extends CachingKeyStreamSubject {
   private val cache = new StreamCacheImpl

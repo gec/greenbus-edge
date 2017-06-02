@@ -137,12 +137,6 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
 
     connectConsumer(consumer)
 
-    /*flatQueue.awaitListen(
-      prefixMatcher(
-        fixed {
-          case up: IdDataKeyUpdate => up.data == DataUnresolved
-        }), 5000)*/
-
     val producerMgr = buildProducer()
     val producer = new Producer1(producerMgr)
     connectProducer(producerMgr)
@@ -180,11 +174,6 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     logger.info("stopping relay")
     stopRelay()
 
-    /*flatQueue.awaitListen(
-      prefixMatcher(
-        fixed {
-          case up: IdDataKeyUpdate => up.data == DataUnresolved
-        }), 5000)*/
   }
 
   test("Producer comes up after consumer, relay reboots, consumer connects before producer") {
@@ -216,12 +205,6 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
 
     connectConsumer(consumer)
 
-    /*flatQueue.awaitListen(
-      prefixMatcher(
-        fixed {
-          case up: IdDataKeyUpdate => up.data == DataUnresolved
-        }), 5000)*/
-
     val producerMgr = buildProducer()
     val producer = new Producer1(producerMgr)
     connectProducer(producerMgr)
@@ -250,12 +233,6 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
 
     logger.info("connecting consumer")
     connectConsumer(consumer)
-
-    /*flatQueue.awaitListen(
-      prefixMatcher(
-        fixed {
-          case up: IdDataKeyUpdate => up.data == DataUnresolved
-        }), 5000)*/
 
     logger.info("connecting producer")
     connectProducer(producerMgr)
@@ -296,12 +273,6 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
 
     consA.connect()
 
-    /*consA.queue.awaitListen(
-      prefixMatcher(
-        fixed {
-          case up: IdDataKeyUpdate => up.id == nonexistentEndPath && up.data == DataUnresolved
-        }), 5000)*/
-
     producerA.connect()
 
     consA.queue.awaitListen(
@@ -332,12 +303,6 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     startRelay()
 
     consA.connect()
-
-    /*consA.queue.awaitListen(
-      prefixMatcher(
-        fixed {
-          case up: IdDataKeyUpdate => up.data == DataUnresolved
-        }), 5000)*/
 
     val producerA = new TestProducer
     val producer = new Producer1(producerA.producerMgr)
@@ -484,21 +449,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
         series = Seq(producer1.seriesEndPath, producer2.seriesEndPath)))
 
     val consA = new TestConsumer(params)
-    /*
-    consA.queue.awaitListen(
-      prefixMatcher(
-        fixed {
-          case up: IdDataKeyUpdate => up.id == producer1.seriesEndPath && up.data == Pending
-        },
-        fixed {
-          case up: IdDataKeyUpdate => up.id == producer1.seriesEndPath && up.data == DataUnresolved
-        },
-        fixed {
-          case up: IdDataKeyUpdate => up.id == producer2.seriesEndPath && up.data == Pending
-        },
-        fixed {
-          case up: IdDataKeyUpdate => up.id == producer2.seriesEndPath && up.data == DataUnresolved
-        }), 5000)*/
+
     consA.queue.awaitListen(
       prefixMatcher(
         fixed {
@@ -518,9 +469,6 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
 
     consA.queue.awaitListen(
       prefixMatcher(
-        /*fixed {
-          case up: IdDataKeyUpdate => up.id == producer2.seriesEndPath && up.data == DataUnresolved
-        },*/
         fixed {
           idDataKeyResolved(producer1.seriesEndPath) { v: DataKeyUpdate =>
             v.value == SeriesUpdate(ValueDouble(2.33), 5)
@@ -528,12 +476,6 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
         }), 5000)
 
     producerB.connect()
-
-    /*consA.queue.awaitListen(
-      prefixMatcher(
-        fixed {
-          case up: IdDataKeyUpdate => up.id == producer2.seriesEndPath && up.data == ResolvedAbsent
-        }), 5000)*/
 
     producer2.updateAndFlush(3.66, 6)
 

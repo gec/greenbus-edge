@@ -29,7 +29,7 @@ import io.greenbus.edge.stream.{ PeerLinkProxyChannel, PeerSessionId }
 import io.greenbus.edge.thread.CallMarshaller
 
 class PeerConsumerServices(logId: String, eventThread: CallMarshaller) extends ConsumerServices {
-  private val session = new PeerSessionId(UUID.randomUUID(), 0)
+  private val session = PeerSessionId(UUID.randomUUID(), 0)
   private val peer = new EdgePeer(logId, session, eventThread, remoteIo = true)
 
   def connected(session: PeerSessionId, channel: PeerLinkProxyChannel): Unit = {
