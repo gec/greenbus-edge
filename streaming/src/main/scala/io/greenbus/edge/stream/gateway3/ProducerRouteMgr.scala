@@ -25,7 +25,6 @@ import io.greenbus.edge.flow.Sink
 import io.greenbus.edge.stream.{ PeerSessionId, TableRow }
 import io.greenbus.edge.stream.engine2.{ KeyStreamObserver, RouteTargetSubject, StreamObserver }
 import io.greenbus.edge.stream.gateway.RouteServiceRequest
-import io.greenbus.edge.stream.gateway2.{ DynamicTable, ProducerStreamSubject }
 
 import scala.collection.mutable
 

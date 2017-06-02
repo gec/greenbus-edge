@@ -21,7 +21,7 @@ package io.greenbus.edge.stream.engine2
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.stream._
 import io.greenbus.edge.stream.filter.StreamCacheImpl
-import io.greenbus.edge.stream.gateway2.MapSequencer
+import io.greenbus.edge.stream.gateway3.MapSequencer
 
 import scala.collection.mutable
 

@@ -23,7 +23,6 @@ import io.greenbus.edge.flow.Sink
 import io.greenbus.edge.stream._
 import io.greenbus.edge.stream.engine2._
 import io.greenbus.edge.stream.gateway.RouteServiceRequest
-import io.greenbus.edge.stream.gateway2._
 
 import scala.collection.mutable
 

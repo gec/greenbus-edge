@@ -20,7 +20,6 @@ package io.greenbus.edge.stream.gateway3
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.stream.{ AppendEvent, PeerSessionId, SequenceCtx, TypeValue }
-import io.greenbus.edge.stream.gateway2.{ AppendSequencer, MapSequencer, SetSequencer }
 
 sealed trait ProducerDataUpdate
 case class AppendProducerUpdate(values: Seq[TypeValue]) extends ProducerDataUpdate
