@@ -30,6 +30,11 @@ import scala.collection.mutable
 
 case class KeyMetadata(indexes: Map[Path, IndexableValue] = Map(), metadata: Map[Path, Value] = Map())
 
+trait DynamicDataKey {
+  def subscribed(path: Path): Unit
+  def unsubscribed(path: Path): Unit
+}
+
 trait EndpointBuilder {
 
   def setIndexes(paramIndexes: Map[Path, IndexableValue]): Unit
@@ -48,6 +53,8 @@ trait EndpointBuilder {
   //def outputRequests(key: Path, handler: Responder[OutputParams, OutputResult]): Unit
 
   def registerOutput(key: Path): Receiver[OutputParams, OutputResult]
+
+  def dynamic(set: String, callbacks: DynamicDataKey): Unit
 
   def build(seriesBuffersSize: Int, eventBuffersSize: Int): ProducerHandle
 }
@@ -120,10 +127,7 @@ class EndpointProducerBuilderImpl(endpointId: EndpointId, outputHandlerThread: C
     rcvImpl
   }
 
-  /*def output() = ???
-  def sequencedOutput() = ???
-  def compareAndSetOutput() = ???
-  def sequencedCompareAndSetOutput() = ???*/
+  def dynamic(set: String, callbacks: DynamicDataKey): Unit = ???
 
   def build(seriesBuffersSize: Int, eventBuffersSize: Int): ProducerHandle = {
     val desc = EndpointDescriptor(indexes, metadata, data.toMap, outputStatuses.toMap)
