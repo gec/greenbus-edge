@@ -25,7 +25,7 @@ import io.greenbus.edge.data._
 
 import scala.collection.mutable.ArrayBuffer
 
-object Reader {
+object EdgeJsonReader {
 
   def read(is: InputStream): Option[Value] = {
     val r = new JsonReader(new InputStreamReader(is, "UTF-8"))
@@ -37,30 +37,47 @@ object Reader {
       case JsonToken.STRING => ValueString(r.nextString())
       case JsonToken.BOOLEAN => ValueBool(r.nextBoolean())
       case JsonToken.NUMBER => parseNumeric(r.nextString())
-      case JsonToken.BEGIN_ARRAY => readArray(r)
-      case JsonToken.BEGIN_OBJECT => readMap(r)
-      case JsonToken.NULL => ValueNone
+      case JsonToken.BEGIN_ARRAY =>
+        r.beginArray()
+        readArray(r)
+      case JsonToken.BEGIN_OBJECT =>
+        r.beginObject()
+        readMap(r)
+      case JsonToken.NULL =>
+        r.nextNull(); ValueNone
       case other => throw new IllegalArgumentException(s"Could not handle json token: $other at ${r.getPath}")
     }
   }
 
   private def readMap(r: JsonReader): Value = {
     val buffer = ArrayBuffer.empty[(Value, Value)]
+    var tagOpt = Option.empty[String]
     var continue = true
     while (continue) {
       r.peek() match {
         case JsonToken.NAME => {
           val name = r.nextName()
-          val value = readValue(r)
-          buffer += ((ValueString(name), value))
+          if (name == "@tag") {
+            tagOpt = Some(r.nextString())
+          } else {
+            val value = readValue(r)
+            buffer += ((ValueString(name), value))
+          }
         }
         case JsonToken.END_OBJECT =>
+          r.endObject()
           continue = false
         case other =>
           throw new IllegalArgumentException(s"Expecting name or object end, could not handle json token: $other at ${r.getPath}")
       }
     }
-    ValueMap(buffer.toMap)
+
+    tagOpt match {
+      case None => ValueMap(buffer.toMap)
+      case Some(tag) =>
+        TaggedValue(tag, ValueMap(buffer.toMap))
+    }
+
   }
 
   private def readArray(r: JsonReader) = {
@@ -69,8 +86,10 @@ object Reader {
     var continue = true
     while (continue) {
       r.peek() match {
-        case JsonToken.END_ARRAY => continue = false
-        case _ => readValue(r)
+        case JsonToken.END_ARRAY =>
+          r.endArray()
+          continue = false
+        case _ => buffer += readValue(r)
       }
     }
 

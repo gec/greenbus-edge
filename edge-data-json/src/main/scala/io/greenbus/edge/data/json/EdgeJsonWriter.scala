@@ -24,11 +24,12 @@ import java.util.Base64
 import com.google.gson.stream.JsonWriter
 import io.greenbus.edge.data._
 
-object Writer {
+object EdgeJsonWriter {
 
   def write(value: Value, os: OutputStream): Unit = {
     val pw = new PrintWriter(os)
     val w = new JsonWriter(pw)
+    w.setSerializeNulls(false)
 
     writeValue(value, w)
 
@@ -37,7 +38,26 @@ object Writer {
 
   private def writeValue(value: Value, w: JsonWriter): Unit = {
     value match {
-      case TaggedValue(tag, basic) => writeValue(basic, w)
+      case TaggedValue(tag, basic) =>
+        basic match {
+          case v: ValueMap => {
+            w.beginObject()
+
+            w.name("@tag")
+            w.value(tag)
+
+            v.value.foreach {
+              case (key, subValue) =>
+                key match {
+                  case keyV: ValueString => w.name(keyV.value)
+                  case other => w.name(other.toString)
+                }
+                writeValue(subValue, w)
+            }
+            w.endObject()
+          }
+          case v => writeValue(v, w)
+        }
       case v: ValueList => {
         w.beginArray()
         v.value.foreach(writeValue(_, w))
