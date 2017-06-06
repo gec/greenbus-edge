@@ -64,43 +64,43 @@ object MappingLibrary {
   def readBool(elem: Value, ctx: ReaderContext): Either[String, Boolean] = {
     elem match {
       case v: ValueBool => Right(v.value)
-      case _ => Left(s"${ctx.context} error: expected boolean value, saw: ${descName(elem)}")
+      case _ => Left(s"${ctx.context} error: expected boolean value, saw: ${descName(elem)} : $elem")
     }
   }
   def readByte(elem: Value, ctx: ReaderContext): Either[String, Byte] = {
     elem match {
       case v: ValueByte => Right(v.value)
-      case _ => Left(s"${ctx.context} error: expected byte value, saw: ${descName(elem)}")
+      case _ => Left(s"${ctx.context} error: expected byte value, saw: ${descName(elem)} : $elem")
     }
   }
   def readInt(elem: Value, ctx: ReaderContext): Either[String, Int] = {
     elem match {
       case v: IntegerValue => Right(v.toInt)
-      case _ => Left(s"${ctx.context} error: expected integer value, saw: ${descName(elem)}")
+      case _ => Left(s"${ctx.context} error: expected integer value, saw: ${descName(elem)} : $elem")
     }
   }
   def readLong(elem: Value, ctx: ReaderContext): Either[String, Long] = {
     elem match {
       case v: IntegerValue => Right(v.toLong)
-      case _ => Left(s"${ctx.context} error: expected long value, saw: ${descName(elem)}")
+      case _ => Left(s"${ctx.context} error: expected long value, saw: ${descName(elem)} : $elem")
     }
   }
   def readFloat(elem: Value, ctx: ReaderContext): Either[String, Float] = {
     elem match {
       case v: FloatingPointValue => Right(v.toFloat)
-      case _ => Left(s"${ctx.context} error: expected float value, saw: ${descName(elem)}")
+      case _ => Left(s"${ctx.context} error: expected float value, saw: ${descName(elem)} : $elem")
     }
   }
   def readDouble(elem: Value, ctx: ReaderContext): Either[String, Double] = {
     elem match {
       case v: FloatingPointValue => Right(v.toDouble)
-      case _ => Left(s"${ctx.context} error: expected double value, saw: ${descName(elem)}")
+      case _ => Left(s"${ctx.context} error: expected double value, saw: ${descName(elem)} : $elem")
     }
   }
   def readString(elem: Value, ctx: ReaderContext): Either[String, String] = {
     elem match {
       case v: ValueString => Right(v.value)
-      case _ => Left(s"${ctx.context} error: expected string value, saw: ${descName(elem)}")
+      case _ => Left(s"${ctx.context} error: expected string value, saw: ${descName(elem)} : $elem")
     }
   }
 
