@@ -20,27 +20,37 @@ package io.greenbus.edge.peer.impl2
 
 import java.util.UUID
 
+import io.greenbus.edge.api.stream.ServiceClientImpl
 import io.greenbus.edge.api.stream.peer.EdgePeer
 import io.greenbus.edge.api.stream.subscribe2.SubShim
 import io.greenbus.edge.api.{ EdgeSubscriptionClient, ServiceClient, ServiceClientChannel }
-import io.greenbus.edge.flow.Source
-import io.greenbus.edge.peer.ConsumerServices
+import io.greenbus.edge.flow.{ RemoteBoundLatestSource, Source }
+import io.greenbus.edge.peer.{ ConsumerServices, QueuingServiceChannel }
+import io.greenbus.edge.stream.subscribe.StreamServiceClientImpl
 import io.greenbus.edge.stream.{ PeerLinkProxyChannel, PeerSessionId }
-import io.greenbus.edge.thread.CallMarshaller
+import io.greenbus.edge.thread.SchedulableCallMarshaller
 
-class PeerConsumerServices(logId: String, eventThread: CallMarshaller) extends ConsumerServices {
+class PeerConsumerServices(logId: String, eventThread: SchedulableCallMarshaller) extends ConsumerServices {
   private val session = PeerSessionId(UUID.randomUUID(), 0)
   private val peer = new EdgePeer(logId, session, eventThread, remoteIo = true)
+  private val requestQueuer = new QueuingServiceChannel(eventThread)
+  private val serviceDist = new RemoteBoundLatestSource[ServiceClientChannel](eventThread)
 
   def connected(session: PeerSessionId, channel: PeerLinkProxyChannel): Unit = {
     peer.connectRemotePeer(session, channel)
+
+    val streamServices = new StreamServiceClientImpl(channel, eventThread)
+    val edgeServices = new ServiceClientImpl(streamServices)
+
+    serviceDist.push(edgeServices)
+    requestQueuer.connected(edgeServices)
   }
 
   def subscriptionClient: EdgeSubscriptionClient = {
     new SubShim(peer.subscriptions)
   }
 
-  def serviceChannelSource: Source[ServiceClientChannel] = ???
+  def serviceChannelSource: Source[ServiceClientChannel] = serviceDist
 
-  def queuingServiceClient: ServiceClient = ???
+  def queuingServiceClient: ServiceClient = requestQueuer
 }
