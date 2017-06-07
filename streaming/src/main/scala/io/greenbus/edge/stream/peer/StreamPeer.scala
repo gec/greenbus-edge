@@ -18,8 +18,6 @@
  */
 package io.greenbus.edge.stream.peer
 
-import java.util.UUID
-
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.flow.{ Handler, RemoteBoundQueuedDistributor, Sink, Source }
 import io.greenbus.edge.stream._
