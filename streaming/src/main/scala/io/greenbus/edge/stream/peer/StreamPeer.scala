@@ -66,6 +66,8 @@ class StreamPeer(id: String, sessionId: PeerSessionId, engineThread: CallMarshal
   private val handler = new PeerChannelManager(channelManager, if (remoteIo) Some(engineThread) else None)
   private val userHandles = mutable.Set.empty[StreamSub]
 
+  def session: PeerSessionId = sessionId
+
   private def eventNotify(): Unit = {
     logger.debug(s"eventNotify()")
     userHandles.foreach(_.flush())

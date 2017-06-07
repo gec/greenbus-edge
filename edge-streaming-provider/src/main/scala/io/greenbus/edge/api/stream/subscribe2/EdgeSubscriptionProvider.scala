@@ -22,7 +22,7 @@ import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.api._
 import io.greenbus.edge.api.stream._
 import io.greenbus.edge.flow.{ Handler, Source }
-import io.greenbus.edge.stream.RowId
+import io.greenbus.edge.stream.{ PeerRouteSource, RowId, TypeValue }
 import io.greenbus.edge.stream.peer.{ StreamPeer, StreamUserSubscription }
 import io.greenbus.edge.stream.subscribe._
 
@@ -31,6 +31,7 @@ import scala.collection.mutable
 class SubShim(client: EdgeSubscriptionClient2) extends EdgeSubscriptionClient {
   def subscribe(params: SubscriptionParams): EdgeSubscription = {
     val p2 = EdgeSubscriptionParams(
+      params.indexing.endpointPrefixes.toSet,
       params.descriptors.toSet,
       (params.dataKeys.series ++ params.dataKeys.keyValues ++ params.dataKeys.topicEvent ++ params.dataKeys.activeSet).toSet,
       params.outputKeys.toSet)
@@ -39,6 +40,7 @@ class SubShim(client: EdgeSubscriptionClient2) extends EdgeSubscriptionClient {
 }
 
 case class EdgeSubscriptionParams(
+  endpointPrefixSet: Set[Path],
   endpointDescriptors: Set[EndpointId],
   dataKeys: Set[EndpointPath],
   outputKeys: Set[EndpointPath])
@@ -76,9 +78,28 @@ class EdgeSubImpl(sub: StreamUserSubscription, initial: Seq[IdentifiedEdgeUpdate
 class EdgeSubscriptionProvider(peer: StreamPeer) extends EdgeSubscriptionClient2 {
 
   def subscribe(params: EdgeSubscriptionParams): EdgeSubscription = {
+    //println(s"subscribed: $params")
 
     val transMap = mutable.Map.empty[RowId, EdgeKeyUpdateTranslator]
     val initial = Vector.newBuilder[IdentifiedEdgeUpdate]
+
+    params.endpointPrefixSet.foreach { path =>
+
+      val codec = new EdgeSubCodec {
+        def updateFor(v: DataValueUpdate, metaOpt: Option[TypeValue]): Seq[IdentifiedEdgeUpdate] = {
+          //println(s"updateFor: $v , $metaOpt")
+          Seq()
+        }
+
+        def simpleToUpdate(v: EdgeDataStatus[Nothing]): IdentifiedEdgeUpdate = {
+          IdEndpointPrefixUpdate(path, v)
+        }
+      }
+      val keyTranslator = new EdgeKeyUpdateTranslator(codec)
+      val row = PeerRouteSource.peerRouteRow(peer.session)
+      initial += IdEndpointPrefixUpdate(path, Pending)
+      transMap += (row -> keyTranslator)
+    }
 
     params.endpointDescriptors.foreach { id =>
       val keyTranslator = new EdgeKeyUpdateTranslator(new EndpointDescSubCodec(id.toString, id))
