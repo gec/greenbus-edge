@@ -49,13 +49,12 @@ object EdgeWebSocketProxy {
       retryIntervalMs = clientSettings.retryIntervalMs,
       connectTimeoutMs = clientSettings.connectTimeoutMs)
 
-    services.start()
-
     val linkMgr = system.actorOf(PeerLinkMgr.props(services.buildConsumerServices()))
 
     val mgr = new GuiSocketMgr(linkMgr)
     globalSocketMgr.set(mgr)
 
+    services.start()
     val server = new EdgeGuiServer(proxySettings.port)
     server.run()
   }

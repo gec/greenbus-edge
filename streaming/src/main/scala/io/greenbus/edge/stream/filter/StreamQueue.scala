@@ -63,7 +63,7 @@ class StreamCacheImpl(appendLimitDefault: Int) extends StreamCache {
           case snap: ResyncSnapshot =>
             state = InitSessioned(st.ctx, snap.resync)
           case sd: StreamDelta =>
-            state = InitSessioned(st.ctx, PresequencedStreamOps.foldResync(st.current, sd.update, appendLimit = appendLimitDefault)) // TODO: infinite append!
+            state = InitSessioned(st.ctx, PresequencedStreamOps.foldResync(st.current, sd.update, appendLimit = appendLimitDefault))
           case StreamAbsent =>
             state = InitAbsent
         }

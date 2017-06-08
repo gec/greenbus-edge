@@ -25,7 +25,7 @@ import io.greenbus.edge.thread.{ EventThreadService, SchedulableCallMarshaller }
 import scala.concurrent.ExecutionContext
 
 object AmqpEdgeConnectionManager {
-  def build(host: String, port: Int, retryIntervalMs: Long = 10000, connectTimeoutMs: Long = 10000, appendLimitDefault: Int = 100)(implicit ec: ExecutionContext): AmqpEdgeConnectionManager = {
+  def build(host: String, port: Int, retryIntervalMs: Long = 10000, connectTimeoutMs: Long = 10000, appendLimitDefault: Int = 10)(implicit ec: ExecutionContext): AmqpEdgeConnectionManager = {
     new AmqpEdgeConnectionManager(host, port, retryIntervalMs, connectTimeoutMs, appendLimitDefault)
   }
 }

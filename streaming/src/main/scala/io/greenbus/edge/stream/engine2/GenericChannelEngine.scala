@@ -60,13 +60,13 @@ class GenericChannelEngine(streamEngine: StreamEngine, serviceEngine: ServiceEng
   }
 
   private def sourceUpdates(source: RouteStreamSource, events: SourceEvents): Unit = {
-    logger.debug(s"source channel added: $source")
+    logger.debug(s"source channel updates: $source")
     streamEngine.sourceUpdate(source, events)
     eventNotify()
   }
 
   private def sourceChannelClosed(source: GenericSourceChannel, handle: RouteStreamSource): Unit = {
-    logger.debug(s"source channel added: $source")
+    logger.debug(s"source channel closed: $source")
     streamEngine.sourceRemoved(handle)
     eventNotify()
   }
