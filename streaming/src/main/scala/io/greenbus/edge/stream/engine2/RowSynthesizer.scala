@@ -78,7 +78,7 @@ object RowSynthImpl {
   case class SourceSessioned(session: PeerSessionId) extends SourceState
   case object SourceStreamAbsent extends SourceState
 }
-class RowSynthImpl[Source] extends RowSynthesizer[Source] with LazyLogging {
+class RowSynthImpl[Source](appendLimitDefault: Int) extends RowSynthesizer[Source] with LazyLogging {
   import RowSynthImpl._
 
   //private var activeSessionOpt = Option.empty[(PeerSessionId, StreamFilter)]
@@ -115,7 +115,7 @@ class RowSynthImpl[Source] extends RowSynthesizer[Source] with LazyLogging {
             } else {
               standbySessions.get(resync.sessionId) match {
                 case None => {
-                  val queue = new FilteredStreamQueue
+                  val queue = new FilteredStreamQueue(appendLimitDefault)
                   queue.handle(event)
                   standbySessions.put(resync.sessionId, queue)
                 }

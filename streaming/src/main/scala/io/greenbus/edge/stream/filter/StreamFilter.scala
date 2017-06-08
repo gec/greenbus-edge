@@ -42,7 +42,7 @@ class StreamFilterImpl extends StreamFilter with LazyLogging {
         event match {
           case rs: ResyncSession =>
             logger.debug(s"StreamFilter resync init: $rs")
-            val filter = new GenSequenceFilter("filter")
+            val filter = new GenSequenceFilter("filter", appendLimit = 1)
             filter.resync(rs.resync)
             state = Init(rs.sessionId, filter)
             Some(rs)
@@ -63,7 +63,7 @@ class StreamFilterImpl extends StreamFilter with LazyLogging {
               }
             } else {
               logger.debug(s"StreamFilter resync new session: $rs")
-              val filter = new GenSequenceFilter("filter")
+              val filter = new GenSequenceFilter("filter", appendLimit = 1)
               filter.resync(rs.resync)
               state = Init(rs.sessionId, filter)
               Some(rs)
@@ -93,7 +93,7 @@ object GenSequenceFilter {
   case object Uninit extends State
   case class Init(var sequence: SequencedTypeValue, var snap: SequenceSnapshot) extends State
 }
-class GenSequenceFilter(cid: String) extends SequenceFilter {
+class GenSequenceFilter(cid: String, appendLimit: Int) extends SequenceFilter {
   import GenSequenceFilter._
   private var state: State = Uninit
 
@@ -101,7 +101,7 @@ class GenSequenceFilter(cid: String) extends SequenceFilter {
     state match {
       case Uninit => None
       case st: Init =>
-        val (endSeq, endSnap, eventOpt) = FilteringStreamOps.filteredDeltaFold(st.sequence, st.snap, delta)
+        val (endSeq, endSnap, eventOpt) = FilteringStreamOps.filteredDeltaFold(st.sequence, st.snap, delta, 1)
         st.sequence = endSeq
         st.snap = endSnap
         eventOpt

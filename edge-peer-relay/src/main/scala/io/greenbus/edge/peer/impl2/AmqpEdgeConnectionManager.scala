@@ -25,11 +25,11 @@ import io.greenbus.edge.thread.{ EventThreadService, SchedulableCallMarshaller }
 import scala.concurrent.ExecutionContext
 
 object AmqpEdgeConnectionManager {
-  def build(host: String, port: Int, retryIntervalMs: Long = 10000, connectTimeoutMs: Long = 10000)(implicit ec: ExecutionContext): AmqpEdgeConnectionManager = {
-    new AmqpEdgeConnectionManager(host, port, retryIntervalMs, connectTimeoutMs)
+  def build(host: String, port: Int, retryIntervalMs: Long = 10000, connectTimeoutMs: Long = 10000, appendLimitDefault: Int = 100)(implicit ec: ExecutionContext): AmqpEdgeConnectionManager = {
+    new AmqpEdgeConnectionManager(host, port, retryIntervalMs, connectTimeoutMs, appendLimitDefault)
   }
 }
-class AmqpEdgeConnectionManager(host: String, port: Int, retryIntervalMs: Long, connectTimeoutMs: Long)(implicit ec: ExecutionContext) {
+class AmqpEdgeConnectionManager(host: String, port: Int, retryIntervalMs: Long, connectTimeoutMs: Long, appendLimitDefault: Int)(implicit ec: ExecutionContext) {
   private val service = AmqpService.build()
   private val exe = EventThreadService.build("event")
 
@@ -52,7 +52,7 @@ class AmqpEdgeConnectionManager(host: String, port: Int, retryIntervalMs: Long, 
   }
 
   def buildProducerServices(): ProducerServices = {
-    val services = new PeerProducerServices(s"producer-$host:$port", exe)
+    val services = new PeerProducerServices(s"producer-$host:$port", exe, appendLimitDefault)
     retrier.bindGatewayObserver(services)
     services
   }

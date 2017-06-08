@@ -52,7 +52,7 @@ trait BaseEdgeIntegration {
   protected def buildProducer(name: String = "producer"): PeerProducerServices = {
     val exe = EventThreadService.build(name)
     executors :+= exe
-    new PeerProducerServices(name, exe)
+    new PeerProducerServices(name, exe, 100)
   }
 
   protected def connectConsumer(consumer: PeerConsumerServices): Closeable = {

@@ -29,9 +29,9 @@ trait GatewayEventHandler {
   def handleEvent(event: ProducerEvent): Unit
 }
 
-class GatewayEngine(engineThread: CallMarshaller) extends GatewayEventHandler {
+class GatewayEngine(engineThread: CallMarshaller, appendLimitDefault: Int) extends GatewayEventHandler {
 
-  private val mgr = new ProducerMgr
+  private val mgr = new ProducerMgr(appendLimitDefault)
   private val queueSet = mutable.Map.empty[TargetQueueMgr, GatewayProxyChannel]
   private var routeSet = Set.empty[TypeValue]
 

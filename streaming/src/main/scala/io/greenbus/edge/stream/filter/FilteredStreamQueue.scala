@@ -19,9 +19,9 @@
 package io.greenbus.edge.stream.filter
 import io.greenbus.edge.stream.AppendEvent
 
-class FilteredStreamQueue extends StreamQueue {
+class FilteredStreamQueue(appendLimitDefault: Int) extends StreamQueue {
   private val filter = new StreamFilterImpl
-  private val queue = new StreamQueueImpl
+  private val queue = new StreamQueueImpl(appendLimitDefault)
 
   def handle(event: AppendEvent): Unit = {
     filter.handle(event).foreach(queue.handle)

@@ -72,7 +72,8 @@ Target mgr
 
 class StreamEngine(
     logId: String,
-    session: PeerSessionId) extends LazyLogging {
+    session: PeerSessionId,
+    appendLimitDefault: Int) extends LazyLogging {
 
   private val streamMap = mutable.Map.empty[TypeValue, RouteStreamMgr]
   private val sourcingMap = mutable.Map.empty[TypeValue, RouteSourcingMgr]
@@ -154,8 +155,6 @@ class StreamEngine(
       //case ev: RowResolvedAbsent => routeMap.get(ev.rowId.routingKey).foreach(_.events(source, Seq(ev))) // TODO: fix this seq
       case ev: RouteUnresolved => streamMap.get(ev.routingKey).foreach(_.events(source, Seq(ev)))
     }
-
-    // TODO: flush
   }
 
   def sourceRemoved(source: RouteStreamSource): Unit = {
@@ -165,13 +164,11 @@ class StreamEngine(
     }
     sourceToRouteMap -= source
     doManifestUpdate()
-
-    // TODO: flush
   }
 
   private def routeAdded(route: TypeValue): RouteStreams = {
     logger.trace(s"$logId route added $route")
-    val routeStream = new RouteStreams(route, _ => new SynthesizedKeyStream[RouteStreamSource])
+    val routeStream = new RouteStreams(route, _ => new SynthesizedKeyStream[RouteStreamSource](appendLimitDefault))
     sourcingMap.get(route).foreach { src =>
       routeStream.sourced(src)
       src.bind(routeStream)
@@ -206,9 +203,6 @@ class StreamEngine(
         // TODO: add all current sources
         routeStreams.targetUpdate(observers.streamObserver, observers.rowObserverMap)
     }
-
-    // TODO: flush?
-    //target.flush()
   }
   def targetRemoved(target: StreamTarget): Unit = {
     logger.debug(s"$logId target removed $target")
@@ -253,9 +247,6 @@ trait StreamTargetSubject[A <: RouteTargetSubject] {
         routeStreams.targetUpdate(observers.streamObserver, observers.rowObserverMap)
     }
     targetToRouteMap.update(target, subscription)
-
-    // TODO: flush?
-    //target.flush()
   }
   def targetRemoved(target: StreamTarget): Unit = {
     val prev = targetToRouteMap.getOrElse(target, Map())

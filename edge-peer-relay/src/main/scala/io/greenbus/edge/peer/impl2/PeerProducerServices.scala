@@ -25,8 +25,8 @@ import io.greenbus.edge.peer.{ GatewayLinkObserver, ProducerServices }
 import io.greenbus.edge.stream.GatewayProxyChannel
 import io.greenbus.edge.thread.CallMarshaller
 
-class PeerProducerServices(logId: String, eventThread: CallMarshaller) extends ProducerServices with GatewayLinkObserver {
-  private val producer = new EdgePublisher(logId, eventThread)
+class PeerProducerServices(logId: String, eventThread: CallMarshaller, appendLimitDefault: Int) extends ProducerServices with GatewayLinkObserver {
+  private val producer = new EdgePublisher(logId, eventThread, appendLimitDefault)
 
   def connected(channel: GatewayProxyChannel): Unit = {
     producer.bindConnection(channel)

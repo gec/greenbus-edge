@@ -70,9 +70,9 @@ trait CachingKeyStreamSubject extends KeyStreamSubject with StreamObserverSet {
   }
 }
 
-class SynthesizedKeyStream[Source] extends KeyStream[Source] {
-  private val retail = new RetailKeyStream
-  private val synth = new SynthKeyStream[Source](retail)
+class SynthesizedKeyStream[Source](appendLimitDefault: Int) extends KeyStream[Source] {
+  private val retail = new RetailKeyStream(appendLimitDefault)
+  private val synth = new SynthKeyStream[Source](retail, appendLimitDefault)
 
   def handle(source: Source, event: AppendEvent): Unit = {
     synth.handle(source, event)
@@ -95,9 +95,9 @@ class SynthesizedKeyStream[Source] extends KeyStream[Source] {
   }
 }
 
-class SynthKeyStream[Source](observer: KeyStreamObserver) extends SourcedKeyStreamObserver[Source] {
+class SynthKeyStream[Source](observer: KeyStreamObserver, appendLimitDefault: Int) extends SourcedKeyStreamObserver[Source] {
 
-  private val rowSynthesizer: RowSynthesizer[Source] = new RowSynthImpl[Source]
+  private val rowSynthesizer: RowSynthesizer[Source] = new RowSynthImpl[Source](appendLimitDefault)
 
   def handle(source: Source, event: AppendEvent): Unit = {
     val emitted = rowSynthesizer.append(source, event)
@@ -114,8 +114,8 @@ class SynthKeyStream[Source](observer: KeyStreamObserver) extends SourcedKeyStre
   }
 }
 
-class RetailKeyStream extends KeyStreamObserver with CachingKeyStreamSubject {
-  protected val cache = new filter.StreamCacheImpl
+class RetailKeyStream(appendLimitDefault: Int) extends KeyStreamObserver with CachingKeyStreamSubject {
+  protected val cache = new filter.StreamCacheImpl(appendLimitDefault)
   protected def sync(): Seq[AppendEvent] = cache.resync()
 
   def targeted(): Boolean = observers.nonEmpty

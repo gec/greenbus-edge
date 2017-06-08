@@ -42,7 +42,7 @@ case class RouteBindEvent(route: TypeValue,
 
 case class RouteUnbindEvent(route: TypeValue) extends ProducerEvent
 
-class ProducerMgr extends StreamTargetSubject2[ProducerRouteMgr] with LazyLogging {
+class ProducerMgr(appendLimitDefault: Int) extends StreamTargetSubject2[ProducerRouteMgr] with LazyLogging {
 
   protected val routeMap = mutable.Map.empty[TypeValue, ProducerRouteMgr]
 
@@ -52,7 +52,7 @@ class ProducerMgr extends StreamTargetSubject2[ProducerRouteMgr] with LazyLoggin
     logger.debug(s"Producer event: $event")
     event match {
       case ev: RouteBindEvent => {
-        val mgr = routeMap.getOrElseUpdate(ev.route, new ProducerRouteMgr)
+        val mgr = routeMap.getOrElseUpdate(ev.route, new ProducerRouteMgr(appendLimitDefault))
         mgr.bind(ev.initialEvents, ev.dynamic, ev.handler)
       }
       case ev: RouteBatchEvent => {
@@ -76,7 +76,7 @@ class ProducerMgr extends StreamTargetSubject2[ProducerRouteMgr] with LazyLoggin
   }
 
   protected def buildRouteManager(route: TypeValue): ProducerRouteMgr = {
-    new ProducerRouteMgr
+    new ProducerRouteMgr(appendLimitDefault)
   }
 }
 

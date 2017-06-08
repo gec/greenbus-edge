@@ -22,12 +22,12 @@ import io.greenbus.edge.stream.{ PeerSessionId, SequenceCtx }
 import io.greenbus.edge.stream.engine2.StreamObserverSet
 import io.greenbus.edge.stream.filter.{ StreamCache, StreamCacheImpl }
 
-class ProducerUpdateStream(sessionId: PeerSessionId, ctx: SequenceCtx) {
+class ProducerUpdateStream(sessionId: PeerSessionId, ctx: SequenceCtx, appendLimit: Int) {
 
   private var sequencerOpt = Option.empty[UpdateSequencer]
   private var observerOpt = Option.empty[StreamObserverSet]
 
-  protected val streamCache = new StreamCacheImpl
+  protected val streamCache = new StreamCacheImpl(appendLimit)
 
   def cache: StreamCache = streamCache
 

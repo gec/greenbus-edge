@@ -20,6 +20,7 @@ package io.greenbus.edge.stream.filter
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.stream._
+import io.greenbus.edge.stream.filter.StreamCacheImpl.SessionContext
 
 object FilteringStreamOps extends LazyLogging {
 
@@ -102,7 +103,7 @@ object FilteringStreamOps extends LazyLogging {
     }
   }
 
-  def filteredDeltaFold(sequence: SequencedTypeValue, current: SequenceSnapshot, delta: Delta): (SequencedTypeValue, SequenceSnapshot, Option[Delta]) = {
+  def filteredDeltaFold(sequence: SequencedTypeValue, current: SequenceSnapshot, delta: Delta, appendLimit: Int): (SequencedTypeValue, SequenceSnapshot, Option[Delta]) = {
 
     var seqVar = sequence
 
@@ -118,7 +119,7 @@ object FilteringStreamOps extends LazyLogging {
     if (passed.nonEmpty) {
       val endSeq = seqVar
       val passedDelta = Delta(passed)
-      val snap = PresequencedStreamOps.foldResync(Resync(sequence, current), passedDelta)
+      val snap = PresequencedStreamOps.foldResync(Resync(sequence, current), passedDelta, appendLimit)
 
       (endSeq, snap.snapshot, Some(passedDelta))
     } else {
@@ -151,7 +152,7 @@ object PresequencedStreamOps extends LazyLogging {
       right
     }
   }
-  def foldResync(left: Resync, right: Delta): Resync = {
+  def foldResync(left: Resync, right: Delta, appendLimit: Int): Resync = {
     left.snapshot match {
       case s: SetSnapshot => {
         val (snap, seq) = foldSetSnapshot(s, left.sequence, right)
@@ -162,21 +163,9 @@ object PresequencedStreamOps extends LazyLogging {
         left.copy(sequence = seq, snapshot = snap)
       }
       case s: AppendSnapshot => {
-        val result = foldAppendSnapshot(s, right)
+        val result = foldAppendSnapshot(s, right, appendLimit)
         left.copy(sequence = result.current.sequence, snapshot = result)
       }
-    }
-  }
-  def foldResync(left: Resync, right: Resync): Resync = {
-    if (right.sequence == left.sequence) {
-      left
-    } else if (left.sequence.precedes(right.sequence)) {
-      // Translating sequential resyncs into a delta would go here
-      right
-    } else if (left.sequence.isLessThan(right.sequence).contains(true)) {
-      right
-    } else {
-      left
     }
   }
 
@@ -215,12 +204,18 @@ object PresequencedStreamOps extends LazyLogging {
     (MapSnapshot(set), seqVar)
   }
 
-  def foldAppendSnapshot(snap: AppendSnapshot, right: Delta): AppendSnapshot = {
+  def foldAppendSnapshot(snap: AppendSnapshot, right: Delta, limit: Int): AppendSnapshot = {
     val appends = filterSequencedDiffs(snap.current.sequence, right.diffs)
 
     if (appends.nonEmpty) {
       val history = snap.previous ++ Vector(snap.current) ++ appends.init
-      AppendSnapshot(appends.last, history)
+      val histSize = history.size
+      val trimmed = if (histSize > limit) {
+        history.drop(histSize - limit)
+      } else {
+        history
+      }
+      AppendSnapshot(appends.last, trimmed)
     } else {
       snap
     }

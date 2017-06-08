@@ -54,7 +54,7 @@ class SingularEngineTests extends FunSuite with Matchers with LazyLogging {
 
     val sessA = sessId
 
-    val engine = new StreamEngine("A", sessA)
+    val engine = new StreamEngine("A", sessA, 50)
 
     val target = new TargetQueueMgr
     val observers = target.subscriptionUpdate(route1.rows.toSet)

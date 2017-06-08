@@ -25,8 +25,8 @@ import io.greenbus.edge.stream.GatewayProxyChannel
 import io.greenbus.edge.stream.gateway3.GatewayEngine
 import io.greenbus.edge.thread.CallMarshaller
 
-class EdgePublisher(logId: String, engineThread: CallMarshaller) {
-  private val gateway = new GatewayEngine(engineThread)
+class EdgePublisher(logId: String, engineThread: CallMarshaller, appendLimitDefault: Int) {
+  private val gateway = new GatewayEngine(engineThread, appendLimitDefault)
 
   def buildEndpoint(endpointId: EndpointId): EndpointBuilder = {
     new EndpointBuilderImpl(endpointId, engineThread, gateway)

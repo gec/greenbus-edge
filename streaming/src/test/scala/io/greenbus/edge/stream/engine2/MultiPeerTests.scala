@@ -41,7 +41,7 @@ object PeerTestFramework extends Matchers with LazyLogging {
   class MockPeer(val name: String, sessionOpt: Option[PeerSessionId] = None) {
     val gateway = new MockRouteSource(s"src-$name")
     val session: PeerSessionId = sessionOpt.getOrElse(Helpers.sessId)
-    val engine = new StreamEngine(name, session)
+    val engine = new StreamEngine(name, session, 50)
 
     def routeRow: RowId = {
       PeerRouteSource.peerRouteRow(session)

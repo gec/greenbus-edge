@@ -40,7 +40,7 @@ object StreamCacheImpl {
   case class InitSessioned(ctx: SessionContext, current: Resync) extends State
   case object InitAbsent extends State
 }
-class StreamCacheImpl extends StreamCache {
+class StreamCacheImpl(appendLimitDefault: Int) extends StreamCache {
   import StreamCacheImpl._
   private var state: State = Uninit
 
@@ -63,7 +63,7 @@ class StreamCacheImpl extends StreamCache {
           case snap: ResyncSnapshot =>
             state = InitSessioned(st.ctx, snap.resync)
           case sd: StreamDelta =>
-            state = InitSessioned(st.ctx, StreamTypes.foldResync(st.current, sd.update)) // TODO: infinite append!
+            state = InitSessioned(st.ctx, PresequencedStreamOps.foldResync(st.current, sd.update, appendLimit = appendLimitDefault)) // TODO: infinite append!
           case StreamAbsent =>
             state = InitAbsent
         }
@@ -106,7 +106,7 @@ object StreamQueueImpl {
   case object AbsentIdle extends State
   case class Absented(prev: Seq[AppendEvent]) extends State
 }
-class StreamQueueImpl extends StreamQueue with LazyLogging {
+class StreamQueueImpl(appendLimitDefault: Int) extends StreamQueue with LazyLogging {
 
   import StreamQueueImpl._
 
@@ -143,7 +143,7 @@ class StreamQueueImpl extends StreamQueue with LazyLogging {
           case snap: ResyncSnapshot =>
             state = Resynced(st.ctx, snap.resync, ArrayBuffer(StreamDelta(st.current)))
           case sd: StreamDelta =>
-            state = AccumulatingDeltas(st.ctx, StreamTypes.foldDelta(st.current, sd.update)) // TODO: infinite append!
+            state = AccumulatingDeltas(st.ctx, PresequencedStreamOps.foldDelta(st.current, sd.update)) // TODO: infinite append!
           case StreamAbsent =>
             state = Absented(Seq(StreamDelta(st.current)))
         }
@@ -157,7 +157,7 @@ class StreamQueueImpl extends StreamQueue with LazyLogging {
             st.prev += ResyncSession(st.ctx.sessionId, st.ctx.context, st.current)
             state = Resynced(st.ctx, snap.resync, st.prev)
           case sd: StreamDelta =>
-            state = Resynced(st.ctx, StreamTypes.foldResync(st.current, sd.update), st.prev) // TODO: infinite append!
+            state = Resynced(st.ctx, PresequencedStreamOps.foldResync(st.current, sd.update, appendLimitDefault), st.prev) // TODO: infinite append!
           case StreamAbsent =>
             state = Absented(st.prev :+ ResyncSession(st.ctx.sessionId, st.ctx.context, st.current))
         }

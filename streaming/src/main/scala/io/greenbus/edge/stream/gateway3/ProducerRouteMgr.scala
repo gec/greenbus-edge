@@ -28,7 +28,7 @@ import io.greenbus.edge.stream.gateway.RouteServiceRequest
 
 import scala.collection.mutable
 
-class ProducerRouteMgr extends RouteTargetSubject with LazyLogging {
+class ProducerRouteMgr(appendLimitDefault: Int) extends RouteTargetSubject with LazyLogging {
 
   private var produced = false
   private val updateMap = mutable.Map.empty[TableRow, ProducerUpdateStream]
@@ -79,7 +79,7 @@ class ProducerRouteMgr extends RouteTargetSubject with LazyLogging {
     ev match {
       case AddRow(key, ctx) => {
         //updateMap.get(key).foreach { stream => } // TODO: remove row?
-        val stream = new ProducerUpdateStream(PeerSessionId(UUID.randomUUID(), 0), ctx)
+        val stream = new ProducerUpdateStream(PeerSessionId(UUID.randomUUID(), 0), ctx, appendLimitDefault)
         streamAdded(key, stream)
       }
       case RowUpdate(key, update) => {

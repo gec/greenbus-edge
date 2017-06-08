@@ -22,8 +22,8 @@ import io.greenbus.edge.stream._
 import io.greenbus.edge.stream.filter.StreamCacheImpl
 import io.greenbus.edge.stream.gateway3.MapSequencer
 
-class StaticStream extends CachingKeyStreamSubject {
-  private val cache = new StreamCacheImpl
+class StaticStream(appendLimitDefault: Int) extends CachingKeyStreamSubject {
+  private val cache = new StreamCacheImpl(appendLimitDefault)
 
   def handle(events: Seq[AppendEvent]): Unit = {
     events.foreach(cache.handle)
@@ -52,14 +52,14 @@ class PeerSelfStreams(streams: Map[TableRow, StaticStream]) extends RouteStreamM
   def unsourced(): Unit = {}
 
   protected def streamFactory(key: TableRow): StaticStream = {
-    new StaticStream
+    new StaticStream(appendLimitDefault = 1)
   }
 }
 
 class PeerManifestMgr(session: PeerSessionId) {
   private val manifestRow = PeerRouteSource.peerRouteRow(session)
   private val manifestSequencer = new MapSequencer(session, SequenceCtx(None, None))
-  private val manifestStream = new StaticStream
+  private val manifestStream = new StaticStream(appendLimitDefault = 1)
 
   private val routeMgr = new PeerSelfStreams(Map(manifestRow.tableRow -> manifestStream))
 
