@@ -25,12 +25,12 @@ import io.greenbus.edge.api.stream.peer.EdgePeer
 import io.greenbus.edge.api.stream.subscribe2.SubShim
 import io.greenbus.edge.api.{ EdgeSubscriptionClient, ServiceClient, ServiceClientChannel }
 import io.greenbus.edge.flow.{ RemoteBoundLatestSource, Source }
-import io.greenbus.edge.peer.{ ConsumerServices, QueuingServiceChannel }
+import io.greenbus.edge.peer.{ ConsumerServices, PeerLinkObserver, QueuingServiceChannel }
 import io.greenbus.edge.stream.subscribe.StreamServiceClientImpl
 import io.greenbus.edge.stream.{ PeerLinkProxyChannel, PeerSessionId }
 import io.greenbus.edge.thread.SchedulableCallMarshaller
 
-class PeerConsumerServices(logId: String, eventThread: SchedulableCallMarshaller) extends ConsumerServices {
+class PeerConsumerServices(logId: String, eventThread: SchedulableCallMarshaller) extends ConsumerServices with PeerLinkObserver {
   private val session = PeerSessionId(UUID.randomUUID(), 0)
   private val peer = new EdgePeer(logId, session, eventThread, remoteIo = true)
   private val requestQueuer = new QueuingServiceChannel(eventThread)

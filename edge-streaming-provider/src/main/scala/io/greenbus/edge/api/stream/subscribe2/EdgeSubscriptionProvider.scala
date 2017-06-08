@@ -78,24 +78,12 @@ class EdgeSubImpl(sub: StreamUserSubscription, initial: Seq[IdentifiedEdgeUpdate
 class EdgeSubscriptionProvider(peer: StreamPeer) extends EdgeSubscriptionClient2 {
 
   def subscribe(params: EdgeSubscriptionParams): EdgeSubscription = {
-    //println(s"subscribed: $params")
 
     val transMap = mutable.Map.empty[RowId, EdgeKeyUpdateTranslator]
     val initial = Vector.newBuilder[IdentifiedEdgeUpdate]
 
     params.endpointPrefixSet.foreach { path =>
-
-      val codec = new EdgeSubCodec {
-        def updateFor(v: DataValueUpdate, metaOpt: Option[TypeValue]): Seq[IdentifiedEdgeUpdate] = {
-          //println(s"updateFor: $v , $metaOpt")
-          Seq()
-        }
-
-        def simpleToUpdate(v: EdgeDataStatus[Nothing]): IdentifiedEdgeUpdate = {
-          IdEndpointPrefixUpdate(path, v)
-        }
-      }
-      val keyTranslator = new EdgeKeyUpdateTranslator(codec)
+      val keyTranslator = new EdgeKeyUpdateTranslator(new ManifestRowToEndpointSetCodec(path.toString, path))
       val row = PeerRouteSource.peerRouteRow(peer.session)
       initial += IdEndpointPrefixUpdate(path, Pending)
       transMap += (row -> keyTranslator)

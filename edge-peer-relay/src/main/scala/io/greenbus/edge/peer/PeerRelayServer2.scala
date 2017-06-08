@@ -36,5 +36,11 @@ object PeerRelayServer2 {
 
     relay.listen(settings.host, settings.port)
 
+    Runtime.getRuntime.addShutdownHook(new Thread(new Runnable {
+      def run(): Unit = {
+        relay.close()
+      }
+    }))
+
   }
 }

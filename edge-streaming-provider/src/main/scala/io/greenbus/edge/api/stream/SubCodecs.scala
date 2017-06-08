@@ -23,6 +23,7 @@ import io.greenbus.edge.api._
 import io.greenbus.edge.api.stream.SetCodec.EndpointIdSetCodec
 import io.greenbus.edge.stream.TypeValue
 import io.greenbus.edge.stream.subscribe.{ Appended, DataValueUpdate, MapUpdated, SetUpdated }
+import io.greenbus.edge.util.EitherUtil
 
 class AppendDataKeySubCodec(logId: String, id: EndpointPath, codec: AppendDataKeyCodec) extends EdgeSubCodec with LazyLogging {
 
@@ -167,6 +168,27 @@ class AppendOutputKeySubCodec(logId: String, id: EndpointPath, codec: AppendOutp
       }
       case _ =>
         Seq()
+    }
+  }
+}
+
+class ManifestRowToEndpointSetCodec(logId: String, path: Path) extends EdgeSubCodec with LazyLogging {
+  def simpleToUpdate(v: EdgeDataStatus[Nothing]): IdentifiedEdgeUpdate = {
+    IdEndpointPrefixUpdate(path, v)
+  }
+
+  def updateFor(dataValueUpdate: DataValueUpdate, metaOpt: Option[TypeValue]): Seq[IdentifiedEdgeUpdate] = {
+    dataValueUpdate match {
+      case up: MapUpdated =>
+        if (up.added.nonEmpty || up.removed.nonEmpty) {
+          val current = up.value.keySet.map(EdgeCodecCommon.readEndpointId).flatMap(_.toOption)
+          val removes = up.removed.map(EdgeCodecCommon.readEndpointId).flatMap(_.toOption)
+          val adds = up.added.map(_._1).map(EdgeCodecCommon.readEndpointId).flatMap(_.toOption)
+          Seq(IdEndpointPrefixUpdate(path, ResolvedValue(EndpointSetUpdate(current, removes, adds))))
+        } else {
+          Seq()
+        }
+      case _ => Seq()
     }
   }
 }

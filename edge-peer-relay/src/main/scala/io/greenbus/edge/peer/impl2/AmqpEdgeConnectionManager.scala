@@ -46,11 +46,15 @@ class AmqpEdgeConnectionManager(host: String, port: Int, retryIntervalMs: Long, 
   }
 
   def buildConsumerServices(): ConsumerServices = {
-    new PeerConsumerServices(s"consumer-$host:$port", exe)
+    val services = new PeerConsumerServices(s"consumer-$host:$port", exe)
+    retrier.bindPeerLinkObserver(services)
+    services
   }
 
   def buildProducerServices(): ProducerServices = {
-    new PeerProducerServices(s"producer-$host:$port", exe)
+    val services = new PeerProducerServices(s"producer-$host:$port", exe)
+    retrier.bindGatewayObserver(services)
+    services
   }
 
   def eventThread: SchedulableCallMarshaller = exe
