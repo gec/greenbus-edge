@@ -29,19 +29,3 @@ trait ProducerServices {
 trait GatewayLinkObserver {
   def connected(channel: GatewayProxyChannel): Unit
 }
-
-/*
-class ProducerManager(eventThread: SchedulableCallMarshaller) extends ProducerServices with GatewayLinkObserver {
-
-  private val gatewaySource = GatewayRouteSource.build(eventThread)
-
-  private val provider = new StreamProducerBinder(gatewaySource)
-
-  def connected(channel: GatewayProxyChannel): Unit = {
-    gatewaySource.connect(channel)
-  }
-
-  def endpointBuilder(id: EndpointId): EndpointBuilder = {
-    new EndpointProducerBuilderImpl(id, eventThread, provider)
-  }
-}*/
