@@ -230,24 +230,6 @@ object StreamConversions {
     b.build()
   }
 
-  def resyncSnapshotFromProto(msg: proto.ResyncSnapshot): Either[String, stream.ResyncSnapshot] = {
-    if (msg.hasSnapshot && msg.hasSequence) {
-      for {
-        seq <- ValueTypeConversions.sequencedFromProto(msg.getSequence)
-        update <- setSnapshotFromProto(msg.getSnapshot)
-      } yield {
-        stream.ResyncSnapshot(Resync(seq, update))
-      }
-    } else {
-      Left("ResyncSnapshot missing update or sequence")
-    }
-  }
-  def resyncSnapshotToProto(obj: stream.ResyncSnapshot): proto.ResyncSnapshot = {
-    val b = proto.ResyncSnapshot.newBuilder()
-    b.setSnapshot(setSnapshotToProto(obj.resync.snapshot))
-    b.build()
-  }
-
   def resyncSessionFromProto(msg: proto.ResyncSession): Either[String, stream.ResyncSession] = {
     if (msg.hasSessionId && msg.hasSnapshot && msg.hasSequence && msg.hasContext) {
       for {
@@ -288,7 +270,6 @@ object StreamConversions {
     import proto.AppendEvent.AppendTypesCase
     msg.getAppendTypesCase match {
       case AppendTypesCase.STREAM_DELTA => streamDeltaFromProto(msg.getStreamDelta)
-      case AppendTypesCase.RESYNC_SNAPSHOT => resyncSnapshotFromProto(msg.getResyncSnapshot)
       case AppendTypesCase.RESYNC_SESSION => resyncSessionFromProto(msg.getResyncSession)
       case AppendTypesCase.STREAM_ABSENT => Right(StreamAbsent)
       case _ => Left("Unrecognizable AppendEvent type")
@@ -298,7 +279,6 @@ object StreamConversions {
     val b = proto.AppendEvent.newBuilder()
     obj match {
       case v: stream.StreamDelta => b.setStreamDelta(streamDeltaToProto(v))
-      case v: stream.ResyncSnapshot => b.setResyncSnapshot(resyncSnapshotToProto(v))
       case v: stream.ResyncSession => b.setResyncSession(resyncSessionToProto(v))
       case stream.StreamAbsent => b.setStreamAbsent(true)
       case _ => throw new IllegalArgumentException("Unrecognized AppendEvent type")

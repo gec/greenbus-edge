@@ -50,7 +50,6 @@ class StreamCacheImpl(appendLimitDefault: Int) extends StreamCache {
         event match {
           case rs: ResyncSession =>
             state = InitSessioned(SessionContext(rs.sessionId, rs.context), rs.resync)
-          case snap: ResyncSnapshot => throw new IllegalStateException(s"No resync session for unitialized cache")
           case sd: StreamDelta => throw new IllegalStateException(s"No resync session for unitialized cache")
           case StreamAbsent =>
             state = InitAbsent
@@ -60,8 +59,6 @@ class StreamCacheImpl(appendLimitDefault: Int) extends StreamCache {
         event match {
           case rs: ResyncSession =>
             state = InitSessioned(SessionContext(rs.sessionId, rs.context), rs.resync)
-          case snap: ResyncSnapshot =>
-            state = InitSessioned(st.ctx, snap.resync)
           case sd: StreamDelta =>
             state = InitSessioned(st.ctx, PresequencedStreamOps.foldResync(st.current, sd.update, appendLimit = appendLimitDefault))
           case StreamAbsent =>
@@ -72,7 +69,6 @@ class StreamCacheImpl(appendLimitDefault: Int) extends StreamCache {
         event match {
           case rs: ResyncSession =>
             state = InitSessioned(SessionContext(rs.sessionId, rs.context), rs.resync)
-          case snap: ResyncSnapshot => throw new IllegalStateException(s"No resync session for absent cache")
           case sd: StreamDelta => throw new IllegalStateException(s"No resync session for absent cache")
           case StreamAbsent =>
         }
@@ -118,7 +114,6 @@ class StreamQueueImpl(appendLimitDefault: Int) extends StreamQueue with LazyLogg
         event match {
           case rs: ResyncSession =>
             state = Resynced(SessionContext(rs.sessionId, rs.context), rs.resync, ArrayBuffer())
-          case snap: ResyncSnapshot => throw new IllegalStateException(s"No resync session for unitialized queue")
           case sd: StreamDelta => throw new IllegalStateException(s"No resync session for unitialized queue")
           case StreamAbsent =>
             state = Absented(Seq())
@@ -128,8 +123,6 @@ class StreamQueueImpl(appendLimitDefault: Int) extends StreamQueue with LazyLogg
         event match {
           case rs: ResyncSession =>
             state = Resynced(SessionContext(rs.sessionId, rs.context), rs.resync, ArrayBuffer())
-          case snap: ResyncSnapshot =>
-            state = Resynced(st.ctx, snap.resync, ArrayBuffer())
           case sd: StreamDelta =>
             state = AccumulatingDeltas(st.ctx, sd.update)
           case StreamAbsent =>
@@ -140,8 +133,6 @@ class StreamQueueImpl(appendLimitDefault: Int) extends StreamQueue with LazyLogg
         event match {
           case rs: ResyncSession =>
             state = Resynced(SessionContext(rs.sessionId, rs.context), rs.resync, ArrayBuffer(StreamDelta(st.current)))
-          case snap: ResyncSnapshot =>
-            state = Resynced(st.ctx, snap.resync, ArrayBuffer(StreamDelta(st.current)))
           case sd: StreamDelta =>
             state = AccumulatingDeltas(st.ctx, PresequencedStreamOps.foldDelta(st.current, sd.update)) // TODO: infinite append!
           case StreamAbsent =>
@@ -153,9 +144,6 @@ class StreamQueueImpl(appendLimitDefault: Int) extends StreamQueue with LazyLogg
           case rs: ResyncSession =>
             st.prev += ResyncSession(st.ctx.sessionId, st.ctx.context, st.current)
             state = Resynced(SessionContext(rs.sessionId, rs.context), rs.resync, st.prev)
-          case snap: ResyncSnapshot =>
-            st.prev += ResyncSession(st.ctx.sessionId, st.ctx.context, st.current)
-            state = Resynced(st.ctx, snap.resync, st.prev)
           case sd: StreamDelta =>
             state = Resynced(st.ctx, PresequencedStreamOps.foldResync(st.current, sd.update, appendLimitDefault), st.prev) // TODO: infinite append!
           case StreamAbsent =>
@@ -166,7 +154,6 @@ class StreamQueueImpl(appendLimitDefault: Int) extends StreamQueue with LazyLogg
         event match {
           case rs: ResyncSession =>
             state = Resynced(SessionContext(rs.sessionId, rs.context), rs.resync, ArrayBuffer())
-          case snap: ResyncSnapshot => logger.warn(s"No resync session for absent queue")
           case sd: StreamDelta => logger.warn(s"No resync session for absent queue")
           case StreamAbsent =>
             state = Absented(Seq())
@@ -175,7 +162,6 @@ class StreamQueueImpl(appendLimitDefault: Int) extends StreamQueue with LazyLogg
         event match {
           case rs: ResyncSession =>
             state = Resynced(SessionContext(rs.sessionId, rs.context), rs.resync, ArrayBuffer(st.prev :+ StreamAbsent: _*))
-          case snap: ResyncSnapshot => logger.warn(s"No resync session for absent queue")
           case sd: StreamDelta => logger.warn(s"No resync session for absent queue")
           case StreamAbsent =>
         }

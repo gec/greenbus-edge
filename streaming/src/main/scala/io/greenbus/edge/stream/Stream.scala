@@ -48,7 +48,6 @@ case class SequenceCtx(params: Option[StreamParams], userMetadata: Option[TypeVa
 sealed trait AppendEvent
 case object StreamAbsent extends AppendEvent
 case class StreamDelta(update: Delta) extends AppendEvent
-case class ResyncSnapshot(resync: Resync) extends AppendEvent
 case class ResyncSession(sessionId: PeerSessionId, context: SequenceCtx, resync: Resync) extends AppendEvent
 
 // This is "peer event", append event above is stream event

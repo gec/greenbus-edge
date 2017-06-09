@@ -66,6 +66,8 @@ object FilteringStreamOps extends LazyLogging {
         resync.snapshot match {
           case r: AppendSnapshot =>
             (r, Delta(Seq(r.current)))
+          case _ =>
+            (resync.snapshot, resync)
         }
     }
   }

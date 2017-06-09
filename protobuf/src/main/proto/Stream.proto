@@ -71,10 +71,6 @@ message StreamDelta {
     repeated SequencedDiff updates = 1;
 }
 
-message ResyncSnapshot {
-    SequencedTypeValue sequence = 1;
-    SeqSnapshot snapshot = 2;
-}
 message ResyncSession {
     PeerSessionId session_id = 1;
     SequenceContext context = 2;
@@ -94,9 +90,8 @@ message SequenceContext {
 message AppendEvent {
     oneof append_types {
         StreamDelta stream_delta = 1;
-        ResyncSnapshot resync_snapshot = 2;
-        ResyncSession resync_Session = 3;
-        bool stream_absent = 4;
+        ResyncSession resync_Session = 2;
+        bool stream_absent = 3;
     }
 }
 

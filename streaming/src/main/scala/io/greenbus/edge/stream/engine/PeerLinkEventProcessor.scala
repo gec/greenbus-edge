@@ -35,7 +35,7 @@ class PeerLinkEventProcessor(session: PeerSessionId, handler: SourceEvents => Un
       case None => None
       case Some(ValueSync(_, value)) => Some(value)
       case Some(ValueDelta(value)) => Some(value)
-
+      case _ => None
     }
 
     val optMapUpdate = dvu.flatMap {
