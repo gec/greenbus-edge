@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicReference
 import akka.actor.ActorSystem
 import com.typesafe.config.ConfigFactory
 import io.greenbus.edge.peer.impl2.AmqpEdgeConnectionManager
-import io.greenbus.edge.peer.{ AmqpEdgeService, PeerClientSettings }
+import io.greenbus.edge.peer.PeerClientSettings
 
 import scala.concurrent.ExecutionContext.Implicits.global
 

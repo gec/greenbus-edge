@@ -49,9 +49,7 @@ class ProducerDynamic(producer: ProducerServices, table: DynamicDataKey) {
 
 @RunWith(classOf[JUnitRunner])
 class DynamicTableTest extends FunSuite with Matchers with BeforeAndAfterEach with BaseEdgeIntegration with LazyLogging {
-  import EdgeMatchers._
   import EdgeSubHelpers._
-  import io.greenbus.edge.peer.TestModel._
 
   class TestConsumer(params: SubscriptionParams) {
     val consumer = buildConsumer()

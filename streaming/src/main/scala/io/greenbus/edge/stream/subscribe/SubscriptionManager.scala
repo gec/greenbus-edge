@@ -207,6 +207,7 @@ class AppendUpdateSynthesizer extends UpdateSynthesizer[Appended] with LazyLoggi
   }
 }
 
+/*
 class ConsumerUpdateFilter(cid: String, resync: ResyncSession, updates: UpdateSynthesizer[_ <: DataValueUpdate]) {
 
   private val filter = new GenInitializedStreamFilter(cid, resync)
@@ -539,3 +540,4 @@ trait PeerBasedSubKey extends SubscriptionKey {
 }
 
 case class KeyedUpdate(key: SubscriptionKey, value: ValueUpdate)
+*/

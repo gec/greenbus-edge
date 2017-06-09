@@ -20,9 +20,10 @@ package io.greenbus.edge.stream.engine2
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.stream._
+import io.greenbus.edge.stream.engine2.PeerTestFramework.SimpleRoute
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
-import org.scalatest.{ FunSuite, Matchers }
+import org.scalatest.{FunSuite, Matchers}
 
 import scala.collection.mutable
 
@@ -44,7 +45,7 @@ class MockRouteSource(name: String) extends RouteStreamSource with LazyLogging {
 @RunWith(classOf[JUnitRunner])
 class SingularEngineTests extends FunSuite with Matchers with LazyLogging {
 
-  import Helpers._
+  import io.greenbus.edge.stream.engine2.PeerTestFramework.Helpers._
 
   class BasicTest {
 

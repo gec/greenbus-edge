@@ -19,8 +19,8 @@
 package io.greenbus.edge.peer.impl2
 
 import io.greenbus.edge.amqp.AmqpService
-import io.greenbus.edge.peer.{ ConsumerServices, EdgeServices, ProducerServices, RetryingConnector }
-import io.greenbus.edge.thread.{ EventThreadService, SchedulableCallMarshaller }
+import io.greenbus.edge.peer.{ConsumerServices, ProducerServices, RetryingConnector}
+import io.greenbus.edge.thread.{EventThreadService, SchedulableCallMarshaller}
 
 import scala.concurrent.ExecutionContext
 

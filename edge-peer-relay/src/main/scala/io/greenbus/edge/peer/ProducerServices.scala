@@ -32,6 +32,7 @@ trait GatewayLinkObserver {
   def connected(channel: GatewayProxyChannel): Unit
 }
 
+/*
 class ProducerManager(eventThread: SchedulableCallMarshaller) extends ProducerServices with GatewayLinkObserver {
 
   private val gatewaySource = GatewayRouteSource.build(eventThread)
@@ -45,4 +46,4 @@ class ProducerManager(eventThread: SchedulableCallMarshaller) extends ProducerSe
   def endpointBuilder(id: EndpointId): EndpointBuilder = {
     new EndpointProducerBuilderImpl(id, eventThread, provider)
   }
-}
+}*/

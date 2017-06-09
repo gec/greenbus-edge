@@ -18,12 +18,9 @@
  */
 package io.greenbus.edge.peer
 
-import io.greenbus.edge.api.{ EdgeSubscriptionClient, ServiceClient, ServiceClientChannel }
-import io.greenbus.edge.api.stream._
-import io.greenbus.edge.stream.subscribe.{ DynamicSubscriptionManager, StreamServiceClientImpl }
-import io.greenbus.edge.stream.{ PeerLinkProxyChannel, PeerSessionId }
-import io.greenbus.edge.flow.{ RemoteBoundLatestSource, Source }
-import io.greenbus.edge.thread.SchedulableCallMarshaller
+import io.greenbus.edge.api.{EdgeSubscriptionClient, ServiceClient, ServiceClientChannel}
+import io.greenbus.edge.flow.Source
+import io.greenbus.edge.stream.{PeerLinkProxyChannel, PeerSessionId}
 
 trait PeerLinkObserver {
   def connected(session: PeerSessionId, channel: PeerLinkProxyChannel): Unit
@@ -35,36 +32,4 @@ trait ConsumerServices {
   def serviceChannelSource: Source[ServiceClientChannel]
 
   def queuingServiceClient: ServiceClient
-}
-
-trait StreamConsumerManager extends ConsumerServices with PeerLinkObserver
-
-object StreamConsumerManager {
-  def build(eventThread: SchedulableCallMarshaller): StreamConsumerManager = {
-    new StreamConsumerManagerImpl(eventThread)
-  }
-}
-class StreamConsumerManagerImpl(eventThread: SchedulableCallMarshaller) extends StreamConsumerManager {
-
-  private val streamSubMgr = new DynamicSubscriptionManager(eventThread)
-  private val edgeSubMgr = new EdgeSubscriptionManager(eventThread, streamSubMgr)
-
-  private val serviceDist = new RemoteBoundLatestSource[ServiceClientChannel](eventThread)
-  private val requestQueuer = new QueuingServiceChannel(eventThread)
-
-  def connected(session: PeerSessionId, channel: PeerLinkProxyChannel): Unit = {
-    streamSubMgr.connected(session, channel)
-
-    val streamServices = new StreamServiceClientImpl(channel, eventThread)
-    val edgeServices = new ServiceClientImpl(streamServices)
-    serviceDist.push(edgeServices)
-    requestQueuer.connected(edgeServices)
-  }
-
-  def subscriptionClient: EdgeSubscriptionClient = edgeSubMgr
-
-  def serviceChannelSource: Source[ServiceClientChannel] = serviceDist
-
-  def queuingServiceClient: ServiceClient = requestQueuer
-
 }

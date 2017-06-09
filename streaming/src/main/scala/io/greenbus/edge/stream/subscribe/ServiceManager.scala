@@ -23,7 +23,8 @@ import io.greenbus.edge.stream._
 import io.greenbus.edge.flow._
 import io.greenbus.edge.thread.CallMarshaller
 
-import scala.util.{ Success, Try }
+import scala.collection.mutable
+import scala.util.{Success, Try}
 
 case class UserServiceRequest(row: RowId, value: TypeValue)
 case class UserServiceResponse(row: RowId, value: TypeValue)
@@ -62,4 +63,26 @@ class StreamServiceClientImpl(proxy: PeerLinkProxyChannel, eventThread: CallMars
   }
 
   def onClose: LatchSubscribable = proxy.onClose
+}
+
+
+class Correlator[A] {
+
+  private var sequence: Long = 0
+  private val correlationMap = mutable.LongMap.empty[A]
+
+  def add(obj: A): Long = {
+    val next = sequence
+    sequence += 1
+
+    correlationMap += (next -> obj)
+
+    next
+  }
+
+  def pop(correlator: Long): Option[A] = {
+    val result = correlationMap.get(correlator)
+    correlationMap -= correlator
+    result
+  }
 }

@@ -18,10 +18,12 @@
  */
 package io.greenbus.edge.stream.engine2
 
+import java.util.UUID
+
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.stream._
 import org.junit.runner.RunWith
-import org.scalatest.{ FunSuite, Matchers }
+import org.scalatest.{FunSuite, Matchers}
 import org.scalatest.junit.JUnitRunner
 
 import scala.collection.mutable
@@ -31,6 +33,37 @@ object PeerTestFramework extends Matchers with LazyLogging {
   class MockSubscriber {
 
   }
+
+  object Helpers {
+    def sessId: PeerSessionId = PeerSessionId(UUID.randomUUID(), 0)
+  }
+
+  class SimpleRoute {
+    val route = UuidVal(UUID.randomUUID())
+    val row1 = RowId(route, "testTable", SymbolVal("row1"))
+    val row2 = RowId(route, "testTable", SymbolVal("row2"))
+    val row3 = RowId(route, "testTable", SymbolVal("row3"))
+    val rows = Seq(row1, row2, row3)
+    val rowSet = rows.toSet
+    val tableRowsSet = rows.map(_.tableRow).toSet
+
+    def routeToTableRows: (TypeValue, Set[TableRow]) = route -> tableRowsSet
+
+    def firstBatch(session: PeerSessionId, n: Int = 0): Seq[RowAppendEvent] = {
+      Seq(
+        RowAppendEvent(row1, ResyncSession(session, SequenceCtx.empty, Resync(Int64Val(0), SetSnapshot(Set(Int64Val(5 + n), Int64Val(3 + n)))))),
+        RowAppendEvent(row2, ResyncSession(session, SequenceCtx.empty, Resync(Int64Val(0), MapSnapshot(Map(Int64Val(3 + n) -> Int64Val(9 + n)))))),
+        RowAppendEvent(row3, ResyncSession(session, SequenceCtx.empty, Resync(Int64Val(0), AppendSnapshot(SequencedDiff(Int64Val(0), AppendValue(Int64Val(66 + n))), Seq())))))
+    }
+
+    def secondBatch(n: Int = 0): Seq[RowAppendEvent] = {
+      Seq(
+        RowAppendEvent(row1, StreamDelta(Delta(Seq(SequencedDiff(Int64Val(1), SetDiff(Set(Int64Val(5 + n)), Set(Int64Val(7 + n)))))))),
+        RowAppendEvent(row2, StreamDelta(Delta(Seq(SequencedDiff(Int64Val(1), MapDiff(Set(), Set(Int64Val(4) -> Int64Val(55 + n)), Set(Int64Val(3 + n) -> Int64Val(8 + n)))))))),
+        RowAppendEvent(row3, StreamDelta(Delta(Seq(SequencedDiff(Int64Val(1), AppendValue(Int64Val(77 + n))))))))
+    }
+  }
+
 
   object MockPeer {
 

@@ -19,7 +19,6 @@
 package io.greenbus.edge.stream.gateway3
 
 import io.greenbus.edge.stream._
-import io.greenbus.edge.stream.gateway.MapDiffCalc
 
 class AppendSequencer(session: PeerSessionId, ctx: SequenceCtx) {
   private var sequence: Long = 0
@@ -95,6 +94,28 @@ class SetSequencer(session: PeerSessionId, ctx: SequenceCtx) {
   }
 }
 
+
+object MapDiffCalc {
+  def calculate[A, B](prev: Map[A, B], next: Map[A, B]): (Set[A], Set[(A, B)], Set[(A, B)]) = {
+    val removed = prev.keySet -- next.keySet
+
+    val added = Set.newBuilder[(A, B)]
+    val modified = Set.newBuilder[(A, B)]
+    next.foreach {
+      case (k, v) =>
+        prev.get(k) match {
+          case None => added += (k -> v)
+          case Some(lastV) =>
+            if (lastV != v) {
+              modified += (k -> v)
+            }
+        }
+    }
+
+    (removed, added.result(), modified.result())
+  }
+
+}
 object MapSequencer {
 
   def diff(next: Map[TypeValue, TypeValue], prev: Map[TypeValue, TypeValue]): MapDiff = {
