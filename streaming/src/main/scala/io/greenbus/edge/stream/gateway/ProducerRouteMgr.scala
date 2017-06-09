@@ -84,7 +84,7 @@ class ProducerRouteMgr(appendLimitDefault: Int) extends RouteTargetSubject with 
       case RowUpdate(key, update) => {
         updateMap.get(key).foreach(_.handle(update))
       }
-      case DrowRow(key) =>
+      case DropRow(key) =>
         updateMap.get(key).foreach(s => streamRemoved(key, s))
     }
   }

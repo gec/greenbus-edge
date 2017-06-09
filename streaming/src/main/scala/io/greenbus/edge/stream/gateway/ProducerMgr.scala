@@ -28,7 +28,7 @@ import scala.collection.mutable
 sealed trait ProducerKeyEvent
 case class AddRow(key: TableRow, ctx: SequenceCtx) extends ProducerKeyEvent
 case class RowUpdate(key: TableRow, update: ProducerDataUpdate) extends ProducerKeyEvent
-case class DrowRow(key: TableRow) extends ProducerKeyEvent
+case class DropRow(key: TableRow) extends ProducerKeyEvent
 
 sealed trait ProducerEvent
 
