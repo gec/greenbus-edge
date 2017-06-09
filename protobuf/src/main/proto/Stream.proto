@@ -41,25 +41,9 @@ message MapSnapshot {
     repeated TypeValueKeyPair elements = 1;
 }
 
-/*
-message AppendSetValue {
-    SequencedTypeValue sequence = 1;
-    TypeValue value = 2;
-}
-
-message AppendSetSequence {
-    repeated AppendSetValue values = 1;
-}
-*/
-
 message SequencedDiff {
     SequencedTypeValue sequence = 1;
     SeqDiff diff = 2;
-    /*oneof set_types {
-        SetDiff set_diff = 2;
-        MapDiff map_diff = 3;
-        TypeValue append_diff = 4;
-    }*/
 }
 
 message AppendSnapshot {
