@@ -19,7 +19,6 @@
 package io.greenbus.edge.stream.gateway3
 
 import io.greenbus.edge.stream.engine2.TargetQueueMgr
-import io.greenbus.edge.stream.gateway.RouteServiceRequest
 import io.greenbus.edge.stream.{ GatewayEvents, GatewayProxyChannel, ServiceResponse, TypeValue }
 import io.greenbus.edge.thread.CallMarshaller
 

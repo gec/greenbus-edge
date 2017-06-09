@@ -23,7 +23,6 @@ import io.greenbus.edge.flow.Sink
 import io.greenbus.edge.stream._
 import io.greenbus.edge.stream.engine2.CachingKeyStreamSubject
 import io.greenbus.edge.stream.filter.StreamCache
-import io.greenbus.edge.stream.gateway.RouteServiceRequest
 
 trait DynamicTable {
   def subscribed(key: TypeValue): Unit

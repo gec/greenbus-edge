@@ -22,7 +22,6 @@ import io.greenbus.edge.api._
 import io.greenbus.edge.api.stream._
 import io.greenbus.edge.data.{ IndexableValue, SampleValue, Value }
 import io.greenbus.edge.flow._
-import io.greenbus.edge.stream.gateway.RouteServiceRequest
 import io.greenbus.edge.stream.{ SequenceCtx, TableRow, TextVal, TypeValue }
 import io.greenbus.edge.stream.gateway3._
 import io.greenbus.edge.thread.CallMarshaller
@@ -74,6 +73,8 @@ class OutputStatusPublisher(key: TableRow, updates: Sink[RowUpdate]) extends Out
     updates.push(RowUpdate(key, AppendProducerUpdate(Seq(v))))
   }
 }
+
+case class ProducerOutputEntry(path: Path, responder: Responder[OutputParams, OutputResult])
 
 class EndpointBuilderImpl(endpointId: EndpointId, gatewayThread: CallMarshaller, gateway: GatewayEventHandler) extends EndpointBuilder {
   private val updateBuffer = new RowUpdateBuffer

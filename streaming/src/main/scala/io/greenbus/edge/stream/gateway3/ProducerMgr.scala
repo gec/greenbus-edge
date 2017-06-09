@@ -22,7 +22,6 @@ import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.flow.Sink
 import io.greenbus.edge.stream._
 import io.greenbus.edge.stream.engine2._
-import io.greenbus.edge.stream.gateway.RouteServiceRequest
 
 import scala.collection.mutable
 
@@ -32,6 +31,8 @@ case class RowUpdate(key: TableRow, update: ProducerDataUpdate) extends Producer
 case class DrowRow(key: TableRow) extends ProducerKeyEvent
 
 sealed trait ProducerEvent
+
+case class RouteServiceRequest(row: TableRow, value: TypeValue, respond: TypeValue => Unit)
 
 case class RouteBatchEvent(route: TypeValue, events: Seq[ProducerKeyEvent]) extends ProducerEvent
 

@@ -20,11 +20,7 @@ package io.greenbus.edge.stream.subscribe
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.stream._
-import io.greenbus.edge.stream.gateway.MapDiffCalc
-import io.greenbus.edge.flow._
-import io.greenbus.edge.thread.CallMarshaller
-
-import scala.collection.mutable
+import io.greenbus.edge.stream.gateway3.MapDiffCalc
 
 sealed trait ValueUpdate
 case object ValueAbsent extends ValueUpdate

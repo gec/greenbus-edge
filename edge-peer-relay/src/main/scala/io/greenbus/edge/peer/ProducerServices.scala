@@ -19,10 +19,8 @@
 package io.greenbus.edge.peer
 
 import io.greenbus.edge.api.EndpointId
-import io.greenbus.edge.api.stream.{ EndpointBuilder, EndpointProducerBuilderImpl, ProducerBinder, StreamProducerBinder }
+import io.greenbus.edge.api.stream.EndpointBuilder
 import io.greenbus.edge.stream.GatewayProxyChannel
-import io.greenbus.edge.stream.gateway.GatewayRouteSource
-import io.greenbus.edge.thread.SchedulableCallMarshaller
 
 trait ProducerServices {
   def endpointBuilder(id: EndpointId): EndpointBuilder
