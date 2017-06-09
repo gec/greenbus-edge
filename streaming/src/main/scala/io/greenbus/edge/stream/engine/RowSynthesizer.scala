@@ -19,8 +19,8 @@
 package io.greenbus.edge.stream.engine
 
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.stream.filter.{ FilteredStreamQueue, StreamFilter, StreamFilterImpl, StreamQueue }
 import io.greenbus.edge.stream._
+import io.greenbus.edge.stream.filter.{ FilteredStreamQueue, StreamFilter, StreamFilterImpl, StreamQueue }
 
 import scala.collection.mutable
 

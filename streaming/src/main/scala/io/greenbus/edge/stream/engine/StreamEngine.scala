@@ -19,7 +19,6 @@
 package io.greenbus.edge.stream.engine
 
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.flow.{ Sink, Source }
 import io.greenbus.edge.stream._
 
 import scala.collection.mutable

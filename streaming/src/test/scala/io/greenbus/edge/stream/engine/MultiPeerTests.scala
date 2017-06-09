@@ -23,8 +23,8 @@ import java.util.UUID
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.stream._
 import org.junit.runner.RunWith
-import org.scalatest.{ FunSuite, Matchers }
 import org.scalatest.junit.JUnitRunner
+import org.scalatest.{ FunSuite, Matchers }
 
 import scala.collection.mutable
 

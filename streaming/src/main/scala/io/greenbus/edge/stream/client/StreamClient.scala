@@ -21,9 +21,9 @@ package io.greenbus.edge.stream.client
 import java.util.UUID
 
 import io.greenbus.edge.channel.ChannelClient
+import io.greenbus.edge.flow.{ CloseObservable, LatchSubscribable }
 import io.greenbus.edge.stream._
 import io.greenbus.edge.stream.channel.{ GatewayProxyChannelImpl, PeerLinkProxyChannelImpl }
-import io.greenbus.edge.flow.{ CloseObservable, LatchSubscribable }
 
 import scala.concurrent.{ ExecutionContext, Future }
 

@@ -104,8 +104,8 @@ object ChannelParserImpl {
   }
 }
 class ChannelParserImpl(sessionId: PeerSessionId, serialization: ChannelSerializationProvider) extends AmqpChannelParser {
-  import ChannelParserImpl._
   import ChannelIdentifiers._
+  import ChannelParserImpl._
   import io.greenbus.edge.stream.channel.Channels._
 
   def peerLinkResponse[A <: ChannelDescriptor[_]](obj: String => A, propertiesOpt: Option[util.Map[Symbol, AnyRef]], key: String): Option[AmqpChannelParsed] = {
@@ -153,9 +153,9 @@ class ChannelParserImpl(sessionId: PeerSessionId, serialization: ChannelSerializ
 }
 
 class ClientResponseParser extends AmqpClientResponseParser {
-  import io.greenbus.edge.stream.channel.Channels._
   import ChannelIdentifiers._
   import ChannelParserImpl._
+  import io.greenbus.edge.stream.channel.Channels._
 
   private def peerLink[A](obj: PeerSessionId => ChannelDescriptor[A], propertiesOpt: Option[util.Map[Symbol, AnyRef]]): Option[ChannelDescriptor[A]] = {
     propertiesOpt.flatMap(parsePeerLinkSession)

@@ -362,8 +362,8 @@ object StreamConversions {
 }
 
 object ProtocolConversions {
-  import ValueTypeConversions._
   import StreamConversions._
+  import ValueTypeConversions._
   import io.greenbus.edge.util.EitherUtil._
 
   def servReqFromProto(msg: proto.ServiceRequest): Either[String, stream.ServiceRequest] = {

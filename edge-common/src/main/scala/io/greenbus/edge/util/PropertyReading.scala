@@ -18,9 +18,10 @@
  */
 package io.greenbus.edge.util
 
-import java.util.Properties
-import scala.collection.JavaConversions._
 import java.io.FileInputStream
+import java.util.Properties
+
+import scala.collection.JavaConversions._
 
 class ConfigurationException(message: String) extends Exception(message)
 

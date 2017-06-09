@@ -18,13 +18,11 @@
  */
 package io.greenbus.edge.api.stream
 
-import io.greenbus.edge.api._
+import io.greenbus.edge.api.{ proto, _ }
 import io.greenbus.edge.api.proto.convert.{ Conversions, OutputConversions }
-import io.greenbus.edge.stream._
-import io.greenbus.edge.api.proto
-import io.greenbus.edge.data.{ proto => vproto }
 import io.greenbus.edge.data.proto.convert.ValueConversions
-import io.greenbus.edge.data.{ IndexableValue, SampleValue, Value }
+import io.greenbus.edge.data.{ IndexableValue, SampleValue, Value, proto => vproto }
+import io.greenbus.edge.stream._
 import io.greenbus.edge.stream.consume.{ MapUpdated, SetUpdated }
 import io.greenbus.edge.util.EitherUtil
 

@@ -18,8 +18,8 @@
  */
 package io.greenbus.edge.data.mapping
 
-import io.greenbus.edge.data.schema.{ StructFieldDef, TStruct }
 import io.greenbus.edge.data._
+import io.greenbus.edge.data.schema.{ StructFieldDef, TStruct }
 import io.greenbus.edge.util.EitherUtil
 
 object MappingLibrary {

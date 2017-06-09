@@ -30,8 +30,8 @@ import io.greenbus.edge.thread.CallMarshaller
 import org.apache.qpid.proton.Proton
 import org.apache.qpid.proton.engine._
 
-import scala.concurrent.{ Await, Future, Promise }
 import scala.concurrent.duration._
+import scala.concurrent.{ Await, Future, Promise }
 
 trait AmqpChannelClientSource extends CloseableComponent {
   def open(describer: AmqpChannelDescriber, responseParser: AmqpClientResponseParser, serialization: ChannelSerializationProvider): Future[ChannelClient]

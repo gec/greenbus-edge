@@ -18,8 +18,8 @@
  */
 package io.greenbus.edge.peer
 
+import io.greenbus.edge.api.stream.KeyMetadata
 import io.greenbus.edge.api.{ EndpointId, EndpointPath, Path }
-import io.greenbus.edge.api.stream.{ EndpointBuilder, KeyMetadata }
 import io.greenbus.edge.data.{ ValueDouble, ValueString }
 
 object TestModel {

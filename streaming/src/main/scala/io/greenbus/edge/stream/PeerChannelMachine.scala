@@ -18,7 +18,6 @@
  */
 package io.greenbus.edge.stream
 
-import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.flow._
 
 trait StreamSubscribable {

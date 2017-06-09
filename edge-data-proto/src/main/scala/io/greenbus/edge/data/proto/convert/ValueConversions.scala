@@ -19,8 +19,8 @@
 package io.greenbus.edge.data.proto.convert
 
 import com.google.protobuf.ByteString
-import io.greenbus.edge.data.{ ValueMap, ValueNone, proto }
 import io.greenbus.edge.data
+import io.greenbus.edge.data.{ ValueNone, proto }
 
 import scala.collection.JavaConverters._
 

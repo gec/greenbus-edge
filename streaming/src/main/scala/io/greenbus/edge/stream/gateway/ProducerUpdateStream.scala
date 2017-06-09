@@ -18,9 +18,9 @@
  */
 package io.greenbus.edge.stream.gateway
 
-import io.greenbus.edge.stream.{ PeerSessionId, SequenceCtx }
 import io.greenbus.edge.stream.engine.StreamObserverSet
 import io.greenbus.edge.stream.filter.{ StreamCache, StreamCacheImpl }
+import io.greenbus.edge.stream.{ PeerSessionId, SequenceCtx }
 
 class ProducerUpdateStream(sessionId: PeerSessionId, ctx: SequenceCtx, appendLimit: Int) {
 

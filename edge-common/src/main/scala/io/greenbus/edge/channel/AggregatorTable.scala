@@ -18,8 +18,7 @@
  */
 package io.greenbus.edge.channel
 
-import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.flow.{ Closeable, CloseableComponent, ReceiverChannel, SenderChannel }
+import io.greenbus.edge.flow.CloseableComponent
 
 trait AggregatorTable[Key, Handler] {
   def handleForKey(key: Key, closeable: CloseableComponent)(set: Handler => Unit): Unit

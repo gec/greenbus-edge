@@ -18,8 +18,8 @@
  */
 package io.greenbus.edge.stream.channel
 
-import io.greenbus.edge.stream._
 import io.greenbus.edge.flow._
+import io.greenbus.edge.stream._
 
 class SubscriberChannelProxyImpl(
     subChannel: ReceiverChannel[SubscriptionSetUpdate, Boolean],

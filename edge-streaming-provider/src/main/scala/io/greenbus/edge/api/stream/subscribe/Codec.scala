@@ -21,8 +21,8 @@ package io.greenbus.edge.api.stream.subscribe
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.api._
 import io.greenbus.edge.api.stream.AppendDataKeyCodec.{ LatestKeyValueCodec, SeriesCodec, TopicEventCodec }
-import io.greenbus.edge.api.stream.{ AppendDataKeyCodec, EdgeCodecCommon, EdgeSubCodec, KeyedSetDataKeyCodec }
 import io.greenbus.edge.api.stream.KeyedSetDataKeyCodec.ActiveSetCodec
+import io.greenbus.edge.api.stream.{ AppendDataKeyCodec, EdgeCodecCommon, EdgeSubCodec, KeyedSetDataKeyCodec }
 import io.greenbus.edge.stream.TypeValue
 import io.greenbus.edge.stream.consume.{ Appended, DataValueUpdate, MapUpdated }
 

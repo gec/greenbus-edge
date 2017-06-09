@@ -20,7 +20,6 @@ package io.greenbus.edge.stream.filter
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.stream._
-import io.greenbus.edge.stream.filter.StreamCacheImpl.SessionContext
 
 object FilteringStreamOps extends LazyLogging {
 

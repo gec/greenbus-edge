@@ -18,13 +18,7 @@
  */
 package io.greenbus.edge.stream
 
-import java.util.UUID
-
-import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.collection.OneToManyUniquely
 import io.greenbus.edge.flow._
-
-import scala.collection.mutable
 
 trait GatewayProxy extends ServiceConsumer {
   def subscriptions: Source[Set[RowId]]

@@ -22,8 +22,8 @@ import java.util.UUID
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.flow.Sink
-import io.greenbus.edge.stream.{ PeerSessionId, TableRow }
 import io.greenbus.edge.stream.engine.{ KeyStreamObserver, RouteTargetSubject, StreamObserver }
+import io.greenbus.edge.stream.{ PeerSessionId, TableRow }
 
 import scala.collection.mutable
 

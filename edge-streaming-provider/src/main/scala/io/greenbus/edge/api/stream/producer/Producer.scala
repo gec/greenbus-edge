@@ -22,8 +22,8 @@ import io.greenbus.edge.api._
 import io.greenbus.edge.api.stream._
 import io.greenbus.edge.data.{ IndexableValue, SampleValue, Value }
 import io.greenbus.edge.flow._
-import io.greenbus.edge.stream.{ SequenceCtx, TableRow, TextVal, TypeValue }
 import io.greenbus.edge.stream.gateway._
+import io.greenbus.edge.stream.{ SequenceCtx, TableRow, TextVal, TypeValue }
 import io.greenbus.edge.thread.CallMarshaller
 
 import scala.collection.mutable

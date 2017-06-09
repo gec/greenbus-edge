@@ -23,8 +23,8 @@ import io.greenbus.edge.api._
 import io.greenbus.edge.api.stream._
 import io.greenbus.edge.flow.{ Handler, Source }
 import io.greenbus.edge.stream.consume._
-import io.greenbus.edge.stream.{ PeerRouteSource, RowId }
 import io.greenbus.edge.stream.peer.{ StreamPeer, StreamUserSubscription }
+import io.greenbus.edge.stream.{ PeerRouteSource, RowId }
 
 import scala.collection.mutable
 

@@ -19,7 +19,6 @@
 package io.greenbus.edge.data
 
 import java.util
-import java.util.UUID
 
 sealed trait Value
 

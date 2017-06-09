@@ -18,9 +18,8 @@
  */
 package io.greenbus.edge.api.proto.convert
 
-import com.google.protobuf.ByteString
+import io.greenbus.edge.api
 import io.greenbus.edge.api.proto
-import io.greenbus.edge.{ api, data }
 import io.greenbus.edge.data._
 import io.greenbus.edge.data.proto.convert.ValueConversions
 

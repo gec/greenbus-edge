@@ -19,8 +19,8 @@
 package io.greenbus.edge.stream.channel
 
 import io.greenbus.edge.channel._
-import io.greenbus.edge.stream._
 import io.greenbus.edge.flow.{ ReceiverChannel, SenderChannel }
+import io.greenbus.edge.stream._
 
 object Channels {
 
