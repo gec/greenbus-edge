@@ -21,7 +21,7 @@ package io.greenbus.edge.api.stream
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.api._
 import io.greenbus.edge.stream.TypeValue
-import io.greenbus.edge.stream.subscribe._
+import io.greenbus.edge.stream.consume._
 
 trait ObservedEdgeTypeSubMgr extends EdgeTypeSubMgr {
 

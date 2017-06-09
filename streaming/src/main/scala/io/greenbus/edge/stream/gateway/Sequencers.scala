@@ -16,7 +16,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.stream.gateway3
+package io.greenbus.edge.stream.gateway
 
 import io.greenbus.edge.stream._
 

@@ -19,7 +19,6 @@
 package io.greenbus.edge.stream.consume
 
 import io.greenbus.edge.stream._
-import io.greenbus.edge.stream.subscribe.{ RowUpdate, ValueUnresolved }
 
 object UserSubscriptionSynth {
   def build(rows: Set[RowId]): UserSubscriptionSynth = {

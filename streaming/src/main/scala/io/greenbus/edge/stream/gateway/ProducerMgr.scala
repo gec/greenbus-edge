@@ -16,12 +16,12 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.stream.gateway3
+package io.greenbus.edge.stream.gateway
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.flow.Sink
 import io.greenbus.edge.stream._
-import io.greenbus.edge.stream.engine2._
+import io.greenbus.edge.stream.engine._
 
 import scala.collection.mutable
 

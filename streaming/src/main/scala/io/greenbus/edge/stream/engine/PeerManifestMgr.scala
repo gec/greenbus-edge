@@ -16,11 +16,11 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.stream.engine2
+package io.greenbus.edge.stream.engine
 
 import io.greenbus.edge.stream._
 import io.greenbus.edge.stream.filter.StreamCacheImpl
-import io.greenbus.edge.stream.gateway3.MapSequencer
+import io.greenbus.edge.stream.gateway.MapSequencer
 
 class StaticStream(appendLimitDefault: Int) extends CachingKeyStreamSubject {
   private val cache = new StreamCacheImpl(appendLimitDefault)

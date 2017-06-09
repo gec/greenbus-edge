@@ -16,11 +16,11 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.stream.engine2
+package io.greenbus.edge.stream.engine
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.stream._
-import io.greenbus.edge.stream.engine2.PeerTestFramework.SimpleRoute
+import io.greenbus.edge.stream.engine.PeerTestFramework.SimpleRoute
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import org.scalatest.{ FunSuite, Matchers }
@@ -45,7 +45,7 @@ class MockRouteSource(name: String) extends RouteStreamSource with LazyLogging {
 @RunWith(classOf[JUnitRunner])
 class SingularEngineTests extends FunSuite with Matchers with LazyLogging {
 
-  import io.greenbus.edge.stream.engine2.PeerTestFramework.Helpers._
+  import io.greenbus.edge.stream.engine.PeerTestFramework.Helpers._
 
   class BasicTest {
 

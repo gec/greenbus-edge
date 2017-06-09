@@ -16,14 +16,14 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.api.stream.producer2
+package io.greenbus.edge.api.stream.producer
 
 import io.greenbus.edge.api._
 import io.greenbus.edge.api.stream._
 import io.greenbus.edge.data.{ IndexableValue, SampleValue, Value }
 import io.greenbus.edge.flow._
 import io.greenbus.edge.stream.{ SequenceCtx, TableRow, TextVal, TypeValue }
-import io.greenbus.edge.stream.gateway3._
+import io.greenbus.edge.stream.gateway._
 import io.greenbus.edge.thread.CallMarshaller
 
 import scala.collection.mutable

@@ -18,7 +18,7 @@
  */
 package io.greenbus.edge.api.stream.peer
 
-import io.greenbus.edge.api.stream.subscribe2.{ EdgeSubscriptionClient2, EdgeSubscriptionProvider }
+import io.greenbus.edge.api.stream.subscribe.{ EdgeSubscriptionClient2, EdgeSubscriptionProvider }
 import io.greenbus.edge.stream.{ PeerChannelHandler, PeerLinkProxyChannel, PeerSessionId }
 import io.greenbus.edge.stream.peer.StreamPeer
 import io.greenbus.edge.thread.CallMarshaller

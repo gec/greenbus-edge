@@ -16,9 +16,9 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.stream.gateway3
+package io.greenbus.edge.stream.gateway
 
-import io.greenbus.edge.stream.engine2.TargetQueueMgr
+import io.greenbus.edge.stream.engine.TargetQueueMgr
 import io.greenbus.edge.stream.{ GatewayEvents, GatewayProxyChannel, ServiceResponse, TypeValue }
 import io.greenbus.edge.thread.CallMarshaller
 

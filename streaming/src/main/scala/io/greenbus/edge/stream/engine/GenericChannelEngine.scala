@@ -16,15 +16,11 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.stream.engine2
+package io.greenbus.edge.stream.engine
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.flow._
 import io.greenbus.edge.stream._
-import io.greenbus.edge.stream.consume.ValueUpdateSynthesizerImpl
-import io.greenbus.edge.stream.subscribe._
-import io.greenbus.edge.thread.CallMarshaller
-import io.greenbus.edge.util.EitherUtil
 
 import scala.collection.mutable
 

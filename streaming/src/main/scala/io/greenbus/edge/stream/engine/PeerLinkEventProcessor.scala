@@ -16,11 +16,10 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.stream.engine2
+package io.greenbus.edge.stream.engine
 
 import io.greenbus.edge.stream._
-import io.greenbus.edge.stream.consume.ValueUpdateSynthesizerImpl
-import io.greenbus.edge.stream.subscribe.{ MapUpdated, ValueDelta, ValueSync }
+import io.greenbus.edge.stream.consume.{ MapUpdated, ValueDelta, ValueSync, ValueUpdateSynthesizerImpl }
 import io.greenbus.edge.util.EitherUtil
 
 import scala.collection.mutable

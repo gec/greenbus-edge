@@ -22,7 +22,7 @@ import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.api._
 import io.greenbus.edge.api.stream.SetCodec.EndpointIdSetCodec
 import io.greenbus.edge.stream.TypeValue
-import io.greenbus.edge.stream.subscribe.{ Appended, DataValueUpdate, MapUpdated, SetUpdated }
+import io.greenbus.edge.stream.consume.{ Appended, DataValueUpdate, MapUpdated, SetUpdated }
 import io.greenbus.edge.util.EitherUtil
 
 class AppendDataKeySubCodec(logId: String, id: EndpointPath, codec: AppendDataKeyCodec) extends EdgeSubCodec with LazyLogging {

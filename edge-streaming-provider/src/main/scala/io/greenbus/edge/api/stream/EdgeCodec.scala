@@ -25,7 +25,7 @@ import io.greenbus.edge.api.proto
 import io.greenbus.edge.data.{ proto => vproto }
 import io.greenbus.edge.data.proto.convert.ValueConversions
 import io.greenbus.edge.data.{ IndexableValue, SampleValue, Value }
-import io.greenbus.edge.stream.subscribe.{ MapUpdated, SetUpdated }
+import io.greenbus.edge.stream.consume.{ MapUpdated, SetUpdated }
 import io.greenbus.edge.util.EitherUtil
 
 object EdgeTables {

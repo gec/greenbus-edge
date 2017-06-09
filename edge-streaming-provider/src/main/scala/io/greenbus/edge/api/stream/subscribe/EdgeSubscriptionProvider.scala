@@ -16,15 +16,15 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.api.stream.subscribe2
+package io.greenbus.edge.api.stream.subscribe
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.api._
 import io.greenbus.edge.api.stream._
 import io.greenbus.edge.flow.{ Handler, Source }
-import io.greenbus.edge.stream.{ PeerRouteSource, RowId, TypeValue }
+import io.greenbus.edge.stream.consume._
+import io.greenbus.edge.stream.{ PeerRouteSource, RowId }
 import io.greenbus.edge.stream.peer.{ StreamPeer, StreamUserSubscription }
-import io.greenbus.edge.stream.subscribe._
 
 import scala.collection.mutable
 

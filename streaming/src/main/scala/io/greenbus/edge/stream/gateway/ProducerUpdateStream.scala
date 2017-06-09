@@ -16,10 +16,10 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.stream.gateway3
+package io.greenbus.edge.stream.gateway
 
 import io.greenbus.edge.stream.{ PeerSessionId, SequenceCtx }
-import io.greenbus.edge.stream.engine2.StreamObserverSet
+import io.greenbus.edge.stream.engine.StreamObserverSet
 import io.greenbus.edge.stream.filter.{ StreamCache, StreamCacheImpl }
 
 class ProducerUpdateStream(sessionId: PeerSessionId, ctx: SequenceCtx, appendLimit: Int) {

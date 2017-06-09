@@ -21,9 +21,8 @@ package io.greenbus.edge.stream.peer
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.flow.{ Handler, RemoteBoundQueuedDistributor, Sink, Source }
 import io.greenbus.edge.stream._
-import io.greenbus.edge.stream.consume.UserSubscriptionSynth
-import io.greenbus.edge.stream.engine2._
-import io.greenbus.edge.stream.subscribe.RowUpdate
+import io.greenbus.edge.stream.consume.{ RowUpdate, UserSubscriptionSynth }
+import io.greenbus.edge.stream.engine._
 import io.greenbus.edge.thread.CallMarshaller
 
 import scala.collection.mutable

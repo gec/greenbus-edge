@@ -19,7 +19,6 @@
 package io.greenbus.edge.stream.consume
 
 import io.greenbus.edge.stream._
-import io.greenbus.edge.stream.subscribe._
 
 trait ValueUpdateSynthesizer {
   def handle(event: AppendEvent): Option[ValueUpdate]

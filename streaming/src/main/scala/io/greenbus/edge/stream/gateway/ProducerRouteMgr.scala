@@ -16,14 +16,14 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.stream.gateway3
+package io.greenbus.edge.stream.gateway
 
 import java.util.UUID
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.flow.Sink
 import io.greenbus.edge.stream.{ PeerSessionId, TableRow }
-import io.greenbus.edge.stream.engine2.{ KeyStreamObserver, RouteTargetSubject, StreamObserver }
+import io.greenbus.edge.stream.engine.{ KeyStreamObserver, RouteTargetSubject, StreamObserver }
 
 import scala.collection.mutable
 

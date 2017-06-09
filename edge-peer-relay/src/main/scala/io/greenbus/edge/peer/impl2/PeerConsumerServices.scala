@@ -22,11 +22,11 @@ import java.util.UUID
 
 import io.greenbus.edge.api.stream.ServiceClientImpl
 import io.greenbus.edge.api.stream.peer.EdgePeer
-import io.greenbus.edge.api.stream.subscribe2.SubShim
+import io.greenbus.edge.api.stream.subscribe.SubShim
 import io.greenbus.edge.api.{ EdgeSubscriptionClient, ServiceClient, ServiceClientChannel }
 import io.greenbus.edge.flow.{ RemoteBoundLatestSource, Source }
 import io.greenbus.edge.peer.{ ConsumerServices, PeerLinkObserver, QueuingServiceChannel }
-import io.greenbus.edge.stream.subscribe.StreamServiceClientImpl
+import io.greenbus.edge.stream.consume.StreamServiceClientImpl
 import io.greenbus.edge.stream.{ PeerLinkProxyChannel, PeerSessionId }
 import io.greenbus.edge.thread.SchedulableCallMarshaller
 

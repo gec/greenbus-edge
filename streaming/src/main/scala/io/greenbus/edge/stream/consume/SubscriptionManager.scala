@@ -16,11 +16,11 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.stream.subscribe
+package io.greenbus.edge.stream.consume
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.stream._
-import io.greenbus.edge.stream.gateway3.MapDiffCalc
+import io.greenbus.edge.stream.gateway.MapDiffCalc
 
 sealed trait ValueUpdate
 case object ValueAbsent extends ValueUpdate

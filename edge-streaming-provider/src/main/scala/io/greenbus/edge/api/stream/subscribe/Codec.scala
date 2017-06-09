@@ -16,7 +16,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.api.stream.subscribe2
+package io.greenbus.edge.api.stream.subscribe
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.api._
@@ -24,7 +24,7 @@ import io.greenbus.edge.api.stream.AppendDataKeyCodec.{ LatestKeyValueCodec, Ser
 import io.greenbus.edge.api.stream.{ AppendDataKeyCodec, EdgeCodecCommon, EdgeSubCodec, KeyedSetDataKeyCodec }
 import io.greenbus.edge.api.stream.KeyedSetDataKeyCodec.ActiveSetCodec
 import io.greenbus.edge.stream.TypeValue
-import io.greenbus.edge.stream.subscribe.{ Appended, DataValueUpdate, MapUpdated }
+import io.greenbus.edge.stream.consume.{ Appended, DataValueUpdate, MapUpdated }
 
 trait DataKeyCodec {
   def updateFor(dataValueUpdate: DataValueUpdate, descOpt: Option[DataKeyDescriptor]): Seq[IdentifiedEdgeUpdate]
