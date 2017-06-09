@@ -282,7 +282,6 @@ object ConsumerConversions {
       case api.DataUnresolved => (proto.StatusType.DATA_UNRESOLVED, None)
       case api.ResolvedAbsent => (proto.StatusType.RESOLVED_ABSENT, None)
       case v: api.ResolvedValue[A] => (proto.StatusType.RESOLVED_VALUE, Some(v.value))
-      case api.Disconnected => (proto.StatusType.DISCONNECTED, None)
     }
   }
 
@@ -292,7 +291,6 @@ object ConsumerConversions {
       case proto.StatusType.DATA_UNRESOLVED => Right(api.DataUnresolved)
       case proto.StatusType.RESOLVED_ABSENT => Right(api.ResolvedAbsent)
       case proto.StatusType.RESOLVED_VALUE => vOpt.map(v => Right(api.ResolvedValue(v))).getOrElse(Left("Resolved value with no value update"))
-      case proto.StatusType.DISCONNECTED => Right(api.Disconnected)
       case proto.StatusType.UNRECOGNIZED => Left("Unrecognized status type")
     }
   }

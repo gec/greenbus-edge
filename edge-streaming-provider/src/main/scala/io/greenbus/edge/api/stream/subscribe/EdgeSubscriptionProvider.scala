@@ -131,8 +131,6 @@ class EdgeKeyUpdateTranslator(codec: EdgeSubCodec) {
         Seq(codec.simpleToUpdate(ResolvedAbsent))
       case ValueUnresolved =>
         Seq(codec.simpleToUpdate(DataUnresolved))
-      case ValueDisconnected =>
-        Seq(codec.simpleToUpdate(Disconnected))
     }
   }
 }

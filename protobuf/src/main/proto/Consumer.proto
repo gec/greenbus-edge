@@ -54,7 +54,6 @@ enum StatusType {
     DATA_UNRESOLVED = 1;
     RESOLVED_ABSENT = 2;
     RESOLVED_VALUE = 3;
-    DISCONNECTED = 4;
 }
 
 message IdentifiedEdgeUpdate {

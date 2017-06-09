@@ -25,7 +25,6 @@ import io.greenbus.edge.stream.gateway.MapDiffCalc
 sealed trait ValueUpdate
 case object ValueAbsent extends ValueUpdate
 case object ValueUnresolved extends ValueUpdate
-case object ValueDisconnected extends ValueUpdate
 case class ValueSync(metadata: Option[TypeValue], initial: DataValueUpdate) extends ValueUpdate
 case class ValueDelta(update: DataValueUpdate) extends ValueUpdate
 
