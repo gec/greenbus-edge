@@ -18,40 +18,8 @@
  */
 package io.greenbus.edge.stream.consume
 
-import java.util.UUID
-
-import io.greenbus.edge.flow.{ Handler, RemoteBoundQueuedDistributor, Sink, Source }
 import io.greenbus.edge.stream._
-import io.greenbus.edge.stream.engine2._
-import io.greenbus.edge.stream.subscribe.{ RowUpdate, ValueUnresolved, ValueUpdate }
-import io.greenbus.edge.thread.CallMarshaller
-
-import scala.collection.mutable
-
-class UserUpdateSink(queue: UserUpdateQueue, notify: (UserUpdateQueue) => Unit) extends KeyStreamObserver {
-  private val synth = new ValueUpdateSynthesizerImpl
-  def handle(event: AppendEvent): Unit = {
-    synth.handle(event).foreach(queue.enqueue)
-    notify(queue)
-  }
-  def unresolved(): Unit = {
-    queue.enqueue(ValueUnresolved)
-    notify(queue)
-  }
-}
-
-trait UserUpdateQueue {
-  def enqueue(update: ValueUpdate): Unit
-  def flush(): Unit
-}
-
-class UserRouteSubscription(val map: Map[TableRow, UserUpdateSink]) extends StreamObserver {
-  def handle(routeEvent: StreamEvent): Unit = {
-    routeEvent match {
-      case RouteUnresolved(_) => map.values.foreach(_.unresolved())
-    }
-  }
-}
+import io.greenbus.edge.stream.subscribe.{ RowUpdate, ValueUnresolved }
 
 object UserSubscriptionSynth {
   def build(rows: Set[RowId]): UserSubscriptionSynth = {

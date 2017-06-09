@@ -18,9 +18,9 @@
  */
 package io.greenbus.edge.peer
 
-import io.greenbus.edge.api.{EdgeSubscriptionClient, ServiceClient, ServiceClientChannel}
+import io.greenbus.edge.api.{ EdgeSubscriptionClient, ServiceClient, ServiceClientChannel }
 import io.greenbus.edge.flow.Source
-import io.greenbus.edge.stream.{PeerLinkProxyChannel, PeerSessionId}
+import io.greenbus.edge.stream.{ PeerLinkProxyChannel, PeerSessionId }
 
 trait PeerLinkObserver {
   def connected(session: PeerSessionId, channel: PeerLinkProxyChannel): Unit

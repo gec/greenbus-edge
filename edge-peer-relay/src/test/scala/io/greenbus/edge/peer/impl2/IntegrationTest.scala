@@ -20,11 +20,11 @@ package io.greenbus.edge.peer.impl2
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.api._
-import io.greenbus.edge.data.{ValueDouble, ValueString, ValueUInt32}
+import io.greenbus.edge.data.{ ValueDouble, ValueString, ValueUInt32 }
 import io.greenbus.edge.flow.Closeable
-import io.greenbus.edge.peer.TestModel.{Producer1, Producer2, TypesProducer}
+import io.greenbus.edge.peer.TestModel.{ Producer1, Producer2, TypesProducer }
 import org.junit.runner.RunWith
-import org.scalatest.{BeforeAndAfterEach, FunSuite, Matchers}
+import org.scalatest.{ BeforeAndAfterEach, FunSuite, Matchers }
 import org.scalatest.junit.JUnitRunner
 
 object EdgeMatchers {

@@ -29,7 +29,6 @@ import io.greenbus.edge.thread.CallMarshaller
 import scala.collection.mutable
 import scala.util.{ Failure, Success, Try }
 
-
 class ServiceClientImpl(client: StreamServiceClient) extends ServiceClientChannel {
 
   def send(obj: OutputRequest, handleResponse: (Try[OutputResult]) => Unit): Unit = {

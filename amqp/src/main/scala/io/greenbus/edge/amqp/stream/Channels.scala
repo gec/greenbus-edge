@@ -23,7 +23,7 @@ import java.util.UUID
 
 import io.greenbus.edge.amqp.channel._
 import io.greenbus.edge.channel.{ ChannelDescriptor, ChannelSerializationProvider }
-import io.greenbus.edge.stream.{ Gateway, PeerSessionId }
+import io.greenbus.edge.stream.PeerSessionId
 import org.apache.qpid.proton.amqp.{ Binary, Symbol }
 
 object ChannelIdentifiers {

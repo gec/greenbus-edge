@@ -94,7 +94,6 @@ class SetSequencer(session: PeerSessionId, ctx: SequenceCtx) {
   }
 }
 
-
 object MapDiffCalc {
   def calculate[A, B](prev: Map[A, B], next: Map[A, B]): (Set[A], Set[(A, B)], Set[(A, B)]) = {
     val removed = prev.keySet -- next.keySet

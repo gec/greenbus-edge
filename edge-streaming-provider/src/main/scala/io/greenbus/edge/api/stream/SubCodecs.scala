@@ -247,37 +247,22 @@ class KeySetSubCodec(logId: String, identify: EdgeDataStatus[KeySetUpdate] => Id
 
 object SubscriptionManagers {
 
-  def subEndpointDesc(id: EndpointId): EdgeTypeSubMgr = {
-    new GenEdgeTypeSubMgrComp(id.toString, endpointDesc(id.toString, id))
-  }
   def endpointDesc(logId: String, id: EndpointId): EdgeSubCodec = {
     new EndpointDescSubCodec(logId, id)
   }
 
-  def subAppendDataKey(id: EndpointPath, codec: AppendDataKeyCodec): EdgeTypeSubMgr = {
-    new GenEdgeTypeSubMgrComp(id.toString, appendDataKey(id, codec))
-  }
   def appendDataKey(id: EndpointPath, codec: AppendDataKeyCodec): EdgeSubCodec = {
     new AppendDataKeySubCodec(id.toString, id, codec)
   }
 
-  def subMapDataKey(id: EndpointPath, codec: KeyedSetDataKeyCodec): EdgeTypeSubMgr = {
-    new GenEdgeTypeSubMgrComp(id.toString, mapDataKey(id, codec))
-  }
   def mapDataKey(id: EndpointPath, codec: KeyedSetDataKeyCodec): EdgeSubCodec = {
     new MapDataKeySubCodec(id.toString, id, codec)
   }
 
-  def subOutputStatus(id: EndpointPath, codec: AppendOutputKeyCodec): EdgeTypeSubMgr = {
-    new GenEdgeTypeSubMgrComp(id.toString, outputStatus(id, codec))
-  }
   def outputStatus(id: EndpointPath, codec: AppendOutputKeyCodec): EdgeSubCodec = {
     new AppendOutputKeySubCodec(id.toString, id, codec)
   }
 
-  def subPrefixSet(prefix: Path): EdgeTypeSubMgr = {
-    new GenEdgeTypeSubMgrComp(prefix.toString, prefixSet(prefix))
-  }
   def prefixSet(prefix: Path): EdgeSubCodec = {
 
     def identify(status: EdgeDataStatus[EndpointSetUpdate]): IdentifiedEdgeUpdate = IdEndpointPrefixUpdate(prefix, status)
@@ -285,9 +270,6 @@ object SubscriptionManagers {
     new EndpointSetSubCodec(prefix.toString, identify)
   }
 
-  def subEndpointIndexSet(spec: IndexSpecifier): EdgeTypeSubMgr = {
-    new GenEdgeTypeSubMgrComp(spec.toString, endpointIndexSet(spec))
-  }
   def endpointIndexSet(spec: IndexSpecifier): EdgeSubCodec = {
 
     def identify(status: EdgeDataStatus[EndpointSetUpdate]): IdentifiedEdgeUpdate = IdEndpointIndexUpdate(spec, status)
@@ -295,9 +277,6 @@ object SubscriptionManagers {
     new EndpointSetSubCodec(spec.toString, identify)
   }
 
-  def subDataKeyIndexSet(spec: IndexSpecifier): EdgeTypeSubMgr = {
-    new GenEdgeTypeSubMgrComp(spec.toString, dataKeyIndexSet(spec))
-  }
   def dataKeyIndexSet(spec: IndexSpecifier): EdgeSubCodec = {
 
     def identify(status: EdgeDataStatus[KeySetUpdate]): IdentifiedEdgeUpdate = IdDataKeyIndexUpdate(spec, status)
@@ -305,9 +284,6 @@ object SubscriptionManagers {
     new KeySetSubCodec(spec.toString, identify)
   }
 
-  def subOutputKeyIndexSet(spec: IndexSpecifier): EdgeTypeSubMgr = {
-    new GenEdgeTypeSubMgrComp(spec.toString, outputKeyIndexSet(spec))
-  }
   def outputKeyIndexSet(spec: IndexSpecifier): EdgeSubCodec = {
 
     def identify(status: EdgeDataStatus[KeySetUpdate]): IdentifiedEdgeUpdate = IdOutputKeyIndexUpdate(spec, status)

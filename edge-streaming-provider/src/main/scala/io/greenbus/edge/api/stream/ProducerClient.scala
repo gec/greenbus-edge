@@ -19,8 +19,8 @@
 package io.greenbus.edge.api.stream
 
 import io.greenbus.edge.api._
-import io.greenbus.edge.data.{IndexableValue, SampleValue, Value}
-import io.greenbus.edge.flow.{QueuedDistributor, Receiver, Source}
+import io.greenbus.edge.data.{ IndexableValue, SampleValue, Value }
+import io.greenbus.edge.flow.{ QueuedDistributor, Receiver, Source }
 import io.greenbus.edge.stream._
 
 case class KeyMetadata(indexes: Map[Path, IndexableValue] = Map(), metadata: Map[Path, Value] = Map())

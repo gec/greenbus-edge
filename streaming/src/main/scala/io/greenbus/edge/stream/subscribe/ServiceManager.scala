@@ -24,7 +24,7 @@ import io.greenbus.edge.flow._
 import io.greenbus.edge.thread.CallMarshaller
 
 import scala.collection.mutable
-import scala.util.{Success, Try}
+import scala.util.{ Success, Try }
 
 case class UserServiceRequest(row: RowId, value: TypeValue)
 case class UserServiceResponse(row: RowId, value: TypeValue)
@@ -64,7 +64,6 @@ class StreamServiceClientImpl(proxy: PeerLinkProxyChannel, eventThread: CallMars
 
   def onClose: LatchSubscribable = proxy.onClose
 }
-
 
 class Correlator[A] {
 

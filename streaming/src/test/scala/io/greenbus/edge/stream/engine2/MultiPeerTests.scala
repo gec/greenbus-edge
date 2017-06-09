@@ -23,7 +23,7 @@ import java.util.UUID
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.stream._
 import org.junit.runner.RunWith
-import org.scalatest.{FunSuite, Matchers}
+import org.scalatest.{ FunSuite, Matchers }
 import org.scalatest.junit.JUnitRunner
 
 import scala.collection.mutable
@@ -63,7 +63,6 @@ object PeerTestFramework extends Matchers with LazyLogging {
         RowAppendEvent(row3, StreamDelta(Delta(Seq(SequencedDiff(Int64Val(1), AppendValue(Int64Val(77 + n))))))))
     }
   }
-
 
   object MockPeer {
 
