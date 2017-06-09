@@ -131,7 +131,7 @@ class EndpointBuilderImpl(endpointId: EndpointId, gatewayThread: CallMarshaller,
   }
 
   def outputStatus(key: Path, metadata: KeyMetadata = KeyMetadata()): OutputStatusHandle = {
-    val rowId = EdgeCodecCommon.dataKeyRowId(EndpointPath(endpointId, key))
+    val rowId = EdgeCodecCommon.outputKeyRowId(EndpointPath(endpointId, key))
     val handle = new OutputStatusPublisher(rowId.tableRow, updateBuffer)
     val desc = OutputKeyDescriptor(metadata.indexes, metadata.metadata)
     outputStatuses += (key -> desc)
@@ -158,7 +158,6 @@ class EndpointBuilderImpl(endpointId: EndpointId, gatewayThread: CallMarshaller,
       }
 
       def unsubscribed(key: TypeValue): Unit = {
-        println(s"unsubscribed: $key")
         EdgeCodecCommon.readPath(key) match {
           case Left(err) => println(err)
           case Right(path) =>
@@ -178,7 +177,9 @@ class EndpointBuilderImpl(endpointId: EndpointId, gatewayThread: CallMarshaller,
 
     val requests = registerRequests()
 
-    gateway.handleEvent(RouteBindEvent(route, initEvents.result(), Map(), requests))
+    val events = initEvents.result()
+
+    gateway.handleEvent(RouteBindEvent(route, events, Map(), requests))
 
     new EndpointProducer(route, gateway, updateBuffer)
   }

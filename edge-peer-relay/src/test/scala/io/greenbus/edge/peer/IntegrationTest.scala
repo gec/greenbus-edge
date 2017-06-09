@@ -21,11 +21,15 @@ package io.greenbus.edge.peer
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.api._
 import io.greenbus.edge.data.{ ValueDouble, ValueString, ValueUInt32 }
+import io.greenbus.edge.flow
 import io.greenbus.edge.flow.Closeable
-import io.greenbus.edge.peer.TestModel.{ Producer1, Producer2, TypesProducer }
+import io.greenbus.edge.peer.TestModel.{ OutputProducer, Producer1, Producer2, TypesProducer }
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import org.scalatest.{ BeforeAndAfterEach, FunSuite, Matchers }
+
+import scala.concurrent.duration._
+import scala.concurrent.{ Await, Promise }
 
 object EdgeMatchers {
   import EdgeSubHelpers._
@@ -36,6 +40,19 @@ object EdgeMatchers {
         case ResolvedValue(v) =>
           v match {
             case v: DataKeyUpdate => f(v)
+            case _ => false
+          }
+        case _ => false
+      }
+
+      up.id == endPath && valueMatched
+  }
+  def idOutputKeyResolved(endPath: EndpointPath)(f: OutputKeyUpdate => Boolean): PartialFunction[IdentifiedEdgeUpdate, Boolean] = {
+    case up: IdOutputKeyUpdate =>
+      val valueMatched = up.data match {
+        case ResolvedValue(v) =>
+          v match {
+            case v: OutputKeyUpdate => f(v)
             case _ => false
           }
         case _ => false
@@ -700,6 +717,54 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
             v.value == ActiveSetUpdate(Map(ValueString("Key03") -> ValueUInt32(5), ValueString("Key02") -> ValueUInt32(4)), Set(ValueString("Key01")), Set((ValueString("Key03"), ValueUInt32(5))), Set((ValueString("Key02"), ValueUInt32(4))))
           }
         }), 5000)
+  }
+
+  test("output key status") {
+    import EdgeSubHelpers._
+
+    startRelay()
+
+    val producerA = new TestProducer
+    val producer = new OutputProducer(producerA.producerMgr, "out01")
+    producerA.connect()
+
+    producer.outStatus.handle.update(OutputKeyStatus(producer.uuid, 0, None))
+    producer.buffer.flush()
+
+    val params = SubscriptionParams(outputKeys = Seq(producer.outStatus.endpointPath))
+
+    val consA = new TestConsumer(params)
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          case up: IdOutputKeyUpdate => up.id == producer.outStatus.endpointPath && up.data == Pending
+        },
+        fixed {
+          case up: IdOutputKeyUpdate => up.id == producer.outStatus.endpointPath && up.data == DataUnresolved
+        }), 5000)
+
+    consA.connect()
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          idOutputKeyResolved(producer.outStatus.endpointPath) { v: OutputKeyUpdate =>
+            v.value == OutputKeyStatus(producer.uuid, 0, None)
+          }
+        }), 5000)
+
+    producer.outRcv.bind(new flow.Responder[OutputParams, OutputResult] {
+      def handle(obj: OutputParams, respond: (OutputResult) => Unit): Unit = {
+        respond(OutputSuccess(Some(ValueString("response 1"))))
+      }
+    })
+
+    val prom = Promise[OutputResult]
+    consA.consumer.queuingServiceClient.send(OutputRequest(producer.outStatus.endpointPath, OutputParams()), r => prom.complete(r))
+
+    Await.result(prom.future, 5000.milliseconds) shouldEqual OutputSuccess(Some(ValueString("response 1")))
+
   }
 }
 

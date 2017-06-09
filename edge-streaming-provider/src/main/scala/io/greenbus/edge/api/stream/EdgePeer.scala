@@ -18,6 +18,7 @@
  */
 package io.greenbus.edge.api.stream
 
+import io.greenbus.edge.api.ServiceClient
 import io.greenbus.edge.api.stream.subscribe.{ EdgeSubscriptionClient2, EdgeSubscriptionProvider }
 import io.greenbus.edge.stream.peer.StreamPeer
 import io.greenbus.edge.stream.{ PeerChannelHandler, PeerLinkProxyChannel, PeerSessionId }
@@ -28,6 +29,8 @@ class EdgePeer(logId: String, sessionId: PeerSessionId, engineThread: CallMarsha
   private val peer = new StreamPeer(logId, sessionId, engineThread, remoteIo, appendLimitDefault)
   private val subProvider = new EdgeSubscriptionProvider(peer)
 
+  private val services = new ServiceClientImpl(peer.serviceClient)
+
   def connectRemotePeer(peerSessionId: PeerSessionId, channel: PeerLinkProxyChannel): Unit = {
     peer.connectRemotePeer(peerSessionId, channel)
   }
@@ -35,4 +38,6 @@ class EdgePeer(logId: String, sessionId: PeerSessionId, engineThread: CallMarsha
   def channelHandler: PeerChannelHandler = peer.channelHandler
 
   def subscriptions: EdgeSubscriptionClient2 = subProvider
+
+  def serviceClient: ServiceClient = services
 }

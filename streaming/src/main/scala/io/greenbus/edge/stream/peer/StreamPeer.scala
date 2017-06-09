@@ -19,9 +19,9 @@
 package io.greenbus.edge.stream.peer
 
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.flow.{ Handler, RemoteBoundQueuedDistributor, Sink, Source }
+import io.greenbus.edge.flow._
 import io.greenbus.edge.stream._
-import io.greenbus.edge.stream.consume.{ RowUpdate, UserSubscriptionSynth }
+import io.greenbus.edge.stream.consume._
 import io.greenbus.edge.stream.engine._
 import io.greenbus.edge.thread.CallMarshaller
 
@@ -64,6 +64,7 @@ class StreamPeer(id: String, sessionId: PeerSessionId, engineThread: CallMarshal
   private val channelManager = new GenericChannelEngine(streamEngine, serviceEngine, eventNotify)
   private val handler = new PeerChannelManager(channelManager, if (remoteIo) Some(engineThread) else None)
   private val userHandles = mutable.Set.empty[StreamSub]
+  private val servClient = new ConsumerServiceClient(serviceEngine, engineThread)
 
   def session: PeerSessionId = sessionId
 
@@ -80,6 +81,8 @@ class StreamPeer(id: String, sessionId: PeerSessionId, engineThread: CallMarshal
   }
 
   def channelHandler: PeerChannelHandler = handler
+
+  def serviceClient: StreamServiceClient = servClient
 
   def subscribe(rows: Set[RowId]): StreamUserSubscription = {
     val target = new TargetQueueMgr

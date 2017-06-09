@@ -21,6 +21,7 @@ package io.greenbus.edge.stream.consume
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.flow._
 import io.greenbus.edge.stream._
+import io.greenbus.edge.stream.engine.ServiceEngine
 import io.greenbus.edge.thread.CallMarshaller
 
 import scala.collection.mutable
@@ -29,23 +30,13 @@ import scala.util.{ Success, Try }
 case class UserServiceRequest(row: RowId, value: TypeValue)
 case class UserServiceResponse(row: RowId, value: TypeValue)
 
-trait StreamServiceClient extends Sender[UserServiceRequest, UserServiceResponse] with CloseObservable
+trait StreamServiceClient extends Sender[UserServiceRequest, UserServiceResponse] /*with CloseObservable*/
 
-class StreamServiceClientImpl(proxy: PeerLinkProxyChannel, eventThread: CallMarshaller) extends StreamServiceClient with LazyLogging {
-
+class ConsumerServiceClient(engine: ServiceEngine, engineThread: CallMarshaller) extends StreamServiceClient with LazyLogging {
   private val correlator = new Correlator[(Try[UserServiceResponse]) => Unit]
 
-  proxy.responses.bind(resps => handleResponses(resps))
-
-  def send(obj: UserServiceRequest, handleResponse: (Try[UserServiceResponse]) => Unit): Unit = {
-    eventThread.marshal {
-      val correlation = correlator.add(handleResponse)
-      proxy.requests.push(Seq(ServiceRequest(obj.row, obj.value, Int64Val(correlation))))
-    }
-  }
-
-  private def handleResponses(responses: Seq[ServiceResponse]): Unit = {
-    eventThread.marshal {
+  private val issuer = new ServiceIssuer {
+    def handleResponses(responses: Seq[ServiceResponse]): Unit = {
       responses.foreach { response =>
         response.correlation match {
           case Int64Val(ourCorrelation) => {
@@ -62,7 +53,12 @@ class StreamServiceClientImpl(proxy: PeerLinkProxyChannel, eventThread: CallMars
     }
   }
 
-  def onClose: LatchSubscribable = proxy.onClose
+  def send(obj: UserServiceRequest, handleResponse: (Try[UserServiceResponse]) => Unit): Unit = {
+    engineThread.marshal {
+      val correlation = correlator.add(handleResponse)
+      engine.requestsIssued(issuer, Seq(ServiceRequest(obj.row, obj.value, Int64Val(correlation))))
+    }
+  }
 }
 
 class Correlator[A] {

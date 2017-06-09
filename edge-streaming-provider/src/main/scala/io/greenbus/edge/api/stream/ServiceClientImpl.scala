@@ -24,7 +24,7 @@ import io.greenbus.edge.stream.consume.{ StreamServiceClient, UserServiceRequest
 
 import scala.util.{ Failure, Success, Try }
 
-class ServiceClientImpl(client: StreamServiceClient) extends ServiceClientChannel {
+class ServiceClientImpl(client: StreamServiceClient) extends ServiceClient {
 
   def send(obj: OutputRequest, handleResponse: (Try[OutputResult]) => Unit): Unit = {
     val row = EdgeCodecCommon.keyRowId(obj.key, EdgeTables.outputTable)
@@ -45,7 +45,5 @@ class ServiceClientImpl(client: StreamServiceClient) extends ServiceClientChanne
 
     client.send(UserServiceRequest(row, value), handle)
   }
-
-  def onClose: LatchSubscribable = client.onClose
 }
 
