@@ -16,13 +16,12 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.peer.impl2
+package io.greenbus.edge.peer
 
-import io.greenbus.edge.api.IdentifiedEdgeUpdate
 import org.scalatest.exceptions.TestFailedException
 
 import scala.annotation.tailrec
-import scala.concurrent.{ Await, Future, Promise, promise }
+import scala.concurrent.{ Await, Future, Promise }
 
 object TestHelpers {
 

@@ -16,7 +16,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.peer.impl2
+package io.greenbus.edge.peer
 
 import java.util.UUID
 
@@ -24,14 +24,13 @@ import io.greenbus.edge.amqp.AmqpService
 import io.greenbus.edge.amqp.impl.AmqpListener
 import io.greenbus.edge.api.IdentifiedEdgeUpdate
 import io.greenbus.edge.flow.Closeable
-import io.greenbus.edge.peer.{ RetryingConnector }
 import io.greenbus.edge.stream.PeerSessionId
 import io.greenbus.edge.thread.EventThreadService
 import org.scalatest.BeforeAndAfterEach
 
 import scala.concurrent.Await
-import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
 
 object EdgeSubHelpers extends TypedSubHelpers[IdentifiedEdgeUpdate]
 

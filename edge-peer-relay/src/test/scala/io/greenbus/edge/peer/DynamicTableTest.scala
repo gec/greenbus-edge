@@ -16,17 +16,15 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.peer.impl2
+package io.greenbus.edge.peer
 
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.api.stream.{ DynamicDataKey, KeyMetadata }
-import io.greenbus.edge.api.{ EndpointId, EndpointPath, Path, SubscriptionParams }
-import io.greenbus.edge.data.{ ValueDouble, ValueString }
+import io.greenbus.edge.api.stream.DynamicDataKey
+import io.greenbus.edge.api.{ EndpointId, Path, SubscriptionParams }
 import io.greenbus.edge.flow.Closeable
-import io.greenbus.edge.peer.ProducerServices
 import org.junit.runner.RunWith
-import org.scalatest.{ BeforeAndAfterEach, FunSuite, Matchers }
 import org.scalatest.junit.JUnitRunner
+import org.scalatest.{ BeforeAndAfterEach, FunSuite, Matchers }
 
 class ProducerDynamic(producer: ProducerServices, table: DynamicDataKey) {
 

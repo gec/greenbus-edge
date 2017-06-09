@@ -16,23 +16,16 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.peer.impl2
+package io.greenbus.edge.api.stream
 
-import io.greenbus.edge.api.EndpointId
-import io.greenbus.edge.api.stream.EndpointBuilder
-import io.greenbus.edge.api.stream.peer.EdgePublisher
-import io.greenbus.edge.peer.{ GatewayLinkObserver, ProducerServices }
-import io.greenbus.edge.stream.GatewayProxyChannel
-import io.greenbus.edge.thread.CallMarshaller
+import io.greenbus.edge.api._
+import io.greenbus.edge.stream.TypeValue
+import io.greenbus.edge.stream.consume._
 
-class PeerProducerServices(logId: String, eventThread: CallMarshaller, appendLimitDefault: Int) extends ProducerServices with GatewayLinkObserver {
-  private val producer = new EdgePublisher(logId, eventThread, appendLimitDefault)
+trait EdgeSubCodec {
 
-  def connected(channel: GatewayProxyChannel): Unit = {
-    producer.bindConnection(channel)
-  }
+  def simpleToUpdate(v: EdgeDataStatus[Nothing]): IdentifiedEdgeUpdate
 
-  def endpointBuilder(id: EndpointId): EndpointBuilder = {
-    producer.buildEndpoint(id)
-  }
+  def updateFor(v: DataValueUpdate, metaOpt: Option[TypeValue]): Seq[IdentifiedEdgeUpdate]
 }
+

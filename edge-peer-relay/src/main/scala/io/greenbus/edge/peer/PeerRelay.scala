@@ -16,13 +16,13 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.peer.impl2
+package io.greenbus.edge.peer
 
 import io.greenbus.edge.amqp.AmqpService
 import io.greenbus.edge.amqp.channel.AmqpChannelHandler
 import io.greenbus.edge.amqp.impl.AmqpListener
 import io.greenbus.edge.amqp.stream.ChannelParserImpl
-import io.greenbus.edge.api.stream.peer.EdgePeer
+import io.greenbus.edge.api.stream.EdgePeer
 import io.greenbus.edge.stream.PeerSessionId
 import io.greenbus.edge.stream.channel.ChannelHandler
 import io.greenbus.edge.stream.proto.provider.ProtoSerializationProvider

@@ -16,23 +16,22 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.api.stream.peer
+package io.greenbus.edge.api.stream
 
-import io.greenbus.edge.api.stream.subscribe.{ EdgeSubscriptionClient2, EdgeSubscriptionProvider }
-import io.greenbus.edge.stream.{ PeerChannelHandler, PeerLinkProxyChannel, PeerSessionId }
-import io.greenbus.edge.stream.peer.StreamPeer
+import io.greenbus.edge.api.EndpointId
+import io.greenbus.edge.api.stream.producer.EndpointBuilderImpl
+import io.greenbus.edge.stream.GatewayProxyChannel
+import io.greenbus.edge.stream.gateway.GatewayEngine
 import io.greenbus.edge.thread.CallMarshaller
 
-class EdgePeer(logId: String, sessionId: PeerSessionId, engineThread: CallMarshaller, remoteIo: Boolean = true, appendLimitDefault: Int = 10) {
+class EdgePublisher(logId: String, engineThread: CallMarshaller, appendLimitDefault: Int) {
+  private val gateway = new GatewayEngine(engineThread, appendLimitDefault)
 
-  private val peer = new StreamPeer(logId, sessionId, engineThread, remoteIo, appendLimitDefault)
-  private val subProvider = new EdgeSubscriptionProvider(peer)
-
-  def connectRemotePeer(peerSessionId: PeerSessionId, channel: PeerLinkProxyChannel): Unit = {
-    peer.connectRemotePeer(peerSessionId, channel)
+  def buildEndpoint(endpointId: EndpointId): EndpointBuilder = {
+    new EndpointBuilderImpl(endpointId, engineThread, gateway)
   }
 
-  def channelHandler: PeerChannelHandler = peer.channelHandler
-
-  def subscriptions: EdgeSubscriptionClient2 = subProvider
+  def bindConnection(proxy: GatewayProxyChannel): Unit = {
+    gateway.connected(proxy)
+  }
 }

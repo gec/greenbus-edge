@@ -18,29 +18,19 @@
  */
 package io.greenbus.edge.peer
 
-import java.util.UUID
+import io.greenbus.edge.api.EndpointId
+import io.greenbus.edge.api.stream.{ EdgePublisher, EndpointBuilder }
+import io.greenbus.edge.stream.GatewayProxyChannel
+import io.greenbus.edge.thread.CallMarshaller
 
-import io.greenbus.edge.stream.PeerSessionId
+class PeerProducerServices(logId: String, eventThread: CallMarshaller, appendLimitDefault: Int) extends ProducerServices with GatewayLinkObserver {
+  private val producer = new EdgePublisher(logId, eventThread, appendLimitDefault)
 
-object PeerRelayServer2 {
+  def connected(channel: GatewayProxyChannel): Unit = {
+    producer.bindConnection(channel)
+  }
 
-  def main(args: Array[String]): Unit = {
-
-    val baseDir = Option(System.getProperty("io.greenbus.config.base")).getOrElse("")
-    val amqpConfigPath = Option(System.getProperty("io.greenbus.edge.config.peer")).map(baseDir + _).getOrElse(baseDir + "io.greenbus.edge.peer.relay.cfg")
-    val settings = PeerRelaySettings.load(amqpConfigPath)
-
-    val sessionId = PeerSessionId(UUID.randomUUID(), 0)
-
-    val relay = new impl2.PeerRelay(sessionId)
-
-    relay.listen(settings.host, settings.port)
-
-    Runtime.getRuntime.addShutdownHook(new Thread(new Runnable {
-      def run(): Unit = {
-        relay.close()
-      }
-    }))
-
+  def endpointBuilder(id: EndpointId): EndpointBuilder = {
+    producer.buildEndpoint(id)
   }
 }

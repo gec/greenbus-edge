@@ -16,10 +16,9 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.peer.impl2
+package io.greenbus.edge.peer
 
 import io.greenbus.edge.amqp.AmqpService
-import io.greenbus.edge.peer.{ ConsumerServices, ProducerServices, RetryingConnector }
 import io.greenbus.edge.thread.{ EventThreadService, SchedulableCallMarshaller }
 
 import scala.concurrent.ExecutionContext
