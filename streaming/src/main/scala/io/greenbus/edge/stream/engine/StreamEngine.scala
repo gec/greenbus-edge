@@ -23,51 +23,24 @@ import io.greenbus.edge.stream._
 
 import scala.collection.mutable
 
-/*
-
-  alternative:
-
-  KeyStream
-    -> intake filter?
-    -> synthesizer
-      - session set,
-    -> cache
-    -> target set
-    -> queues
-
-  maps:
-    updates/removes to source links (potentially) remove sessions in synth
-    updates/removes to source links can remove from cache
-    lack of subscription means whole stream goes away
-    added subscription means new key stream created or anchored
-
-    peer has separate map for manifest keys?
-   */
-
 case class SourceEvents(routeUpdatesOpt: Option[Map[TypeValue, RouteManifestEntry]], events: Seq[StreamEvent])
+
+trait StreamObserver {
+  def handle(routeEvent: StreamEvent): Unit
+}
+
+trait RouteStreamSource extends RouteServiceProvider {
+  def updateSourcing(route: TypeValue, rows: Set[TableRow]): Unit
+}
 
 trait StreamTarget {
   def flush(): Unit
 }
 
-/*
-
-def targetUpdate(target: StreamObserver, subscription: Map[TableRow, KeyStreamObserver]): Unit = {
- */
-
 trait RouteServiceProvider {
   //def observeForDelivery(events: Seq[StreamEvent]): Unit
   def issueServiceRequests(requests: Seq[ServiceRequest]): Unit
 }
-
-/*
-
-Source mgr
-<- register observers
--> notify flush
-Target mgr
-
- */
 
 class StreamEngine(
     logId: String,
@@ -218,55 +191,3 @@ class StreamEngine(
     targetToRouteMap -= target
   }
 }
-
-trait StreamTargetSubject[A <: RouteTargetSubject] {
-
-  protected val routeMap = mutable.Map.empty[TypeValue, A]
-  private val targetToRouteMap = mutable.Map.empty[StreamTarget, Map[TypeValue, RouteObservers]]
-
-  protected def buildRouteManager(route: TypeValue): A
-
-  def targetSubscriptionUpdate(target: StreamTarget, subscription: Map[TypeValue, RouteObservers]): Unit = {
-    val prev = targetToRouteMap.getOrElse(target, Map())
-
-    val removed = prev.keySet -- subscription.keySet
-    removed.foreach { route =>
-      prev.get(route).foreach { entry =>
-        routeMap.get(route).foreach { routeStreams =>
-          routeStreams.targetRemoved(entry.streamObserver)
-          if (!routeStreams.targeted()) {
-            routeMap -= route
-          }
-        }
-      }
-    }
-    subscription.foreach {
-      case (route, observers) =>
-        val routeStreams = routeMap.getOrElseUpdate(route, buildRouteManager(route))
-        routeStreams.targetUpdate(observers.streamObserver, observers.rowObserverMap)
-    }
-    targetToRouteMap.update(target, subscription)
-  }
-  def targetRemoved(target: StreamTarget): Unit = {
-    val prev = targetToRouteMap.getOrElse(target, Map())
-    prev.foreach {
-      case (route, obs) =>
-        routeMap.get(route).foreach { routeStreams =>
-          routeStreams.targetRemoved(obs.streamObserver)
-          if (!routeStreams.targeted()) {
-            routeMap -= route
-          }
-        }
-    }
-    targetToRouteMap -= target
-  }
-}
-
-trait StreamObserver {
-  def handle(routeEvent: StreamEvent): Unit
-}
-
-trait RouteStreamSource extends RouteServiceProvider {
-  def updateSourcing(route: TypeValue, rows: Set[TableRow]): Unit
-}
-
