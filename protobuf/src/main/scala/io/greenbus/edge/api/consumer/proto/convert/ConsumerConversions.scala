@@ -35,6 +35,7 @@ object ConsumerConversions {
     obj.endpointDescriptors.map(Conversions.toProto).foreach(b.addEndpointDescriptors)
     obj.dataKeys.map(Conversions.toProto).foreach(b.addDataKeys)
     obj.outputKeys.map(Conversions.toProto).foreach(b.addOutputKeys)
+    obj.dynamicDataKeys.map(Conversions.toProto).foreach(b.addDynamicDataKeys)
     b.build()
   }
   def fromProto(msg: proto.SubscriptionParams): Either[String, api.SubscriptionParams] = {
@@ -43,12 +44,14 @@ object ConsumerConversions {
       descs <- rightSequence(msg.getEndpointDescriptorsList.map(Conversions.fromProto))
       dataKeys <- rightSequence(msg.getDataKeysList.map(Conversions.fromProto))
       outKeys <- rightSequence(msg.getOutputKeysList.map(Conversions.fromProto))
+      dynDataKeys <- rightSequence(msg.getDynamicDataKeysList.map(Conversions.fromProto))
     } yield {
       api.SubscriptionParams(
         endpointPrefixSet = prefixSet.toSet,
         endpointDescriptors = descs.toSet,
         dataKeys = dataKeys.toSet,
-        outputKeys = outKeys.toSet)
+        outputKeys = outKeys.toSet,
+        dynamicDataKeys = dynDataKeys.toSet)
     }
   }
 
@@ -349,15 +352,15 @@ object ConsumerConversions {
     }
   }
 
-  def toProto(obj: api.IdEndpointIndexUpdate): proto.IdEndpointIndexUpdate = {
-    val b = proto.IdEndpointIndexUpdate.newBuilder()
-    b.setId(Conversions.toProto(obj.specifier))
+  def toProto(obj: api.IdDynamicDataKeyUpdate): proto.IdDynamicDataKeyUpdate = {
+    val b = proto.IdDynamicDataKeyUpdate.newBuilder()
+    b.setId(Conversions.toProto(obj.id))
     val (status, optV) = updateToProto(obj.data)
     b.setType(status)
     optV.map(toProto).foreach(b.setValue)
     b.build()
   }
-  def fromProto(msg: proto.IdEndpointIndexUpdate): Either[String, api.IdEndpointIndexUpdate] = {
+  def fromProto(msg: proto.IdDynamicDataKeyUpdate): Either[String, api.IdDynamicDataKeyUpdate] = {
     if (msg.hasId) {
 
       val vOptEith = if (msg.hasValue) fromProto(msg.getValue).map(r => Some(r)) else Right(None)
@@ -367,60 +370,10 @@ object ConsumerConversions {
         vOpt <- vOptEith
         status <- updateFromProto(msg.getType, vOpt)
       } yield {
-        api.IdEndpointIndexUpdate(id, status)
+        api.IdDynamicDataKeyUpdate(id, status)
       }
     } else {
-      Left("IdOutputKeyUpdate missing id")
-    }
-  }
-
-  def toProto(obj: api.IdDataKeyIndexUpdate): proto.IdDataKeyIndexUpdate = {
-    val b = proto.IdDataKeyIndexUpdate.newBuilder()
-    b.setId(Conversions.toProto(obj.specifier))
-    val (status, optV) = updateToProto(obj.data)
-    b.setType(status)
-    optV.map(toProto).foreach(b.setValue)
-    b.build()
-  }
-  def fromProto(msg: proto.IdDataKeyIndexUpdate): Either[String, api.IdDataKeyIndexUpdate] = {
-    if (msg.hasId) {
-
-      val vOptEith = if (msg.hasValue) fromProto(msg.getValue).map(r => Some(r)) else Right(None)
-
-      for {
-        id <- Conversions.fromProto(msg.getId)
-        vOpt <- vOptEith
-        status <- updateFromProto(msg.getType, vOpt)
-      } yield {
-        api.IdDataKeyIndexUpdate(id, status)
-      }
-    } else {
-      Left("IdDataKeyIndexUpdate missing id")
-    }
-  }
-
-  def toProto(obj: api.IdOutputKeyIndexUpdate): proto.IdOutputKeyIndexUpdate = {
-    val b = proto.IdOutputKeyIndexUpdate.newBuilder()
-    b.setId(Conversions.toProto(obj.specifier))
-    val (status, optV) = updateToProto(obj.data)
-    b.setType(status)
-    optV.map(toProto).foreach(b.setValue)
-    b.build()
-  }
-  def fromProto(msg: proto.IdOutputKeyIndexUpdate): Either[String, api.IdOutputKeyIndexUpdate] = {
-    if (msg.hasId) {
-
-      val vOptEith = if (msg.hasValue) fromProto(msg.getValue).map(r => Some(r)) else Right(None)
-
-      for {
-        id <- Conversions.fromProto(msg.getId)
-        vOpt <- vOptEith
-        status <- updateFromProto(msg.getType, vOpt)
-      } yield {
-        api.IdOutputKeyIndexUpdate(id, status)
-      }
-    } else {
-      Left("IdOutputKeyIndexUpdate missing id")
+      Left("IdDynamicDataKeyUpdate missing id")
     }
   }
 
@@ -431,9 +384,7 @@ object ConsumerConversions {
       case obj: api.IdDataKeyUpdate => b.setDataKeyUpdate(toProto(obj))
       case obj: api.IdOutputKeyUpdate => b.setOutputKeyUpdate(toProto(obj))
       case obj: api.IdEndpointPrefixUpdate => b.setEndpointPrefixUpdate(toProto(obj))
-      case obj: api.IdEndpointIndexUpdate => b.setEndpointIndexUpdate(toProto(obj))
-      case obj: api.IdDataKeyIndexUpdate => b.setDataKeyIndexUpdate(toProto(obj))
-      case obj: api.IdOutputKeyIndexUpdate => b.setOutputKeyIndexUpdate(toProto(obj))
+      case obj: api.IdDynamicDataKeyUpdate => b.setDynamicDataKeyUpdate(toProto(obj))
     }
     b.build()
   }
@@ -443,9 +394,7 @@ object ConsumerConversions {
       case proto.IdentifiedEdgeUpdate.TypeCase.DATA_KEY_UPDATE => fromProto(msg.getDataKeyUpdate)
       case proto.IdentifiedEdgeUpdate.TypeCase.OUTPUT_KEY_UPDATE => fromProto(msg.getOutputKeyUpdate)
       case proto.IdentifiedEdgeUpdate.TypeCase.ENDPOINT_PREFIX_UPDATE => fromProto(msg.getEndpointPrefixUpdate)
-      case proto.IdentifiedEdgeUpdate.TypeCase.ENDPOINT_INDEX_UPDATE => fromProto(msg.getEndpointIndexUpdate)
-      case proto.IdentifiedEdgeUpdate.TypeCase.DATA_KEY_INDEX_UPDATE => fromProto(msg.getDataKeyIndexUpdate)
-      case proto.IdentifiedEdgeUpdate.TypeCase.OUTPUT_KEY_INDEX_UPDATE => fromProto(msg.getOutputKeyIndexUpdate)
+      case proto.IdentifiedEdgeUpdate.TypeCase.DYNAMIC_DATA_KEY_UPDATE => fromProto(msg.getDynamicDataKeyUpdate)
       case _ => Left(s"Unrecognized edge update type")
     }
   }

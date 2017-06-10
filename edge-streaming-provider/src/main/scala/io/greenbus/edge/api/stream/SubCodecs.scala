@@ -268,25 +268,4 @@ object SubscriptionManagers {
 
     new EndpointSetSubCodec(prefix.toString, identify)
   }
-
-  def endpointIndexSet(spec: IndexSpecifier): EdgeSubCodec = {
-
-    def identify(status: EdgeDataStatus[EndpointSetUpdate]): IdentifiedEdgeUpdate = IdEndpointIndexUpdate(spec, status)
-
-    new EndpointSetSubCodec(spec.toString, identify)
-  }
-
-  def dataKeyIndexSet(spec: IndexSpecifier): EdgeSubCodec = {
-
-    def identify(status: EdgeDataStatus[KeySetUpdate]): IdentifiedEdgeUpdate = IdDataKeyIndexUpdate(spec, status)
-
-    new KeySetSubCodec(spec.toString, identify)
-  }
-
-  def outputKeyIndexSet(spec: IndexSpecifier): EdgeSubCodec = {
-
-    def identify(status: EdgeDataStatus[KeySetUpdate]): IdentifiedEdgeUpdate = IdOutputKeyIndexUpdate(spec, status)
-
-    new KeySetSubCodec(spec.toString, identify)
-  }
 }

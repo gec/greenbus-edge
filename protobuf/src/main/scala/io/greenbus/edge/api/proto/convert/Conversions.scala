@@ -243,6 +243,40 @@ object Conversions {
     }
   }
 
+  def toProto(obj: api.DynamicPath): proto.DynamicPath = {
+    val b = proto.DynamicPath.newBuilder()
+    b.setSet(obj.set)
+    b.setPath(toProto(obj.path))
+    b.build()
+  }
+
+  def fromProto(msg: proto.DynamicPath): Either[String, api.DynamicPath] = {
+    if (msg.hasPath) {
+      fromProto(msg.getPath).map(p => api.DynamicPath(msg.getSet, p))
+    } else {
+      Left("EndpointId unrecognized")
+    }
+  }
+
+  def toProto(obj: api.EndpointDynamicPath): proto.EndpointDynamicPath = {
+    val b = proto.EndpointDynamicPath.newBuilder()
+    b.setEndpointId(toProto(obj.endpoint))
+    b.setKey(toProto(obj.key))
+    b.build()
+  }
+  def fromProto(msg: proto.EndpointDynamicPath): Either[String, api.EndpointDynamicPath] = {
+    if (msg.hasEndpointId && msg.hasKey) {
+      for {
+        id <- fromProto(msg.getEndpointId)
+        key <- fromProto(msg.getKey)
+      } yield {
+        api.EndpointDynamicPath(id, key)
+      }
+    } else {
+      Left("EndpointDynamicPath missing endpoint id or key")
+    }
+  }
+
   def fromProtoSimple(msg: proto.UUID): java.util.UUID = {
     new java.util.UUID(msg.getHigh, msg.getLow)
   }

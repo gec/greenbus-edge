@@ -30,14 +30,14 @@ trait DataKeyCodec {
   def updateFor(dataValueUpdate: DataValueUpdate, descOpt: Option[DataKeyDescriptor]): Seq[IdentifiedEdgeUpdate]
 }
 
-class AppendDataCodec(id: EndpointPath, valueCodec: AppendDataKeyCodec) extends DataKeyCodec with LazyLogging {
+class AppendDataCodec(logId: String, valueCodec: AppendDataKeyCodec, toUpdate: EdgeDataStatus[DataKeyUpdate] => IdentifiedEdgeUpdate) extends DataKeyCodec with LazyLogging {
   def updateFor(dataValueUpdate: DataValueUpdate, descOpt: Option[DataKeyDescriptor]): Seq[IdentifiedEdgeUpdate] = {
     dataValueUpdate match {
       case up: Appended => {
         val readValues: Seq[SequenceDataKeyValueUpdate] = up.values.flatMap { ap =>
           valueCodec.fromTypeValue(ap.value) match {
             case Left(str) =>
-              logger.warn(s"Could not extract data value for $id: $str")
+              logger.warn(s"Could not extract data value for $logId: $str")
               None
             case Right(value) =>
               Some(value)
@@ -46,8 +46,8 @@ class AppendDataCodec(id: EndpointPath, valueCodec: AppendDataKeyCodec) extends 
 
         if (readValues.nonEmpty) {
           val head = readValues.head
-          val headUp = IdDataKeyUpdate(id, ResolvedValue(DataKeyUpdate(descOpt, head)))
-          Seq(headUp) ++ readValues.tail.map(v => IdDataKeyUpdate(id, ResolvedValue(DataKeyUpdate(None, v))))
+          val headUp = toUpdate(ResolvedValue(DataKeyUpdate(descOpt, head)))
+          Seq(headUp) ++ readValues.tail.map(v => toUpdate(ResolvedValue(DataKeyUpdate(None, v))))
         } else {
           Seq()
         }
@@ -57,7 +57,7 @@ class AppendDataCodec(id: EndpointPath, valueCodec: AppendDataKeyCodec) extends 
   }
 }
 
-class MapDataKeySubCodec(id: EndpointPath, codec: KeyedSetDataKeyCodec) extends DataKeyCodec with LazyLogging {
+class MapDataKeySubCodec(logId: String, codec: KeyedSetDataKeyCodec, toUpdate: EdgeDataStatus[DataKeyUpdate] => IdentifiedEdgeUpdate) extends DataKeyCodec with LazyLogging {
 
   def updateFor(dataValueUpdate: DataValueUpdate, descOpt: Option[DataKeyDescriptor]): Seq[IdentifiedEdgeUpdate] = {
     dataValueUpdate match {
@@ -65,13 +65,13 @@ class MapDataKeySubCodec(id: EndpointPath, codec: KeyedSetDataKeyCodec) extends 
 
         val vOpt = codec.fromTypeValue(up) match {
           case Left(str) =>
-            logger.warn(s"Could not extract data value for $id: $str")
+            logger.warn(s"Could not extract data value for $logId: $str")
             None
           case Right(value) =>
             Some(value)
         }
 
-        vOpt.map(v => IdDataKeyUpdate(id, ResolvedValue(DataKeyUpdate(descOpt, v))))
+        vOpt.map(v => toUpdate(ResolvedValue(DataKeyUpdate(descOpt, v))))
           .map(v => Seq(v)).getOrElse(Seq())
       }
       case _ =>
@@ -80,12 +80,12 @@ class MapDataKeySubCodec(id: EndpointPath, codec: KeyedSetDataKeyCodec) extends 
   }
 }
 
-class DynamicDataKeyCodec(logId: String, id: EndpointPath) extends EdgeSubCodec with LazyLogging {
+class DynamicDataKeyCodec(logId: String, toUpdate: EdgeDataStatus[DataKeyUpdate] => IdentifiedEdgeUpdate) extends EdgeSubCodec with LazyLogging {
 
   private var activeCodec = Option.empty[DataKeyCodec]
 
   def simpleToUpdate(v: EdgeDataStatus[Nothing]): IdentifiedEdgeUpdate = {
-    IdDataKeyUpdate(id, v)
+    toUpdate(v)
   }
 
   def updateFor(dataValueUpdate: DataValueUpdate, metaOpt: Option[TypeValue]): Seq[IdentifiedEdgeUpdate] = {
@@ -101,13 +101,13 @@ class DynamicDataKeyCodec(logId: String, id: EndpointPath) extends EdgeSubCodec 
 
     descUpdateOpt.foreach {
       case _: TimeSeriesValueDescriptor =>
-        activeCodec = Some(new AppendDataCodec(id, SeriesCodec))
+        activeCodec = Some(new AppendDataCodec(logId, SeriesCodec, toUpdate))
       case _: LatestKeyValueDescriptor =>
-        activeCodec = Some(new AppendDataCodec(id, LatestKeyValueCodec))
+        activeCodec = Some(new AppendDataCodec(logId, LatestKeyValueCodec, toUpdate))
       case _: EventTopicValueDescriptor =>
-        activeCodec = Some(new AppendDataCodec(id, TopicEventCodec))
+        activeCodec = Some(new AppendDataCodec(logId, TopicEventCodec, toUpdate))
       case _: ActiveSetValueDescriptor =>
-        activeCodec = Some(new MapDataKeySubCodec(id, ActiveSetCodec))
+        activeCodec = Some(new MapDataKeySubCodec(logId, ActiveSetCodec, toUpdate))
       case _ =>
     }
 

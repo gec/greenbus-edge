@@ -76,7 +76,7 @@ class EdgeSubscriptionProvider(peer: StreamPeer) extends EdgeSubscriptionClient 
     }
 
     params.dataKeys.foreach { id =>
-      val keyTranslator = new EdgeKeyUpdateTranslator(new DynamicDataKeyCodec(id.toString, id))
+      val keyTranslator = new EdgeKeyUpdateTranslator(new DynamicDataKeyCodec(id.toString, up => IdDataKeyUpdate(id, up)))
       val row = EdgeCodecCommon.dataKeyRowId(id)
       initial += IdDataKeyUpdate(id, Pending)
       transMap += (row -> keyTranslator)
@@ -86,6 +86,13 @@ class EdgeSubscriptionProvider(peer: StreamPeer) extends EdgeSubscriptionClient 
       val keyTranslator = new EdgeKeyUpdateTranslator(new AppendOutputKeySubCodec(id.toString, id, AppendOutputKeyCodec))
       val row = EdgeCodecCommon.outputKeyRowId(id)
       initial += IdOutputKeyUpdate(id, Pending)
+      transMap += (row -> keyTranslator)
+    }
+
+    params.dynamicDataKeys.foreach { id =>
+      val keyTranslator = new EdgeKeyUpdateTranslator(new DynamicDataKeyCodec(id.toString, up => IdDynamicDataKeyUpdate(id, up)))
+      val row = EdgeCodecCommon.dynamicDataKeyRow(id)
+      initial += IdDynamicDataKeyUpdate(id, Pending)
       transMap += (row -> keyTranslator)
     }
 

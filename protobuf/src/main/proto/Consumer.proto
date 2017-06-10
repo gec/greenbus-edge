@@ -35,6 +35,7 @@ message SubscriptionParams {
     repeated edge.EndpointId endpoint_descriptors = 2;
     repeated edge.EndpointPath data_keys = 3;
     repeated edge.EndpointPath output_keys = 4;
+    repeated edge.EndpointDynamicPath dynamic_data_keys = 5;
 }
 
 enum StatusType {
@@ -51,9 +52,8 @@ message IdentifiedEdgeUpdate {
         IdOutputKeyUpdate output_key_update = 3;
 
         IdEndpointPrefixUpdate endpoint_prefix_update = 4;
-        IdEndpointIndexUpdate endpoint_index_update = 5;
-        IdDataKeyIndexUpdate data_key_index_update = 6;
-        IdOutputKeyIndexUpdate output_key_index_update = 7;
+
+        IdDynamicDataKeyUpdate dynamic_data_key_update = 5;
     }
 }
 
@@ -88,6 +88,11 @@ message IdOutputKeyUpdate {
     OutputKeyUpdate value = 3;
 }
 
+message IdDynamicDataKeyUpdate {
+    edge.EndpointDynamicPath id = 1;
+    StatusType type = 2;
+    DataKeyUpdate value = 3;
+}
 
 message KeyValueUpdate {
     edge.data.Value value = 1;
@@ -118,21 +123,6 @@ message IdEndpointPrefixUpdate {
     edge.Path id = 1;
     StatusType type = 2;
     EndpointSetUpdate value = 3;
-}
-message IdEndpointIndexUpdate {
-    edge.IndexSpecifier id = 1;
-    StatusType type = 2;
-    EndpointSetUpdate value = 3;
-}
-message IdDataKeyIndexUpdate {
-    edge.IndexSpecifier id = 1;
-    StatusType type = 2;
-    KeySetUpdate value = 3;
-}
-message IdOutputKeyIndexUpdate {
-    edge.IndexSpecifier id = 1;
-    StatusType type = 2;
-    KeySetUpdate value = 3;
 }
 
 message EndpointSetUpdate {

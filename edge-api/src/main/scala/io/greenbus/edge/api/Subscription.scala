@@ -24,7 +24,8 @@ case class SubscriptionParams(
   endpointPrefixSet: Set[Path] = Set(),
   endpointDescriptors: Set[EndpointId] = Set(),
   dataKeys: Set[EndpointPath] = Set(),
-  outputKeys: Set[EndpointPath] = Set())
+  outputKeys: Set[EndpointPath] = Set(),
+  dynamicDataKeys: Set[EndpointDynamicPath] = Set())
 
 trait EdgeSubscription {
   def updates: Source[Seq[IdentifiedEdgeUpdate]]

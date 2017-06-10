@@ -38,14 +38,11 @@ case class EndpointSetUpdate(set: Set[EndpointId], removes: Set[EndpointId], add
 case class KeySetUpdate(set: Set[EndpointPath], removes: Set[EndpointPath], adds: Set[EndpointPath])
 
 sealed trait IdentifiedEdgeUpdate
+case class IdEndpointPrefixUpdate(prefix: Path, data: EdgeDataStatus[EndpointSetUpdate]) extends IdentifiedEdgeUpdate
 case class IdEndpointUpdate(id: EndpointId, data: EdgeDataStatus[EndpointDescriptor]) extends IdentifiedEdgeUpdate
 case class IdDataKeyUpdate(id: EndpointPath, data: EdgeDataStatus[DataKeyUpdate]) extends IdentifiedEdgeUpdate
 case class IdOutputKeyUpdate(id: EndpointPath, data: EdgeDataStatus[OutputKeyUpdate]) extends IdentifiedEdgeUpdate
-
-case class IdEndpointPrefixUpdate(prefix: Path, data: EdgeDataStatus[EndpointSetUpdate]) extends IdentifiedEdgeUpdate
-case class IdEndpointIndexUpdate(specifier: IndexSpecifier, data: EdgeDataStatus[EndpointSetUpdate]) extends IdentifiedEdgeUpdate
-case class IdDataKeyIndexUpdate(specifier: IndexSpecifier, data: EdgeDataStatus[KeySetUpdate]) extends IdentifiedEdgeUpdate
-case class IdOutputKeyIndexUpdate(specifier: IndexSpecifier, data: EdgeDataStatus[KeySetUpdate]) extends IdentifiedEdgeUpdate
+case class IdDynamicDataKeyUpdate(id: EndpointDynamicPath, data: EdgeDataStatus[DataKeyUpdate]) extends IdentifiedEdgeUpdate
 
 sealed trait EdgeDataStatus[+A]
 case object Pending extends EdgeDataStatus[Nothing]

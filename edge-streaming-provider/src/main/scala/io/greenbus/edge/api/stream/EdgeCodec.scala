@@ -327,6 +327,11 @@ object EdgeCodecCommon {
     keyRowId(endpointPath, EdgeTables.outputTable)
   }
 
+  def dynamicDataKeyRow(endpointDynamicPath: EndpointDynamicPath): RowId = {
+    val route = endpointIdToRoute(endpointDynamicPath.endpoint)
+    RowId(route, endpointDynamicPath.key.set, writePath(endpointDynamicPath.key.path))
+  }
+
   def keyRowId(endpointPath: EndpointPath, table: String): RowId = {
     val route = endpointIdToRoute(endpointPath.endpoint)
     val key = writePath(endpointPath.key)

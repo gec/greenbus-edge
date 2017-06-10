@@ -51,12 +51,27 @@ class DynamicTableIntegrationTest extends FunSuite with Matchers with BeforeAndA
     }
 
     val producerA = new TestProducer
-    val producer = new DynamicKeyProducer(producerA.producerMgr, "out01", dyn)
+    val producer = new DynamicKeyProducer(producerA.producerMgr, "dyn01", dyn)
     producerA.connect()
 
-    /*val params = SubscriptionParams()
+    val dynKey = EndpointDynamicPath(producer.endpointId, DynamicPath("dset", Path(Seq("path", "01"))))
 
-    val consA = new TestConsumer(params)*/
+    val params = SubscriptionParams(dynamicDataKeys = Set(dynKey))
+
+    val consA = new TestConsumer(params)
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          case up: IdDynamicDataKeyUpdate => up.id == dynKey && up.data == Pending
+        },
+        fixed {
+          case up: IdDynamicDataKeyUpdate => up.id == dynKey && up.data == DataUnresolved
+        }), 5000)
+
+    consA.connect()
+
+    Thread.sleep(2000)
 
   }
 }

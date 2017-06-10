@@ -179,7 +179,7 @@ class EndpointBuilderImpl(endpointId: EndpointId, gatewayThread: CallMarshaller,
 
     val events = initEvents.result()
 
-    gateway.handleEvent(RouteBindEvent(route, events, Map(), requests))
+    gateway.handleEvent(RouteBindEvent(route, events, dynamicTables.toMap, requests))
 
     new EndpointProducer(route, gateway, updateBuffer)
   }
