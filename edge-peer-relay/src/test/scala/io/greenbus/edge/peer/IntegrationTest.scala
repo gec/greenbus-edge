@@ -87,46 +87,6 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
   import EdgeMatchers._
   import EdgeSubHelpers._
 
-  class TestConsumer(params: SubscriptionParams) {
-    val consumer = buildConsumer()
-
-    val subClient = consumer.subscriptionClient
-
-    val subscription = subClient.subscribe(params)
-
-    val queue = new FlatQueue
-    subscription.updates.bind(queue.received)
-
-    private var connectionOpt = Option.empty[Closeable]
-
-    def connect(): Unit = {
-      connectionOpt = Some(connectConsumer(consumer))
-    }
-
-    def unsubscribe(): Unit = {
-      subscription.close()
-    }
-
-    def disconnect(): Unit = {
-      connectionOpt.foreach(_.close())
-    }
-  }
-
-  class TestProducer {
-    val producerMgr = buildProducer()
-    //val producer = new Producer1(producerMgr)
-
-    private var connectionOpt = Option.empty[Closeable]
-
-    def connect(): Unit = {
-      connectionOpt = Some(connectProducer(producerMgr))
-    }
-
-    def disconnect(): Unit = {
-      connectionOpt.foreach(_.close())
-    }
-  }
-
   test("Producer comes up after consumer then quits first") {
 
     val consumer = buildConsumer()
@@ -719,52 +679,5 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
         }), 5000)
   }
 
-  test("output key status") {
-    import EdgeSubHelpers._
-
-    startRelay()
-
-    val producerA = new TestProducer
-    val producer = new OutputProducer(producerA.producerMgr, "out01")
-    producerA.connect()
-
-    producer.outStatus.handle.update(OutputKeyStatus(producer.uuid, 0, None))
-    producer.buffer.flush()
-
-    val params = SubscriptionParams(outputKeys = Seq(producer.outStatus.endpointPath))
-
-    val consA = new TestConsumer(params)
-
-    consA.queue.awaitListen(
-      prefixMatcher(
-        fixed {
-          case up: IdOutputKeyUpdate => up.id == producer.outStatus.endpointPath && up.data == Pending
-        },
-        fixed {
-          case up: IdOutputKeyUpdate => up.id == producer.outStatus.endpointPath && up.data == DataUnresolved
-        }), 5000)
-
-    consA.connect()
-
-    consA.queue.awaitListen(
-      prefixMatcher(
-        fixed {
-          idOutputKeyResolved(producer.outStatus.endpointPath) { v: OutputKeyUpdate =>
-            v.value == OutputKeyStatus(producer.uuid, 0, None)
-          }
-        }), 5000)
-
-    producer.outRcv.bind(new flow.Responder[OutputParams, OutputResult] {
-      def handle(obj: OutputParams, respond: (OutputResult) => Unit): Unit = {
-        respond(OutputSuccess(Some(ValueString("response 1"))))
-      }
-    })
-
-    val prom = Promise[OutputResult]
-    consA.consumer.queuingServiceClient.send(OutputRequest(producer.outStatus.endpointPath, OutputParams()), r => prom.complete(r))
-
-    Await.result(prom.future, 5000.milliseconds) shouldEqual OutputSuccess(Some(ValueString("response 1")))
-
-  }
 }
 

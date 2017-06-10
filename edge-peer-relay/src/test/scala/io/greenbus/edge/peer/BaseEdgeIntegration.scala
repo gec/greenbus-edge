@@ -22,8 +22,9 @@ import java.util.UUID
 
 import io.greenbus.edge.amqp.AmqpService
 import io.greenbus.edge.amqp.impl.AmqpListener
-import io.greenbus.edge.api.IdentifiedEdgeUpdate
+import io.greenbus.edge.api.{ IdentifiedEdgeUpdate, SubscriptionParams }
 import io.greenbus.edge.flow.Closeable
+import io.greenbus.edge.peer.EdgeSubHelpers.FlatQueue
 import io.greenbus.edge.stream.PeerSessionId
 import io.greenbus.edge.thread.EventThreadService
 import org.scalatest.BeforeAndAfterEach
@@ -41,6 +42,46 @@ trait BaseEdgeIntegration {
   private var serverOpt = Option.empty[AmqpListener]
   private var executors = Vector.empty[EventThreadService]
   private var closeables = Vector.empty[Closeable]
+
+  class TestConsumer(params: SubscriptionParams) {
+    val consumer = buildConsumer()
+
+    val subClient = consumer.subscriptionClient
+
+    val subscription = subClient.subscribe(params)
+
+    val queue = new FlatQueue
+    subscription.updates.bind(queue.received)
+
+    private var connectionOpt = Option.empty[Closeable]
+
+    def connect(): Unit = {
+      connectionOpt = Some(connectConsumer(consumer))
+    }
+
+    def unsubscribe(): Unit = {
+      subscription.close()
+    }
+
+    def disconnect(): Unit = {
+      connectionOpt.foreach(_.close())
+    }
+  }
+
+  class TestProducer {
+    val producerMgr = buildProducer()
+    //val producer = new Producer1(producerMgr)
+
+    private var connectionOpt = Option.empty[Closeable]
+
+    def connect(): Unit = {
+      connectionOpt = Some(connectProducer(producerMgr))
+    }
+
+    def disconnect(): Unit = {
+      connectionOpt.foreach(_.close())
+    }
+  }
 
   protected def buildConsumer(name: String = "consumer"): PeerConsumerServices = {
     val exe = EventThreadService.build(name)
