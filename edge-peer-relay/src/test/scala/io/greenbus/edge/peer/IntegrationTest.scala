@@ -93,8 +93,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     val subClient = consumer.subscriptionClient
 
     val params = SubscriptionParams(
-      dataKeys = DataKeySubscriptionParams(
-        series = Seq(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1")))))
+      dataKeys = Set(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1"))))
 
     val subscription = subClient.subscribe(params)
 
@@ -161,8 +160,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     val subClient = consumer.subscriptionClient
 
     val params = SubscriptionParams(
-      dataKeys = DataKeySubscriptionParams(
-        series = Seq(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1")))))
+      dataKeys = Set(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1"))))
 
     val subscription = subClient.subscribe(params)
 
@@ -234,8 +232,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     val nonexistentEndPath = EndpointPath(producer1.endpointId, Path("nonexistent"))
 
     val params = SubscriptionParams(
-      dataKeys = DataKeySubscriptionParams(
-        series = Seq(nonexistentEndPath)))
+      dataKeys = Set(nonexistentEndPath))
 
     val consA = new TestConsumer(params)
 
@@ -263,8 +260,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     import EdgeSubHelpers._
 
     val params = SubscriptionParams(
-      dataKeys = DataKeySubscriptionParams(
-        series = Seq(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1")))))
+      dataKeys = Set(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1"))))
 
     val consA = new TestConsumer(params)
 
@@ -354,8 +350,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     producer.updateAndFlush(2.33, 5)
 
     val params = SubscriptionParams(
-      dataKeys = DataKeySubscriptionParams(
-        series = Seq(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1")))))
+      dataKeys = Set(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1"))))
 
     val consA = new TestConsumer(params)
 
@@ -422,8 +417,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     producer1.updateAndFlush(2.33, 5)
 
     val params = SubscriptionParams(
-      dataKeys = DataKeySubscriptionParams(
-        series = Seq(producer1.seriesEndPath, producer2.seriesEndPath)))
+      dataKeys = Set(producer1.seriesEndPath, producer2.seriesEndPath))
 
     val consA = new TestConsumer(params)
 
@@ -503,8 +497,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     producerA.connect()
 
     val params = SubscriptionParams(
-      dataKeys = DataKeySubscriptionParams(
-        keyValues = Seq(producer.kv1.endpointPath)))
+      dataKeys = Set(producer.kv1.endpointPath))
 
     val consA = new TestConsumer(params)
 
@@ -544,8 +537,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     producer.buffer.flush()
 
     val params = SubscriptionParams(
-      dataKeys = DataKeySubscriptionParams(
-        keyValues = Seq(producer.kv1.endpointPath)))
+      dataKeys = Set(producer.kv1.endpointPath))
 
     val consA = new TestConsumer(params)
 
@@ -593,8 +585,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     producer.buffer.flush()
 
     val params = SubscriptionParams(
-      dataKeys = DataKeySubscriptionParams(
-        topicEvent = Seq(producer.event1.endpointPath)))
+      dataKeys = Set(producer.event1.endpointPath))
 
     val consA = new TestConsumer(params)
 
@@ -643,8 +634,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     producer.buffer.flush()
 
     val params = SubscriptionParams(
-      dataKeys = DataKeySubscriptionParams(
-        activeSet = Seq(producer.activeSet1.endpointPath)))
+      dataKeys = Set(producer.activeSet1.endpointPath))
 
     val consA = new TestConsumer(params)
 

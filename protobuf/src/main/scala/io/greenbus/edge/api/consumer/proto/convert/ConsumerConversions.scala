@@ -29,72 +29,26 @@ import scala.collection.JavaConversions._
 
 object ConsumerConversions {
 
-  def toProto(obj: api.IndexSubscriptionParams): proto.IndexSubscriptionParams = {
-    val b = proto.IndexSubscriptionParams.newBuilder()
-    obj.endpointPrefixes.map(Conversions.toProto).foreach(b.addEndpointPrefixes)
-    obj.endpointIndexes.map(Conversions.toProto).foreach(b.addEndpointIndex)
-    obj.dataKeyIndexes.map(Conversions.toProto).foreach(b.addDataKeyIndexes)
-    obj.outputKeyIndexes.map(Conversions.toProto).foreach(b.addOutputKeyIndexes)
-    b.build()
-  }
-  def fromProto(msg: proto.IndexSubscriptionParams): Either[String, api.IndexSubscriptionParams] = {
-    for {
-      prefixes <- rightSequence(msg.getEndpointPrefixesList.map(Conversions.fromProto))
-      endIndexes <- rightSequence(msg.getEndpointIndexList.map(Conversions.fromProto))
-      dataIndexes <- rightSequence(msg.getDataKeyIndexesList.map(Conversions.fromProto))
-      outputIndexes <- rightSequence(msg.getOutputKeyIndexesList.map(Conversions.fromProto))
-    } yield {
-      api.IndexSubscriptionParams(
-        endpointPrefixes = prefixes,
-        endpointIndexes = endIndexes,
-        dataKeyIndexes = dataIndexes,
-        outputKeyIndexes = outputIndexes)
-    }
-  }
-
-  def toProto(obj: api.DataKeySubscriptionParams): proto.DataKeySubscriptionParams = {
-    val b = proto.DataKeySubscriptionParams.newBuilder()
-    obj.series.map(Conversions.toProto).foreach(b.addSeries)
-    obj.keyValues.map(Conversions.toProto).foreach(b.addKeyValues)
-    obj.topicEvent.map(Conversions.toProto).foreach(b.addTopicEvents)
-    obj.activeSet.map(Conversions.toProto).foreach(b.addActiveSets)
-    b.build()
-  }
-  def fromProto(msg: proto.DataKeySubscriptionParams): Either[String, api.DataKeySubscriptionParams] = {
-    for {
-      ser <- rightSequence(msg.getSeriesList.map(Conversions.fromProto))
-      end <- rightSequence(msg.getKeyValuesList.map(Conversions.fromProto))
-      data <- rightSequence(msg.getTopicEventsList.map(Conversions.fromProto))
-      out <- rightSequence(msg.getActiveSetsList.map(Conversions.fromProto))
-    } yield {
-      api.DataKeySubscriptionParams(
-        series = ser,
-        keyValues = end,
-        topicEvent = data,
-        activeSet = out)
-    }
-  }
-
   def toProto(obj: api.SubscriptionParams): proto.SubscriptionParams = {
     val b = proto.SubscriptionParams.newBuilder()
-    obj.descriptors.map(Conversions.toProto).foreach(b.addDescriptors)
-    b.setDataParams(toProto(obj.dataKeys))
+    obj.endpointPrefixSet.map(Conversions.toProto).foreach(b.addEndpointPrefixSet)
+    obj.endpointDescriptors.map(Conversions.toProto).foreach(b.addEndpointDescriptors)
+    obj.dataKeys.map(Conversions.toProto).foreach(b.addDataKeys)
     obj.outputKeys.map(Conversions.toProto).foreach(b.addOutputKeys)
-    b.setIndexParams(toProto(obj.indexing))
     b.build()
   }
   def fromProto(msg: proto.SubscriptionParams): Either[String, api.SubscriptionParams] = {
     for {
-      descs <- rightSequence(msg.getDescriptorsList.map(Conversions.fromProto))
-      data <- if (msg.hasDataParams) fromProto(msg.getDataParams).map(r => Some(r)) else Right(None)
+      prefixSet <- rightSequence(msg.getEndpointPrefixSetList.map(Conversions.fromProto))
+      descs <- rightSequence(msg.getEndpointDescriptorsList.map(Conversions.fromProto))
+      dataKeys <- rightSequence(msg.getDataKeysList.map(Conversions.fromProto))
       outKeys <- rightSequence(msg.getOutputKeysList.map(Conversions.fromProto))
-      index <- if (msg.hasIndexParams) fromProto(msg.getIndexParams).map(r => Some(r)) else Right(None)
     } yield {
       api.SubscriptionParams(
-        descriptors = descs,
-        dataKeys = data.getOrElse(api.DataKeySubscriptionParams()),
-        outputKeys = outKeys,
-        indexing = index.getOrElse(api.IndexSubscriptionParams()))
+        endpointPrefixSet = prefixSet.toSet,
+        endpointDescriptors = descs.toSet,
+        dataKeys = dataKeys.toSet,
+        outputKeys = outKeys.toSet)
     }
   }
 

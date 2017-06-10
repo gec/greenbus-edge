@@ -21,7 +21,6 @@ package io.greenbus.edge.peer
 import java.util.UUID
 
 import io.greenbus.edge.api.stream.EdgePeer
-import io.greenbus.edge.api.stream.subscribe.SubShim
 import io.greenbus.edge.api.{ EdgeSubscriptionClient, ServiceClient, ServiceClientChannel }
 import io.greenbus.edge.flow.Source
 import io.greenbus.edge.stream.{ PeerLinkProxyChannel, PeerSessionId }
@@ -36,7 +35,7 @@ class PeerConsumerServices(logId: String, eventThread: SchedulableCallMarshaller
   }
 
   def subscriptionClient: EdgeSubscriptionClient = {
-    new SubShim(peer.subscriptions)
+    peer.subscriptions
   }
 
   def serviceChannelSource: Source[ServiceClientChannel] = ???

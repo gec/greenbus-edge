@@ -18,8 +18,8 @@
  */
 package io.greenbus.edge.api.stream
 
-import io.greenbus.edge.api.ServiceClient
-import io.greenbus.edge.api.stream.subscribe.{ EdgeSubscriptionClient2, EdgeSubscriptionProvider }
+import io.greenbus.edge.api.{ EdgeSubscriptionClient, ServiceClient }
+import io.greenbus.edge.api.stream.subscribe.EdgeSubscriptionProvider
 import io.greenbus.edge.stream.peer.StreamPeer
 import io.greenbus.edge.stream.{ PeerChannelHandler, PeerLinkProxyChannel, PeerSessionId }
 import io.greenbus.edge.thread.CallMarshaller
@@ -37,7 +37,7 @@ class EdgePeer(logId: String, sessionId: PeerSessionId, engineThread: CallMarsha
 
   def channelHandler: PeerChannelHandler = peer.channelHandler
 
-  def subscriptions: EdgeSubscriptionClient2 = subProvider
+  def subscriptions: EdgeSubscriptionClient = subProvider
 
   def serviceClient: ServiceClient = services
 }

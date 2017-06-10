@@ -48,7 +48,7 @@ class OutputIntegrationTest extends FunSuite with Matchers with BeforeAndAfterEa
     producer.outStatus.handle.update(OutputKeyStatus(producer.uuid, 0, None))
     producer.buffer.flush()
 
-    val params = SubscriptionParams(outputKeys = Seq(producer.outStatus.endpointPath))
+    val params = SubscriptionParams(outputKeys = Set(producer.outStatus.endpointPath))
 
     val consA = new TestConsumer(params)
 

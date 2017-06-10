@@ -28,27 +28,6 @@ import io.greenbus.edge.stream.{ PeerRouteSource, RowId }
 
 import scala.collection.mutable
 
-class SubShim(client: EdgeSubscriptionClient2) extends EdgeSubscriptionClient {
-  def subscribe(params: SubscriptionParams): EdgeSubscription = {
-    val p2 = EdgeSubscriptionParams(
-      params.indexing.endpointPrefixes.toSet,
-      params.descriptors.toSet,
-      (params.dataKeys.series ++ params.dataKeys.keyValues ++ params.dataKeys.topicEvent ++ params.dataKeys.activeSet).toSet,
-      params.outputKeys.toSet)
-    client.subscribe(p2)
-  }
-}
-
-case class EdgeSubscriptionParams(
-  endpointPrefixSet: Set[Path],
-  endpointDescriptors: Set[EndpointId],
-  dataKeys: Set[EndpointPath],
-  outputKeys: Set[EndpointPath])
-
-trait EdgeSubscriptionClient2 {
-  def subscribe(params: EdgeSubscriptionParams): EdgeSubscription
-}
-
 class EdgeSubImpl(sub: StreamUserSubscription, initial: Seq[IdentifiedEdgeUpdate], map: Map[RowId, EdgeKeyUpdateTranslator]) extends EdgeSubscription with LazyLogging {
 
   private var initialIssued = false
@@ -75,9 +54,9 @@ class EdgeSubImpl(sub: StreamUserSubscription, initial: Seq[IdentifiedEdgeUpdate
   }
 }
 
-class EdgeSubscriptionProvider(peer: StreamPeer) extends EdgeSubscriptionClient2 {
+class EdgeSubscriptionProvider(peer: StreamPeer) extends EdgeSubscriptionClient {
 
-  def subscribe(params: EdgeSubscriptionParams): EdgeSubscription = {
+  def subscribe(params: SubscriptionParams): EdgeSubscription = {
 
     val transMap = mutable.Map.empty[RowId, EdgeKeyUpdateTranslator]
     val initial = Vector.newBuilder[IdentifiedEdgeUpdate]

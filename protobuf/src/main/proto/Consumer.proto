@@ -30,23 +30,11 @@ message ClientOutputRequest {
     uint64 correlation = 3;
 }
 
-message IndexSubscriptionParams {
-    repeated edge.Path endpoint_prefixes = 1;
-    repeated edge.IndexSpecifier endpoint_index = 2;
-    repeated edge.IndexSpecifier data_key_indexes = 3;
-    repeated edge.IndexSpecifier output_key_indexes = 4;
-}
-message DataKeySubscriptionParams {
-    repeated edge.EndpointPath series = 1;
-    repeated edge.EndpointPath key_values = 2;
-    repeated edge.EndpointPath topic_events = 3;
-    repeated edge.EndpointPath active_sets = 4;
-}
 message SubscriptionParams {
-    repeated edge.EndpointId descriptors = 1;
-    DataKeySubscriptionParams data_params = 2;
-    repeated EndpointPath output_keys = 3;
-    IndexSubscriptionParams index_params = 4;
+    repeated edge.Path endpoint_prefix_set = 1;
+    repeated edge.EndpointId endpoint_descriptors = 2;
+    repeated edge.EndpointPath data_keys = 3;
+    repeated edge.EndpointPath output_keys = 4;
 }
 
 enum StatusType {
