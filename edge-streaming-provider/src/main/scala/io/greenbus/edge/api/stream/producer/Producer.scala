@@ -74,6 +74,20 @@ class OutputStatusPublisher(key: TableRow, updates: Sink[RowUpdate]) extends Out
   }
 }
 
+class DynamicSeriesPublisher(endpointId: EndpointId, set: String, gateway: GatewayEventHandler, updates: Sink[RowUpdate]) extends DynamicSeriesHandle {
+  def add(path: Path, metadata: KeyMetadata = KeyMetadata()): SeriesValueHandle = {
+    val rowId = EdgeCodecCommon.dynamicDataKeyRow(EndpointDynamicPath(endpointId, DynamicPath(set, path)))
+    val handle = new SeriesPublisher(rowId.tableRow, updates)
+    val desc = TimeSeriesValueDescriptor(metadata.indexes, metadata.metadata)
+    gateway.handleEvent(RouteBatchEvent(EdgeCodecCommon.writeEndpointId(endpointId), Seq(AddRow(rowId.tableRow, SequenceCtx(None, Some(EdgeCodecCommon.writeDataKeyDescriptor(desc)))))))
+    handle
+  }
+  def remove(path: Path): Unit = {
+    val rowId = EdgeCodecCommon.dynamicDataKeyRow(EndpointDynamicPath(endpointId, DynamicPath(set, path)))
+    gateway.handleEvent(RouteBatchEvent(EdgeCodecCommon.writeEndpointId(endpointId), Seq(DropRow(rowId.tableRow))))
+  }
+}
+
 case class ProducerOutputEntry(path: Path, responder: Responder[OutputParams, OutputResult])
 
 class EndpointBuilderImpl(endpointId: EndpointId, gatewayThread: CallMarshaller, gateway: GatewayEventHandler) extends EndpointBuilder {
@@ -145,7 +159,7 @@ class EndpointBuilderImpl(endpointId: EndpointId, gatewayThread: CallMarshaller,
     rcvImpl
   }
 
-  def dynamic(set: String, callbacks: DynamicDataKey): Unit = {
+  def seriesDynamicSet(set: String, callbacks: DynamicDataKey): DynamicSeriesHandle = {
 
     val table = new DynamicTable {
       def subscribed(key: TypeValue): Unit = {
@@ -168,6 +182,8 @@ class EndpointBuilderImpl(endpointId: EndpointId, gatewayThread: CallMarshaller,
     }
 
     dynamicTables.put(set, table)
+
+    new DynamicSeriesPublisher(endpointId, set, gateway, updateBuffer)
   }
 
   def build(seriesBuffersSize: Int, eventBuffersSize: Int): ProducerHandle = {

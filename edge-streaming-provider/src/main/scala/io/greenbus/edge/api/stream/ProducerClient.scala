@@ -49,7 +49,7 @@ trait EndpointBuilder {
 
   def registerOutput(key: Path): Receiver[OutputParams, OutputResult]
 
-  def dynamic(set: String, callbacks: DynamicDataKey): Unit
+  def seriesDynamicSet(set: String, callbacks: DynamicDataKey): DynamicSeriesHandle
 
   def build(seriesBuffersSize: Int, eventBuffersSize: Int): ProducerHandle
 }
@@ -69,6 +69,11 @@ trait LatestKeyValueHandle {
 }
 trait ActiveSetHandle {
   def update(value: Map[IndexableValue, Value]): Unit
+}
+
+trait DynamicSeriesHandle {
+  def add(path: Path, metadata: KeyMetadata = KeyMetadata()): SeriesValueHandle
+  def remove(path: Path): Unit
 }
 
 trait DataValueDistributor[A] {

@@ -19,27 +19,34 @@
 package io.greenbus.edge.stream.gateway
 
 import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.flow.Sink
-import io.greenbus.edge.stream._
+import io.greenbus.edge.stream.{ AppendEvent, StreamAbsent }
 import io.greenbus.edge.stream.engine.CachingKeyStreamSubject
 import io.greenbus.edge.stream.filter.StreamCache
 
-trait DynamicTable {
-  def subscribed(key: TypeValue): Unit
-  def unsubscribed(key: TypeValue): Unit
+class ProducerStreamSubject(absentWhenUnbound: Boolean) extends CachingKeyStreamSubject with LazyLogging {
+  private var streamOpt = Option.empty[StreamCache]
+
+  protected def sync(): Seq[AppendEvent] = {
+    logger.debug(s"ProducerStreamSubject sync()")
+    streamOpt.map(_.resync()).getOrElse {
+      logger.debug(s"No sync event on subscribe")
+      if (absentWhenUnbound) {
+        Seq(StreamAbsent)
+      } else {
+        Seq()
+      }
+    }
+  }
+
+  def bind(cache: StreamCache): Unit = {
+    streamOpt = Some(cache)
+  }
+  def unbind(): Unit = {
+    streamOpt = None
+    // TODO: row absent?
+  }
+
+  def targeted(): Boolean = {
+    observers.nonEmpty /*|| streamOpt.nonEmpty*/
+  }
 }
-
-case class AppendPublish(key: TableRow, values: Seq[TypeValue])
-case class SetPublish(key: TableRow, value: Set[TypeValue])
-case class MapPublish(key: TableRow, value: Map[TypeValue, TypeValue])
-case class PublishBatch(
-  appendUpdates: Seq[AppendPublish],
-  mapUpdates: Seq[MapPublish],
-  setUpdates: Seq[SetPublish])
-
-case class RoutePublishConfig(
-  appendKeys: Seq[(TableRow, SequenceCtx)],
-  setKeys: Seq[(TableRow, SequenceCtx)],
-  mapKeys: Seq[(TableRow, SequenceCtx)],
-  dynamicTables: Seq[(String, DynamicTable)],
-  handler: Sink[RouteServiceRequest])

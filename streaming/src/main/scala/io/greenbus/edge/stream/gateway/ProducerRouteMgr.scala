@@ -121,8 +121,8 @@ class ProducerRouteMgr(appendLimitDefault: Int) extends RouteTargetSubject with 
     }
   }
 
-  private def buildAndBindSubject(key: TableRow): ProducerStreamSubject = {
-    val subject = new ProducerStreamSubject
+  private def buildAndBindSubject(key: TableRow, static: Boolean): ProducerStreamSubject = {
+    val subject = new ProducerStreamSubject(absentWhenUnbound = static)
     updateMap.get(key).foreach { producer =>
       subject.bind(producer.cache)
       producer.bind(subject)
@@ -131,11 +131,11 @@ class ProducerRouteMgr(appendLimitDefault: Int) extends RouteTargetSubject with 
   }
 
   private def staticSubjectAdded(key: TableRow, observer: KeyStreamObserver): Unit = {
-    val subject = buildAndBindSubject(key)
+    val subject = buildAndBindSubject(key, static = true)
     subject.targetAdded(observer)
   }
   private def dynamicSubjectAdded(key: TableRow, table: DynamicTable, observer: KeyStreamObserver): Unit = {
-    val subject = buildAndBindSubject(key)
+    val subject = buildAndBindSubject(key, static = false)
     subject.targetAdded(observer)
     table.subscribed(key.rowKey)
   }

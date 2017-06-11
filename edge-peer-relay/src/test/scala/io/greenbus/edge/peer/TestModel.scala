@@ -132,7 +132,7 @@ object TestModel {
     val endpointId = EndpointId(Path(s"my-endpoint-$suffix"))
     val builder = producer.endpointBuilder(endpointId)
 
-    builder.dynamic("dset", dynamicDataKey)
+    builder.seriesDynamicSet("dset", dynamicDataKey)
 
     val buffer = builder.build(seriesBuffersSize = 100, eventBuffersSize = 100)
 
