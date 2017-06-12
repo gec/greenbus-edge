@@ -60,6 +60,19 @@ object EdgeMatchers {
 
       up.id == endPath && valueMatched
   }
+  def idDynamicDataKeyResolved(endPath: EndpointDynamicPath)(f: DataKeyUpdate => Boolean): PartialFunction[IdentifiedEdgeUpdate, Boolean] = {
+    case up: IdDynamicDataKeyUpdate =>
+      val valueMatched = up.data match {
+        case ResolvedValue(v) =>
+          v match {
+            case v: DataKeyUpdate => f(v)
+            case _ => false
+          }
+        case _ => false
+      }
+
+      up.id == endPath && valueMatched
+  }
 
   def dataKeyResolved(f: DataKeyUpdate => Boolean): PartialFunction[IdentifiedEdgeUpdate, Boolean] = {
     case up: IdDataKeyUpdate =>

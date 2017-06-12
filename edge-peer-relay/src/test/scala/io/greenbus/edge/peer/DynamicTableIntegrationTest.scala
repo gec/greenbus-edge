@@ -18,12 +18,16 @@
  */
 package io.greenbus.edge.peer
 
+import java.util.concurrent.atomic.AtomicReference
+
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.api._
-import io.greenbus.edge.api.stream.DynamicDataKey
-import io.greenbus.edge.data.ValueString
+import io.greenbus.edge.api.stream.{ DynamicDataKey, DynamicSeriesHandle, ProducerHandle }
+import io.greenbus.edge.data.proto.SampleValue
+import io.greenbus.edge.data.{ ValueDouble, ValueString }
 import io.greenbus.edge.flow
 import io.greenbus.edge.peer.TestModel.{ DynamicKeyProducer, OutputProducer }
+import io.greenbus.edge.stream.DoubleVal
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import org.scalatest.{ BeforeAndAfterEach, FunSuite, Matchers }
@@ -40,9 +44,15 @@ class DynamicTableIntegrationTest extends FunSuite with Matchers with BeforeAndA
 
     startRelay()
 
+    var bufferOpt = Option.empty[ProducerHandle]
+    var dynHandleOpt = Option.empty[DynamicSeriesHandle]
+
     val dyn = new DynamicDataKey {
       def subscribed(path: Path): Unit = {
         println(s"TEST GOT ADD: $path")
+        val seriesHandle = dynHandleOpt.get.add(path)
+        seriesHandle.update(ValueDouble(0.44), 1)
+        bufferOpt.get.flush()
       }
 
       def unsubscribed(path: Path): Unit = {
@@ -52,6 +62,10 @@ class DynamicTableIntegrationTest extends FunSuite with Matchers with BeforeAndA
 
     val producerA = new TestProducer
     val producer = new DynamicKeyProducer(producerA.producerMgr, "dyn01", dyn)
+
+    dynHandleOpt = Some(producer.dynHandle)
+    bufferOpt = Some(producer.buffer)
+
     producerA.connect()
 
     val dynKey = EndpointDynamicPath(producer.endpointId, DynamicPath("dset", Path(Seq("path", "01"))))
@@ -71,8 +85,13 @@ class DynamicTableIntegrationTest extends FunSuite with Matchers with BeforeAndA
 
     consA.connect()
 
-    Thread.sleep(2000)
-
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          idDynamicDataKeyResolved(dynKey) {
+            case up => up.value == SeriesUpdate(ValueDouble(0.44), 1)
+          }
+        }), 5000)
   }
 }
 
