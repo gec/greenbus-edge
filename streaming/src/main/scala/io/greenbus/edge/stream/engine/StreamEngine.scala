@@ -124,7 +124,6 @@ class StreamEngine(
 
     update.events.foreach {
       case ev: RowAppendEvent => streamMap.get(ev.rowId.routingKey).foreach(_.events(source, Seq(ev))) // TODO: fix this seq
-      //case ev: RowResolvedAbsent => routeMap.get(ev.rowId.routingKey).foreach(_.events(source, Seq(ev))) // TODO: fix this seq
       case ev: RouteUnresolved => streamMap.get(ev.routingKey).foreach(_.events(source, Seq(ev)))
     }
   }

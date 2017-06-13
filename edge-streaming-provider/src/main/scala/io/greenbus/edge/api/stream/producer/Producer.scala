@@ -18,6 +18,7 @@
  */
 package io.greenbus.edge.api.stream.producer
 
+import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.api._
 import io.greenbus.edge.api.stream._
 import io.greenbus.edge.data.{ IndexableValue, SampleValue, Value }
@@ -90,7 +91,7 @@ class DynamicSeriesPublisher(endpointId: EndpointId, set: String, gateway: Gatew
 
 case class ProducerOutputEntry(path: Path, responder: Responder[OutputParams, OutputResult])
 
-class EndpointBuilderImpl(endpointId: EndpointId, gatewayThread: CallMarshaller, gateway: GatewayEventHandler) extends EndpointBuilder {
+class EndpointBuilderImpl(endpointId: EndpointId, gatewayThread: CallMarshaller, gateway: GatewayEventHandler) extends EndpointBuilder with LazyLogging {
   private val updateBuffer = new RowUpdateBuffer
   private val initEvents = Vector.newBuilder[ProducerKeyEvent]
 
@@ -164,18 +165,18 @@ class EndpointBuilderImpl(endpointId: EndpointId, gatewayThread: CallMarshaller,
     val table = new DynamicTable {
       def subscribed(key: TypeValue): Unit = {
         EdgeCodecCommon.readPath(key) match {
-          case Left(err) => println(err)
+          case Left(err) => logger.debug("Dynamic key parse error: " + err)
           case Right(path) =>
-            println(path)
+            logger.debug(s"Dynamic key subscribed: $path")
             callbacks.subscribed(path)
         }
       }
 
       def unsubscribed(key: TypeValue): Unit = {
         EdgeCodecCommon.readPath(key) match {
-          case Left(err) => println(err)
+          case Left(err) => logger.debug("Dynamic key parse error: " + err)
           case Right(path) =>
-            println(path)
+            logger.debug(s"Dynamic key unsubscribed: $path")
             callbacks.unsubscribed(path)
         }
       }

@@ -43,7 +43,7 @@ class ProducerStreamSubject(absentWhenUnbound: Boolean) extends CachingKeyStream
   }
   def unbind(): Unit = {
     streamOpt = None
-    // TODO: row absent?
+    observers.foreach(_.handle(StreamAbsent))
   }
 
   def targeted(): Boolean = {

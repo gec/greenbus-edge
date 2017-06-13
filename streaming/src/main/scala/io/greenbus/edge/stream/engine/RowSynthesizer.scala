@@ -198,11 +198,6 @@ class RowSynthImpl[Source](appendLimitDefault: Int) extends RowSynthesizer[Sourc
                   }
                 }
 
-                if (activeSessionOpt.exists(_._1 == prevSourceSession)) {
-                  activeChangeCheck()
-                } else {
-                  Seq()
-                }
               case SourceStreamAbsent =>
                 Seq()
             }

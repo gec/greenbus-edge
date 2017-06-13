@@ -100,7 +100,7 @@ class ProducerRouteMgr(appendLimitDefault: Int) extends RouteTargetSubject with 
     }
   }
   private def streamRemoved(key: TableRow, stream: ProducerUpdateStream): Unit = {
-    logger.debug(s"Stream added $key")
+    logger.debug(s"Stream removed $key")
     updateMap -= key
     subjectMap.get(key).foreach(subj => subj.unbind())
   }
