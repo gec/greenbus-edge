@@ -16,12 +16,10 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.api.stream
+package io.greenbus.edge.api
 
-import io.greenbus.edge.api._
 import io.greenbus.edge.data.{ IndexableValue, SampleValue, Value }
-import io.greenbus.edge.flow.{ QueuedDistributor, Receiver, Source }
-import io.greenbus.edge.stream._
+import io.greenbus.edge.flow.Receiver
 
 case class KeyMetadata(indexes: Map[Path, IndexableValue] = Map(), metadata: Map[Path, Value] = Map())
 
@@ -45,13 +43,16 @@ trait EndpointBuilder {
 
   def outputStatus(key: Path, metadata: KeyMetadata = KeyMetadata()): OutputStatusHandle
 
-  //def outputRequests(key: Path, handler: Responder[OutputParams, OutputResult]): Unit
-
   def registerOutput(key: Path): Receiver[OutputParams, OutputResult]
 
   def seriesDynamicSet(set: String, callbacks: DynamicDataKey): DynamicSeriesHandle
 
   def build(seriesBuffersSize: Int, eventBuffersSize: Int): ProducerHandle
+}
+
+trait ProducerHandle {
+  def flush(): Unit
+  def close(): Unit
 }
 
 trait OutputStatusHandle {
@@ -74,19 +75,4 @@ trait ActiveSetHandle {
 trait DynamicSeriesHandle {
   def add(path: Path, metadata: KeyMetadata = KeyMetadata()): SeriesValueHandle
   def remove(path: Path): Unit
-}
-
-trait DataValueDistributor[A] {
-  protected val queue = new QueuedDistributor[A]
-  def source: Source[A] = queue
-}
-
-sealed trait DataValueQueue
-
-trait ProducerUserBuffer {
-  def enqueue(path: Path, data: TypeValue)
-}
-trait ProducerHandle {
-  def flush(): Unit
-  def close(): Unit
 }

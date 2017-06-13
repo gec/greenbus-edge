@@ -18,8 +18,7 @@
  */
 package io.greenbus.edge.peer
 
-import io.greenbus.edge.api.EndpointId
-import io.greenbus.edge.api.stream.EndpointBuilder
+import io.greenbus.edge.api.{ EndpointBuilder, EndpointId }
 import io.greenbus.edge.stream.GatewayProxyChannel
 
 trait ProducerServices {

@@ -20,8 +20,7 @@ package io.greenbus.edge.peer
 
 import java.util.UUID
 
-import io.greenbus.edge.api.stream.{ DynamicDataKey, KeyMetadata }
-import io.greenbus.edge.api.{ EndpointId, EndpointPath, Path }
+import io.greenbus.edge.api._
 import io.greenbus.edge.data.{ ValueDouble, ValueString }
 
 object TestModel {

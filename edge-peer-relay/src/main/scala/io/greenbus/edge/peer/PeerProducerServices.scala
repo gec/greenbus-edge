@@ -18,8 +18,8 @@
  */
 package io.greenbus.edge.peer
 
-import io.greenbus.edge.api.EndpointId
-import io.greenbus.edge.api.stream.{ EdgePublisher, EndpointBuilder }
+import io.greenbus.edge.api.{ EndpointBuilder, EndpointId }
+import io.greenbus.edge.api.stream.EdgePublisher
 import io.greenbus.edge.stream.GatewayProxyChannel
 import io.greenbus.edge.thread.CallMarshaller
 
