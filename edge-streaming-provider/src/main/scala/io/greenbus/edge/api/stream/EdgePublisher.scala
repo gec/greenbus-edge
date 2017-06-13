@@ -18,7 +18,7 @@
  */
 package io.greenbus.edge.api.stream
 
-import io.greenbus.edge.api.EndpointId
+import io.greenbus.edge.api.{ EndpointBuilder, EndpointId }
 import io.greenbus.edge.api.stream.producer.EndpointBuilderImpl
 import io.greenbus.edge.stream.GatewayProxyChannel
 import io.greenbus.edge.stream.gateway.GatewayEngine

@@ -20,19 +20,15 @@ package io.greenbus.edge.api
 
 import io.greenbus.edge.data.{ IndexableValue, SampleValue, Value }
 
-case class EndpointDescSub(endpointId: EndpointId)
-
-class EndpointSubscription(endpointId: EndpointId, descOpt: Option[EndpointDescSub], dataKeys: Set[Path], outputKeys: Path)
-
-case class DataKeyUpdate(descriptor: Option[DataKeyDescriptor], value: DataKeyValueUpdate)
+case class DataKeyUpdate(descriptor: Option[DataKeyDescriptor], value: DataUpdate)
 case class OutputKeyUpdate(descriptor: Option[OutputKeyDescriptor], value: OutputKeyStatus)
 
-sealed trait DataKeyValueUpdate
-sealed trait SequenceDataKeyValueUpdate extends DataKeyValueUpdate
+sealed trait DataUpdate
+sealed trait SequenceDataKeyValueUpdate extends DataUpdate
 case class KeyValueUpdate(value: Value) extends SequenceDataKeyValueUpdate
 case class SeriesUpdate(value: SampleValue, time: Long) extends SequenceDataKeyValueUpdate
 case class TopicEventUpdate(topic: Path, value: Value, time: Long) extends SequenceDataKeyValueUpdate
-case class ActiveSetUpdate(value: Map[IndexableValue, Value], removes: Set[IndexableValue], added: Set[(IndexableValue, Value)], modified: Set[(IndexableValue, Value)]) extends DataKeyValueUpdate
+case class ActiveSetUpdate(value: Map[IndexableValue, Value], removes: Set[IndexableValue], added: Set[(IndexableValue, Value)], modified: Set[(IndexableValue, Value)]) extends DataUpdate
 
 case class EndpointSetUpdate(set: Set[EndpointId], removes: Set[EndpointId], adds: Set[EndpointId])
 case class KeySetUpdate(set: Set[EndpointPath], removes: Set[EndpointPath], adds: Set[EndpointPath])

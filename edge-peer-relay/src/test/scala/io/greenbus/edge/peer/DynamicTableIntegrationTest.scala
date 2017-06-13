@@ -22,7 +22,6 @@ import java.util.concurrent.atomic.AtomicReference
 
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.api._
-import io.greenbus.edge.api.stream.{ DynamicDataKey, DynamicSeriesHandle, ProducerHandle, SeriesValueHandle }
 import io.greenbus.edge.data.ValueDouble
 import io.greenbus.edge.peer.TestModel.DynamicKeyProducer
 import org.junit.runner.RunWith

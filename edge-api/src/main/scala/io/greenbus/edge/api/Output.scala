@@ -30,7 +30,7 @@ case class OutputFailure(reason: String) extends OutputResult
 
 case class OutputKeyStatus(session: UUID, sequence: Long, valueOpt: Option[Value])
 
-case class OutputRequest(key: EndpointPath, value: OutputParams /*, correlation: Long*/ )
+case class OutputRequest(key: EndpointPath, value: OutputParams)
 
 case class OutputParams(sessionOpt: Option[UUID] = None,
   sequenceOpt: Option[Long] = None,

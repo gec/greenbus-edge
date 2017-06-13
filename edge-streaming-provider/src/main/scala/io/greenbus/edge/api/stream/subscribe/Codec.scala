@@ -104,7 +104,7 @@ class DynamicDataKeyCodec(logId: String, toUpdate: EdgeDataStatus[DataKeyUpdate]
         activeCodec = Some(new AppendDataCodec(logId, SeriesCodec, toUpdate))
       case _: LatestKeyValueDescriptor =>
         activeCodec = Some(new AppendDataCodec(logId, LatestKeyValueCodec, toUpdate))
-      case _: EventTopicValueDescriptor =>
+      case _: TopicEventValueDescriptor =>
         activeCodec = Some(new AppendDataCodec(logId, TopicEventCodec, toUpdate))
       case _: ActiveSetValueDescriptor =>
         activeCodec = Some(new MapDataKeySubCodec(logId, ActiveSetCodec, toUpdate))

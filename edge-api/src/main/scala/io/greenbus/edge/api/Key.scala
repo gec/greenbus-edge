@@ -20,7 +20,7 @@ package io.greenbus.edge.api
 
 case class EndpointId(path: Path)
 
-case class EndpointPath(endpoint: EndpointId, key: Path)
+case class EndpointPath(endpoint: EndpointId, path: Path)
 
 object Path {
   def isPrefixOf(l: Path, r: Path): Boolean = {

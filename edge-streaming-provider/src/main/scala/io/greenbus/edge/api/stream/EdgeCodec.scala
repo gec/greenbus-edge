@@ -334,7 +334,7 @@ object EdgeCodecCommon {
 
   def keyRowId(endpointPath: EndpointPath, table: String): RowId = {
     val route = endpointIdToRoute(endpointPath.endpoint)
-    val key = writePath(endpointPath.key)
+    val key = writePath(endpointPath.path)
 
     RowId(route, table, key)
   }
@@ -393,19 +393,6 @@ object EdgeCodecCommon {
     }
   }
 
-  def writeIndexSpecifier(v: IndexSpecifier): TypeValue = {
-    BytesVal(Conversions.toProto(v).toByteArray)
-  }
-  def readIndexSpecifier(v: TypeValue): Either[String, IndexSpecifier] = {
-    v match {
-      case b: BytesVal =>
-        parse(b.v, proto.IndexSpecifier.parseFrom).flatMap { protoValue =>
-          Conversions.fromProto(protoValue)
-        }
-      case _ => Left(s"Wrong value type for index specifier: " + v)
-    }
-  }
-
   def writeEndpointPath(id: EndpointPath): TypeValue = {
     BytesVal(Conversions.toProto(id).toByteArray)
   }
@@ -432,35 +419,6 @@ object EdgeCodecCommon {
     }
   }
 
-  /*case class IndexSubKey(spec: IndexSpecifier, table: String) extends PeerBasedSubKey {
-    def row(session: PeerSessionId): RowId = {
-      RowId(IndexProducer.routeForSession(session), table, writeIndexSpecifier(spec))
-    }
-  }
-
-  case class EndpointPrefixSubKey(path: Path) extends PeerBasedSubKey {
-    def row(session: PeerSessionId): RowId = {
-      RowId(IndexProducer.routeForSession(session), EdgeTables.endpointPrefixTable, writePath(path))
-    }
-  }
-
-  private def indexSubKey(spec: IndexSpecifier, table: String): SubscriptionKey = {
-    IndexSubKey(spec, table)
-  }
-
-  def endpointPrefixToSubKey(path: Path): SubscriptionKey = {
-    EndpointPrefixSubKey(path)
-  }
-  def endpointIndexSpecToSubKey(spec: IndexSpecifier): SubscriptionKey = {
-    indexSubKey(spec, EdgeTables.endpointIndexTable)
-  }
-  def dataKeyIndexSpecToSubKey(spec: IndexSpecifier): SubscriptionKey = {
-    indexSubKey(spec, EdgeTables.dataKeyIndexTable)
-  }
-  def outputKeyIndexSpecToSubKey(spec: IndexSpecifier): SubscriptionKey = {
-    indexSubKey(spec, EdgeTables.outputKeyIndexTable)
-  }
-*/
   def writeDataKeyDescriptor(desc: DataKeyDescriptor): TypeValue = {
     BytesVal(Conversions.toProto(desc).toByteArray)
   }

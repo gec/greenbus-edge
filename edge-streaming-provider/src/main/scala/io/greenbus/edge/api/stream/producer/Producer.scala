@@ -130,7 +130,7 @@ class EndpointBuilderImpl(endpointId: EndpointId, gatewayThread: CallMarshaller,
   def topicEventValue(key: Path, metadata: KeyMetadata = KeyMetadata()): TopicEventHandle = {
     val rowId = EdgeCodecCommon.dataKeyRowId(EndpointPath(endpointId, key))
     val handle = new TopicEventPublisher(rowId.tableRow, updateBuffer)
-    val desc = EventTopicValueDescriptor(metadata.indexes, metadata.metadata)
+    val desc = TopicEventValueDescriptor(metadata.indexes, metadata.metadata)
     data += (key -> desc)
     initEvents += AddRow(rowId.tableRow, SequenceCtx(None, Some(EdgeCodecCommon.writeDataKeyDescriptor(desc))))
     handle
@@ -187,7 +187,7 @@ class EndpointBuilderImpl(endpointId: EndpointId, gatewayThread: CallMarshaller,
     new DynamicSeriesPublisher(endpointId, set, gateway, updateBuffer)
   }
 
-  def build(seriesBuffersSize: Int, eventBuffersSize: Int): ProducerHandle = {
+  def build(): ProducerHandle = {
     val desc = EndpointDescriptor(indexes, metadata, data.toMap, outputStatuses.toMap)
     addDescriptor(desc)
     val route = EdgeCodecCommon.endpointIdToRoute(endpointId)
