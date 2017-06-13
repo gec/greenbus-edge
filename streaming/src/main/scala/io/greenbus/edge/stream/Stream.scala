@@ -29,7 +29,7 @@ sealed trait SequenceSnapshot
 case class SetSnapshot(snapshot: Set[TypeValue]) extends SequenceSnapshot
 case class MapSnapshot(snapshot: Map[TypeValue, TypeValue]) extends SequenceSnapshot
 
-case class AppendSetValue(sequence: SequencedTypeValue, value: AppendValue)
+//case class AppendSetValue(sequence: SequencedTypeValue, value: AppendValue)
 case class AppendSnapshot(current: SequencedDiff, previous: Seq[SequencedDiff]) extends SequenceSnapshot
 
 case class SequencedDiff(sequence: SequencedTypeValue, diff: SequenceTypeDiff)
@@ -46,8 +46,8 @@ object SequenceCtx {
 case class SequenceCtx(params: Option[StreamParams], userMetadata: Option[TypeValue])
 
 sealed trait AppendEvent
+case object StreamAbsent extends AppendEvent
 case class StreamDelta(update: Delta) extends AppendEvent
-case class ResyncSnapshot(resync: Resync) extends AppendEvent
 case class ResyncSession(sessionId: PeerSessionId, context: SequenceCtx, resync: Resync) extends AppendEvent
 
 // This is "peer event", append event above is stream event
@@ -61,7 +61,4 @@ case class RowAppendEvent(rowId: RowId, appendEvent: AppendEvent) extends RowEve
   def routingKey: TypeValue = rowId.routingKey
 }
 
-/*case class RowResolvedAbsent(rowId: RowId) extends RowEvent {
-  def routingKey: TypeValue = rowId.routingKey
-}*/
 case class RouteUnresolved(routingKey: TypeValue) extends StreamEvent

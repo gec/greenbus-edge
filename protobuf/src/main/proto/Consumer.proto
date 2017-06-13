@@ -30,23 +30,12 @@ message ClientOutputRequest {
     uint64 correlation = 3;
 }
 
-message IndexSubscriptionParams {
-    repeated edge.Path endpoint_prefixes = 1;
-    repeated edge.IndexSpecifier endpoint_index = 2;
-    repeated edge.IndexSpecifier data_key_indexes = 3;
-    repeated edge.IndexSpecifier output_key_indexes = 4;
-}
-message DataKeySubscriptionParams {
-    repeated edge.EndpointPath series = 1;
-    repeated edge.EndpointPath key_values = 2;
-    repeated edge.EndpointPath topic_events = 3;
-    repeated edge.EndpointPath active_sets = 4;
-}
 message SubscriptionParams {
-    repeated edge.EndpointId descriptors = 1;
-    DataKeySubscriptionParams data_params = 2;
-    repeated EndpointPath output_keys = 3;
-    IndexSubscriptionParams index_params = 4;
+    repeated edge.Path endpoint_prefix_set = 1;
+    repeated edge.EndpointId endpoint_descriptors = 2;
+    repeated edge.EndpointPath data_keys = 3;
+    repeated edge.EndpointPath output_keys = 4;
+    repeated edge.EndpointDynamicPath dynamic_data_keys = 5;
 }
 
 enum StatusType {
@@ -54,7 +43,6 @@ enum StatusType {
     DATA_UNRESOLVED = 1;
     RESOLVED_ABSENT = 2;
     RESOLVED_VALUE = 3;
-    DISCONNECTED = 4;
 }
 
 message IdentifiedEdgeUpdate {
@@ -64,9 +52,8 @@ message IdentifiedEdgeUpdate {
         IdOutputKeyUpdate output_key_update = 3;
 
         IdEndpointPrefixUpdate endpoint_prefix_update = 4;
-        IdEndpointIndexUpdate endpoint_index_update = 5;
-        IdDataKeyIndexUpdate data_key_index_update = 6;
-        IdOutputKeyIndexUpdate output_key_index_update = 7;
+
+        IdDynamicDataKeyUpdate dynamic_data_key_update = 5;
     }
 }
 
@@ -101,6 +88,11 @@ message IdOutputKeyUpdate {
     OutputKeyUpdate value = 3;
 }
 
+message IdDynamicDataKeyUpdate {
+    edge.EndpointDynamicPath id = 1;
+    StatusType type = 2;
+    DataKeyUpdate value = 3;
+}
 
 message KeyValueUpdate {
     edge.data.Value value = 1;
@@ -131,21 +123,6 @@ message IdEndpointPrefixUpdate {
     edge.Path id = 1;
     StatusType type = 2;
     EndpointSetUpdate value = 3;
-}
-message IdEndpointIndexUpdate {
-    edge.IndexSpecifier id = 1;
-    StatusType type = 2;
-    EndpointSetUpdate value = 3;
-}
-message IdDataKeyIndexUpdate {
-    edge.IndexSpecifier id = 1;
-    StatusType type = 2;
-    KeySetUpdate value = 3;
-}
-message IdOutputKeyIndexUpdate {
-    edge.IndexSpecifier id = 1;
-    StatusType type = 2;
-    KeySetUpdate value = 3;
 }
 
 message EndpointSetUpdate {

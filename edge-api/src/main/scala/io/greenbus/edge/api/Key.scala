@@ -18,10 +18,6 @@
  */
 package io.greenbus.edge.api
 
-/*sealed trait EndpointId
-case class NamedEndpointId(name: Path) extends EndpointId
-case class UuidEndpointId(uuid: UUID, display: Path) extends EndpointId*/
-
 case class EndpointId(path: Path)
 
 case class EndpointPath(endpoint: EndpointId, key: Path)
@@ -57,3 +53,7 @@ case class Path(parts: Seq[String]) {
     parts.mkString("(", ",", ")")
   }
 }
+
+case class DynamicPath(set: String, path: Path)
+
+case class EndpointDynamicPath(endpoint: EndpointId, key: DynamicPath)

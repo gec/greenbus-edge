@@ -22,15 +22,16 @@ import java.util.UUID
 
 import io.greenbus.edge.amqp.AmqpService
 import io.greenbus.edge.amqp.impl.AmqpListener
-import io.greenbus.edge.api.IdentifiedEdgeUpdate
+import io.greenbus.edge.api.{ IdentifiedEdgeUpdate, SubscriptionParams }
 import io.greenbus.edge.flow.Closeable
+import io.greenbus.edge.peer.EdgeSubHelpers.FlatQueue
 import io.greenbus.edge.stream.PeerSessionId
 import io.greenbus.edge.thread.EventThreadService
 import org.scalatest.BeforeAndAfterEach
 
 import scala.concurrent.Await
-import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
 
 object EdgeSubHelpers extends TypedSubHelpers[IdentifiedEdgeUpdate]
 
@@ -39,23 +40,62 @@ trait BaseEdgeIntegration {
 
   private var relayOpt = Option.empty[PeerRelay]
   private var serverOpt = Option.empty[AmqpListener]
-  private var serviceConnections = Vector.empty[EdgeServices]
   private var executors = Vector.empty[EventThreadService]
   private var closeables = Vector.empty[Closeable]
 
-  protected def buildConsumer(name: String = "consumer"): StreamConsumerManager = {
-    val exe = EventThreadService.build(name)
-    executors :+= exe
-    StreamConsumerManager.build(exe)
+  class TestConsumer(params: SubscriptionParams) {
+    val consumer = buildConsumer()
+
+    val subClient = consumer.subscriptionClient
+
+    val subscription = subClient.subscribe(params)
+
+    val queue = new FlatQueue
+    subscription.updates.bind(queue.received)
+
+    private var connectionOpt = Option.empty[Closeable]
+
+    def connect(): Unit = {
+      connectionOpt = Some(connectConsumer(consumer))
+    }
+
+    def unsubscribe(): Unit = {
+      subscription.close()
+    }
+
+    def disconnect(): Unit = {
+      connectionOpt.foreach(_.close())
+    }
   }
 
-  protected def buildProducer(name: String = "producer"): ProducerManager = {
-    val exe = EventThreadService.build(name)
-    executors :+= exe
-    new ProducerManager(exe)
+  class TestProducer {
+    val producerMgr = buildProducer()
+    //val producer = new Producer1(producerMgr)
+
+    private var connectionOpt = Option.empty[Closeable]
+
+    def connect(): Unit = {
+      connectionOpt = Some(connectProducer(producerMgr))
+    }
+
+    def disconnect(): Unit = {
+      connectionOpt.foreach(_.close())
+    }
   }
 
-  protected def connectConsumer(consumer: StreamConsumerManager): Closeable = {
+  protected def buildConsumer(name: String = "consumer"): PeerConsumerServices = {
+    val exe = EventThreadService.build(name)
+    executors :+= exe
+    new PeerConsumerServices(name, exe)
+  }
+
+  protected def buildProducer(name: String = "producer"): PeerProducerServices = {
+    val exe = EventThreadService.build(name)
+    executors :+= exe
+    new PeerProducerServices(name, exe, 100)
+  }
+
+  protected def connectConsumer(consumer: PeerConsumerServices): Closeable = {
     val service = AmqpService.build()
     val result = Await.result(RetryingConnector.client(service, "127.0.0.1", 50555, 5000), 5000.milliseconds)
     val (sess, link) = Await.result(result.client.openPeerLinkClient(), 5000.milliseconds)
@@ -75,7 +115,7 @@ trait BaseEdgeIntegration {
     closeable
   }
 
-  protected def connectProducer(producer: ProducerManager): Closeable = {
+  protected def connectProducer(producer: PeerProducerServices): Closeable = {
     val service = AmqpService.build()
     val result = Await.result(RetryingConnector.client(service, "127.0.0.1", 50555, 5000), 5000.milliseconds)
     val gatewayChannel = Await.result(result.client.openGatewayChannel(), 5000.milliseconds)
@@ -101,8 +141,6 @@ trait BaseEdgeIntegration {
 
   override protected def afterEach(): Unit = {
     stopRelay()
-    serviceConnections.foreach(_.shutdown())
-    serviceConnections = Vector()
     executors.foreach(_.close())
     executors = Vector()
     closeables.foreach(_.close())

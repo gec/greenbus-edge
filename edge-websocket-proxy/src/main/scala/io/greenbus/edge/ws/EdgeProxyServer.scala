@@ -20,8 +20,7 @@ package io.greenbus.edge.ws
 
 import com.typesafe.scalalogging.LazyLogging
 import org.eclipse.jetty.server.{ Server, ServerConnector }
-import org.eclipse.jetty.servlet.{ DefaultServlet, ServletContextHandler, ServletHolder }
-import org.eclipse.jetty.util.resource.Resource
+import org.eclipse.jetty.servlet.{ ServletContextHandler, ServletHolder }
 import org.eclipse.jetty.websocket.api.{ Session, WebSocketAdapter }
 import org.eclipse.jetty.websocket.servlet.{ WebSocketServlet, WebSocketServletFactory }
 

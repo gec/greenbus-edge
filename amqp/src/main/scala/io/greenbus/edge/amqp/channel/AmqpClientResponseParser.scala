@@ -18,8 +18,9 @@
  */
 package io.greenbus.edge.amqp.channel
 
-import io.greenbus.edge.channel.ChannelDescriptor
 import java.util
+
+import io.greenbus.edge.channel.ChannelDescriptor
 
 trait AmqpClientResponseParser {
   def sender[A](clientDesc: ChannelDescriptor[A], properties: Option[util.Map[org.apache.qpid.proton.amqp.Symbol, AnyRef]]): Option[ChannelDescriptor[A]]

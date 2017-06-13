@@ -18,8 +18,10 @@
  */
 package io.greenbus.edge.peer
 
+import java.util.UUID
+
+import io.greenbus.edge.api.stream.{ DynamicDataKey, KeyMetadata }
 import io.greenbus.edge.api.{ EndpointId, EndpointPath, Path }
-import io.greenbus.edge.api.stream.{ EndpointBuilder, KeyMetadata }
 import io.greenbus.edge.data.{ ValueDouble, ValueString }
 
 object TestModel {
@@ -103,6 +105,36 @@ object TestModel {
       seq.foreach { case (v, time) => series1.handle.update(ValueDouble(v), time) }
       buffer.flush()
     }
+
+    def close(): Unit = {
+      buffer.close()
+    }
+  }
+
+  class OutputProducer(producer: ProducerServices, suffix: String) {
+
+    val uuid = UUID.randomUUID()
+
+    val endpointId = EndpointId(Path(s"my-endpoint-$suffix"))
+    val builder = producer.endpointBuilder(endpointId)
+
+    val outStatus = KeyEntry.build(endpointId, Path("output-key-1")) { key => builder.outputStatus(key) }
+    val outRcv = builder.registerOutput(Path("output-key-1"))
+
+    val buffer = builder.build(seriesBuffersSize = 100, eventBuffersSize = 100)
+
+    def close(): Unit = {
+      buffer.close()
+    }
+  }
+
+  class DynamicKeyProducer(producer: ProducerServices, suffix: String, dynamicDataKey: DynamicDataKey) {
+    val endpointId = EndpointId(Path(s"my-endpoint-$suffix"))
+    val builder = producer.endpointBuilder(endpointId)
+
+    val dynHandle = builder.seriesDynamicSet("dset", dynamicDataKey)
+
+    val buffer = builder.build(seriesBuffersSize = 100, eventBuffersSize = 100)
 
     def close(): Unit = {
       buffer.close()

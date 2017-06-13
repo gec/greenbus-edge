@@ -67,23 +67,23 @@ message Path {
     repeated string part = 1;
 }
 
-message UUIDEndpointId {
-    UUID uuid = 1;
-    Path name = 2;
-}
-
 message EndpointId {
     Path name = 1;
-    /*oneof id_types {
-        Path named_id = 1;
-        UUIDEndpointId uuid_id = 2;
-    }*/
 }
-
 
 message EndpointPath {
     EndpointId endpoint_id = 1;
     Path key = 2;
+}
+
+message DynamicPath {
+    string set = 1;
+    Path path = 2;
+}
+
+message EndpointDynamicPath {
+    EndpointId endpoint_id = 1;
+    DynamicPath key = 2;
 }
 
 message OptionalString {

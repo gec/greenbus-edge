@@ -21,16 +21,47 @@ package io.greenbus.edge.peer
 import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.api._
 import io.greenbus.edge.data.{ ValueDouble, ValueString, ValueUInt32 }
+import io.greenbus.edge.flow
 import io.greenbus.edge.flow.Closeable
-import io.greenbus.edge.peer.EdgeSubHelpers.{ FlatQueue, fixed }
+import io.greenbus.edge.peer.TestModel.{ OutputProducer, Producer1, Producer2, TypesProducer }
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import org.scalatest.{ BeforeAndAfterEach, FunSuite, Matchers }
 
+import scala.concurrent.duration._
+import scala.concurrent.{ Await, Promise }
+
 object EdgeMatchers {
+  import EdgeSubHelpers._
 
   def idDataKeyResolved(endPath: EndpointPath)(f: DataKeyUpdate => Boolean): PartialFunction[IdentifiedEdgeUpdate, Boolean] = {
     case up: IdDataKeyUpdate =>
+      val valueMatched = up.data match {
+        case ResolvedValue(v) =>
+          v match {
+            case v: DataKeyUpdate => f(v)
+            case _ => false
+          }
+        case _ => false
+      }
+
+      up.id == endPath && valueMatched
+  }
+  def idOutputKeyResolved(endPath: EndpointPath)(f: OutputKeyUpdate => Boolean): PartialFunction[IdentifiedEdgeUpdate, Boolean] = {
+    case up: IdOutputKeyUpdate =>
+      val valueMatched = up.data match {
+        case ResolvedValue(v) =>
+          v match {
+            case v: OutputKeyUpdate => f(v)
+            case _ => false
+          }
+        case _ => false
+      }
+
+      up.id == endPath && valueMatched
+  }
+  def idDynamicDataKeyResolved(endPath: EndpointDynamicPath)(f: DataKeyUpdate => Boolean): PartialFunction[IdentifiedEdgeUpdate, Boolean] = {
+    case up: IdDynamicDataKeyUpdate =>
       val valueMatched = up.data match {
         case ResolvedValue(v) =>
           v match {
@@ -67,66 +98,15 @@ object EdgeMatchers {
 @RunWith(classOf[JUnitRunner])
 class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach with BaseEdgeIntegration with LazyLogging {
   import EdgeMatchers._
-
-  logger.debug("Test start")
-
-  /*
-   TODO:
-
-   producer removes endpoint while disconnected, not there when it reconnects
-    */
-
-  import TestModel._
-
-  class TestConsumer(params: SubscriptionParams) {
-    val consumer = buildConsumer()
-
-    val subClient = consumer.subscriptionClient
-
-    val subscription = subClient.subscribe(params)
-
-    val queue = new FlatQueue
-    subscription.updates.bind(queue.received)
-
-    private var connectionOpt = Option.empty[Closeable]
-
-    def connect(): Unit = {
-      connectionOpt = Some(connectConsumer(consumer))
-    }
-
-    def unsubscribe(): Unit = {
-      subscription.close()
-    }
-
-    def disconnect(): Unit = {
-      connectionOpt.foreach(_.close())
-    }
-  }
-
-  class TestProducer {
-    val producerMgr = buildProducer()
-    //val producer = new Producer1(producerMgr)
-
-    private var connectionOpt = Option.empty[Closeable]
-
-    def connect(): Unit = {
-      connectionOpt = Some(connectProducer(producerMgr))
-    }
-
-    def disconnect(): Unit = {
-      connectionOpt.foreach(_.close())
-    }
-  }
+  import EdgeSubHelpers._
 
   test("Producer comes up after consumer then quits first") {
-    import EdgeSubHelpers._
 
     val consumer = buildConsumer()
     val subClient = consumer.subscriptionClient
 
     val params = SubscriptionParams(
-      dataKeys = DataKeySubscriptionParams(
-        series = Seq(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1")))))
+      dataKeys = Set(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1"))))
 
     val subscription = subClient.subscribe(params)
 
@@ -139,25 +119,21 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
           case up: IdDataKeyUpdate => up.data == Pending
         },
         fixed {
-          case up: IdDataKeyUpdate => up.data == Disconnected
+          case up: IdDataKeyUpdate => up.data == DataUnresolved
         }), 5000)
 
     startRelay()
 
     connectConsumer(consumer)
 
-    flatQueue.awaitListen(
-      prefixMatcher(
-        fixed {
-          case up: IdDataKeyUpdate => up.data == DataUnresolved
-        }), 5000)
-
     val producerMgr = buildProducer()
     val producer = new Producer1(producerMgr)
     connectProducer(producerMgr)
 
+    logger.info("UPDATE:")
     producer.updateAndFlush(2.33, 5)
 
+    logger.info("WAITING:")
     flatQueue.awaitListen(
       prefixMatcher(
         fixed {
@@ -187,14 +163,9 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     logger.info("stopping relay")
     stopRelay()
 
-    flatQueue.awaitListen(
-      prefixMatcher(
-        fixed {
-          case up: IdDataKeyUpdate => up.data == Disconnected
-        }), 5000)
   }
 
-  ignore("Producer comes up after consumer, relay reboots, consumer connects before producer") {
+  test("Producer comes up after consumer, relay reboots, consumer connects before producer") {
     import EdgeSubHelpers._
 
     val consumer = buildConsumer()
@@ -202,8 +173,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     val subClient = consumer.subscriptionClient
 
     val params = SubscriptionParams(
-      dataKeys = DataKeySubscriptionParams(
-        series = Seq(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1")))))
+      dataKeys = Set(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1"))))
 
     val subscription = subClient.subscribe(params)
 
@@ -216,18 +186,12 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
           case up: IdDataKeyUpdate => up.data == Pending
         },
         fixed {
-          case up: IdDataKeyUpdate => up.data == Disconnected
+          case up: IdDataKeyUpdate => up.data == DataUnresolved
         }), 5000)
 
     startRelay()
 
     connectConsumer(consumer)
-
-    flatQueue.awaitListen(
-      prefixMatcher(
-        fixed {
-          case up: IdDataKeyUpdate => up.data == DataUnresolved
-        }), 5000)
 
     val producerMgr = buildProducer()
     val producer = new Producer1(producerMgr)
@@ -248,7 +212,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     flatQueue.awaitListen(
       prefixMatcher(
         fixed {
-          case up: IdDataKeyUpdate => up.data == Disconnected
+          case up: IdDataKeyUpdate => up.data == DataUnresolved
         }), 5000)
 
     producer.updateAndFlush(4.11, 7)
@@ -257,12 +221,6 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
 
     logger.info("connecting consumer")
     connectConsumer(consumer)
-
-    flatQueue.awaitListen(
-      prefixMatcher(
-        fixed {
-          case up: IdDataKeyUpdate => up.data == DataUnresolved
-        }), 5000)
 
     logger.info("connecting producer")
     connectProducer(producerMgr)
@@ -276,7 +234,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
         }), 5000)
   }
 
-  ignore("Resolved absent lifecycle") {
+  test("Resolved absent lifecycle") {
     import EdgeSubHelpers._
 
     startRelay()
@@ -287,8 +245,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     val nonexistentEndPath = EndpointPath(producer1.endpointId, Path("nonexistent"))
 
     val params = SubscriptionParams(
-      dataKeys = DataKeySubscriptionParams(
-        series = Seq(nonexistentEndPath)))
+      dataKeys = Set(nonexistentEndPath))
 
     val consA = new TestConsumer(params)
 
@@ -298,16 +255,10 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
           case up: IdDataKeyUpdate => up.id == nonexistentEndPath && up.data == Pending
         },
         fixed {
-          case up: IdDataKeyUpdate => up.id == nonexistentEndPath && up.data == Disconnected
+          case up: IdDataKeyUpdate => up.id == nonexistentEndPath && up.data == DataUnresolved
         }), 5000)
 
     consA.connect()
-
-    consA.queue.awaitListen(
-      prefixMatcher(
-        fixed {
-          case up: IdDataKeyUpdate => up.id == nonexistentEndPath && up.data == DataUnresolved
-        }), 5000)
 
     producerA.connect()
 
@@ -322,8 +273,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     import EdgeSubHelpers._
 
     val params = SubscriptionParams(
-      dataKeys = DataKeySubscriptionParams(
-        series = Seq(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1")))))
+      dataKeys = Set(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1"))))
 
     val consA = new TestConsumer(params)
 
@@ -333,18 +283,12 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
           case up: IdDataKeyUpdate => up.data == Pending
         },
         fixed {
-          case up: IdDataKeyUpdate => up.data == Disconnected
+          case up: IdDataKeyUpdate => up.data == DataUnresolved
         }), 5000)
 
     startRelay()
 
     consA.connect()
-
-    consA.queue.awaitListen(
-      prefixMatcher(
-        fixed {
-          case up: IdDataKeyUpdate => up.data == DataUnresolved
-        }), 5000)
 
     val producerA = new TestProducer
     val producer = new Producer1(producerA.producerMgr)
@@ -376,9 +320,10 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
           case up: IdDataKeyUpdate => up.data == Pending
         },
         fixed {
-          case up: IdDataKeyUpdate => up.data == Disconnected
+          case up: IdDataKeyUpdate => up.data == DataUnresolved
         }), 5000)
 
+    logger.info(s"Connecting B")
     consB.connect()
 
     consB.queue.awaitListen(
@@ -406,7 +351,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
         matchSeriesUpdates(updates4): _*), 5000)
   }
 
-  ignore("Subscription reconnect") {
+  test("Subscription reconnect") {
     import EdgeSubHelpers._
 
     startRelay()
@@ -418,8 +363,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     producer.updateAndFlush(2.33, 5)
 
     val params = SubscriptionParams(
-      dataKeys = DataKeySubscriptionParams(
-        series = Seq(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1")))))
+      dataKeys = Set(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1"))))
 
     val consA = new TestConsumer(params)
 
@@ -429,7 +373,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
           case up: IdDataKeyUpdate => up.data == Pending
         },
         fixed {
-          case up: IdDataKeyUpdate => up.data == Disconnected
+          case up: IdDataKeyUpdate => up.data == DataUnresolved
         }), 5000)
 
     consA.connect()
@@ -454,7 +398,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     consA.queue.awaitListen(
       prefixMatcher(
         fixed {
-          case up: IdDataKeyUpdate => up.data == Disconnected
+          case up: IdDataKeyUpdate => up.data == DataUnresolved
         }), 5000)
 
     val updates3 = Seq[(Double, Long)]((10.33, 13), (12.33, 15))
@@ -464,7 +408,6 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     producer.updateAndFlush(updates4)
 
     Thread.sleep(500)
-    logger.debug(s"!!! RECONNECT")
     consA.connect()
 
     consA.queue.awaitListen(
@@ -487,8 +430,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     producer1.updateAndFlush(2.33, 5)
 
     val params = SubscriptionParams(
-      dataKeys = DataKeySubscriptionParams(
-        series = Seq(producer1.seriesEndPath, producer2.seriesEndPath)))
+      dataKeys = Set(producer1.seriesEndPath, producer2.seriesEndPath))
 
     val consA = new TestConsumer(params)
 
@@ -498,13 +440,13 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
           case up: IdDataKeyUpdate => up.id == producer1.seriesEndPath && up.data == Pending
         },
         fixed {
-          case up: IdDataKeyUpdate => up.id == producer1.seriesEndPath && up.data == Disconnected
-        },
-        fixed {
           case up: IdDataKeyUpdate => up.id == producer2.seriesEndPath && up.data == Pending
         },
         fixed {
-          case up: IdDataKeyUpdate => up.id == producer2.seriesEndPath && up.data == Disconnected
+          case up: IdDataKeyUpdate => up.id == producer2.seriesEndPath && up.data == DataUnresolved
+        },
+        fixed {
+          case up: IdDataKeyUpdate => up.id == producer1.seriesEndPath && up.data == DataUnresolved
         }), 5000)
 
     consA.connect()
@@ -512,21 +454,12 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     consA.queue.awaitListen(
       prefixMatcher(
         fixed {
-          case up: IdDataKeyUpdate => up.id == producer2.seriesEndPath && up.data == DataUnresolved
-        },
-        fixed {
           idDataKeyResolved(producer1.seriesEndPath) { v: DataKeyUpdate =>
             v.value == SeriesUpdate(ValueDouble(2.33), 5)
           }
         }), 5000)
 
     producerB.connect()
-
-    /*consA.queue.awaitListen(
-      prefixMatcher(
-        fixed {
-          case up: IdDataKeyUpdate => up.id == producer2.seriesEndPath && up.data == ResolvedAbsent
-        }), 5000)*/
 
     producer2.updateAndFlush(3.66, 6)
 
@@ -577,8 +510,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     producerA.connect()
 
     val params = SubscriptionParams(
-      dataKeys = DataKeySubscriptionParams(
-        keyValues = Seq(producer.kv1.endpointPath)))
+      dataKeys = Set(producer.kv1.endpointPath))
 
     val consA = new TestConsumer(params)
 
@@ -588,7 +520,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
           case up: IdDataKeyUpdate => up.id == producer.kv1.endpointPath && up.data == Pending
         },
         fixed {
-          case up: IdDataKeyUpdate => up.id == producer.kv1.endpointPath && up.data == Disconnected
+          case up: IdDataKeyUpdate => up.id == producer.kv1.endpointPath && up.data == DataUnresolved
         }), 5000)
 
     consA.connect()
@@ -618,8 +550,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     producer.buffer.flush()
 
     val params = SubscriptionParams(
-      dataKeys = DataKeySubscriptionParams(
-        keyValues = Seq(producer.kv1.endpointPath)))
+      dataKeys = Set(producer.kv1.endpointPath))
 
     val consA = new TestConsumer(params)
 
@@ -629,7 +560,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
           case up: IdDataKeyUpdate => up.id == producer.kv1.endpointPath && up.data == Pending
         },
         fixed {
-          case up: IdDataKeyUpdate => up.id == producer.kv1.endpointPath && up.data == Disconnected
+          case up: IdDataKeyUpdate => up.id == producer.kv1.endpointPath && up.data == DataUnresolved
         }), 5000)
 
     consA.connect()
@@ -667,8 +598,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     producer.buffer.flush()
 
     val params = SubscriptionParams(
-      dataKeys = DataKeySubscriptionParams(
-        topicEvent = Seq(producer.event1.endpointPath)))
+      dataKeys = Set(producer.event1.endpointPath))
 
     val consA = new TestConsumer(params)
 
@@ -678,7 +608,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
           case up: IdDataKeyUpdate => up.id == producer.event1.endpointPath && up.data == Pending
         },
         fixed {
-          case up: IdDataKeyUpdate => up.id == producer.event1.endpointPath && up.data == Disconnected
+          case up: IdDataKeyUpdate => up.id == producer.event1.endpointPath && up.data == DataUnresolved
         }), 5000)
 
     consA.connect()
@@ -704,7 +634,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
   }
 
   // need to fix added showing up on first resolve
-  ignore("active sets updates") {
+  test("active sets updates") {
     import EdgeSubHelpers._
 
     startRelay()
@@ -717,8 +647,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
     producer.buffer.flush()
 
     val params = SubscriptionParams(
-      dataKeys = DataKeySubscriptionParams(
-        activeSet = Seq(producer.activeSet1.endpointPath)))
+      dataKeys = Set(producer.activeSet1.endpointPath))
 
     val consA = new TestConsumer(params)
 
@@ -728,7 +657,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
           case up: IdDataKeyUpdate => up.id == producer.activeSet1.endpointPath && up.data == Pending
         },
         fixed {
-          case up: IdDataKeyUpdate => up.id == producer.activeSet1.endpointPath && up.data == Disconnected
+          case up: IdDataKeyUpdate => up.id == producer.activeSet1.endpointPath && up.data == DataUnresolved
         }), 5000)
 
     consA.connect()
@@ -754,3 +683,4 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
   }
 
 }
+

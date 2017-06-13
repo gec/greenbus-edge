@@ -18,15 +18,12 @@
  */
 package io.greenbus.edge.api.stream
 
-import io.greenbus.edge.api._
+import io.greenbus.edge.api.{ proto, _ }
 import io.greenbus.edge.api.proto.convert.{ Conversions, OutputConversions }
-import io.greenbus.edge.stream._
-import io.greenbus.edge.api.proto
-import io.greenbus.edge.data.{ proto => vproto }
-import io.greenbus.edge.api.stream.index.IndexProducer
 import io.greenbus.edge.data.proto.convert.ValueConversions
-import io.greenbus.edge.data.{ IndexableValue, SampleValue, Value }
-import io.greenbus.edge.stream.subscribe.{ MapUpdated, PeerBasedSubKey, SetUpdated, SubscriptionKey }
+import io.greenbus.edge.data.{ IndexableValue, SampleValue, Value, proto => vproto }
+import io.greenbus.edge.stream._
+import io.greenbus.edge.stream.consume.{ MapUpdated, SetUpdated }
 import io.greenbus.edge.util.EitherUtil
 
 object EdgeTables {
@@ -38,6 +35,7 @@ object EdgeTables {
   val eventTopicValueTable = "edm.events"
   val activeSetValueTable = "edm.set"
 
+  val dataKeyTable = "edm.data"
   val outputTable = "edm.output"
 
   val endpointPrefixTable = "edm.prefix.endpoint"
@@ -321,8 +319,17 @@ object EdgeCodecCommon {
     BytesVal(Conversions.toProto(desc).toByteArray)
   }
 
+  def dataKeyRowId(endpointPath: EndpointPath): RowId = {
+    keyRowId(endpointPath, EdgeTables.dataKeyTable)
+  }
+
   def outputKeyRowId(endpointPath: EndpointPath): RowId = {
     keyRowId(endpointPath, EdgeTables.outputTable)
+  }
+
+  def dynamicDataKeyRow(endpointDynamicPath: EndpointDynamicPath): RowId = {
+    val route = endpointIdToRoute(endpointDynamicPath.endpoint)
+    RowId(route, endpointDynamicPath.key.set, writePath(endpointDynamicPath.key.path))
   }
 
   def keyRowId(endpointPath: EndpointPath, table: String): RowId = {
@@ -425,7 +432,7 @@ object EdgeCodecCommon {
     }
   }
 
-  case class IndexSubKey(spec: IndexSpecifier, table: String) extends PeerBasedSubKey {
+  /*case class IndexSubKey(spec: IndexSpecifier, table: String) extends PeerBasedSubKey {
     def row(session: PeerSessionId): RowId = {
       RowId(IndexProducer.routeForSession(session), table, writeIndexSpecifier(spec))
     }
@@ -453,7 +460,7 @@ object EdgeCodecCommon {
   def outputKeyIndexSpecToSubKey(spec: IndexSpecifier): SubscriptionKey = {
     indexSubKey(spec, EdgeTables.outputKeyIndexTable)
   }
-
+*/
   def writeDataKeyDescriptor(desc: DataKeyDescriptor): TypeValue = {
     BytesVal(Conversions.toProto(desc).toByteArray)
   }

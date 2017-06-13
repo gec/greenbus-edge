@@ -41,25 +41,9 @@ message MapSnapshot {
     repeated TypeValueKeyPair elements = 1;
 }
 
-/*
-message AppendSetValue {
-    SequencedTypeValue sequence = 1;
-    TypeValue value = 2;
-}
-
-message AppendSetSequence {
-    repeated AppendSetValue values = 1;
-}
-*/
-
 message SequencedDiff {
     SequencedTypeValue sequence = 1;
     SeqDiff diff = 2;
-    /*oneof set_types {
-        SetDiff set_diff = 2;
-        MapDiff map_diff = 3;
-        TypeValue append_diff = 4;
-    }*/
 }
 
 message AppendSnapshot {
@@ -87,10 +71,6 @@ message StreamDelta {
     repeated SequencedDiff updates = 1;
 }
 
-message ResyncSnapshot {
-    SequencedTypeValue sequence = 1;
-    SeqSnapshot snapshot = 2;
-}
 message ResyncSession {
     PeerSessionId session_id = 1;
     SequenceContext context = 2;
@@ -110,8 +90,8 @@ message SequenceContext {
 message AppendEvent {
     oneof append_types {
         StreamDelta stream_delta = 1;
-        ResyncSnapshot resync_snapshot = 2;
-        ResyncSession resync_Session = 3;
+        ResyncSession resync_Session = 2;
+        bool stream_absent = 3;
     }
 }
 

@@ -40,6 +40,7 @@ class OperationQueue extends CallMarshaller with LazyLogging {
   }
 
   def marshal(f: => Unit): Unit = {
+    //logger.debug(s"!!! AMQP MARSHAL: " + Thread.currentThread().getStackTrace.toVector(2))
     enqueue(() => {
       try f catch {
         case ex: Throwable =>

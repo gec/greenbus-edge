@@ -20,22 +20,7 @@ package io.greenbus.edge.peer
 
 import java.util.UUID
 
-import com.typesafe.scalalogging.LazyLogging
-import io.greenbus.edge.amqp.AmqpService
-import io.greenbus.edge.amqp.channel.AmqpChannelHandler
-import io.greenbus.edge.amqp.stream.ChannelParserImpl
-import io.greenbus.edge.amqp.impl.AmqpListener
-import io.greenbus.edge.api.stream.index.IndexProducer
-import io.greenbus.edge.flow._
-import io.greenbus.edge.stream._
-import io.greenbus.edge.stream.channel.ChannelHandler
-import io.greenbus.edge.stream.gateway.GatewayRouteSource
-import io.greenbus.edge.stream.proto.provider.ProtoSerializationProvider
-import io.greenbus.edge.thread.{ CallMarshaller, EventThreadService }
-
-import scala.collection.mutable.ArrayBuffer
-import scala.concurrent.Future
-import scala.util.{ Success, Try }
+import io.greenbus.edge.stream.PeerSessionId
 
 object PeerRelayServer {
 
@@ -47,63 +32,15 @@ object PeerRelayServer {
 
     val sessionId = PeerSessionId(UUID.randomUUID(), 0)
 
-    runRelay(sessionId, settings.host, settings.port)
-  }
+    val relay = new PeerRelay(sessionId)
 
-  def runRelay(sessionId: PeerSessionId, host: String, port: Int): Future[AmqpListener] = {
+    relay.listen(settings.host, settings.port)
 
-    val peerChannelMachine = new PeerChannelMachine("Peer", sessionId)
+    Runtime.getRuntime.addShutdownHook(new Thread(new Runnable {
+      def run(): Unit = {
+        relay.close()
+      }
+    }))
 
-    val channelHandler = new ChannelHandler(peerChannelMachine)
-
-    val service = AmqpService.build(Some("server"))
-
-    val exe = EventThreadService.build(s"indexer")
-
-    connectIndexer(exe, service.eventLoop, sessionId, peerChannelMachine)
-
-    val serialization = new ProtoSerializationProvider
-    val amqpHandler = new AmqpChannelHandler(service.eventLoop, new ChannelParserImpl(sessionId, serialization), serialization, channelHandler)
-
-    service.listen(host, port, amqpHandler)
-  }
-
-  def connectIndexer(indexerEventThread: CallMarshaller, peerThread: CallMarshaller, session: PeerSessionId, machine: PeerChannelHandler): Unit = {
-
-    val gatewaySource = GatewayRouteSource.build(indexerEventThread)
-    val indexer = new IndexProducer(indexerEventThread, gatewaySource)
-
-    val localChannelSource = new LocalChannelSource(machine)
-
-    val gateway = localChannelSource.gateway(indexerEventThread, peerThread)
-    val sub = localChannelSource.subscribe(indexerEventThread, peerThread)
-
-    gatewaySource.connect(gateway)
-    indexer.connected(session, sub)
-  }
-}
-
-class PeerRelay(sessionId: PeerSessionId) {
-
-  private val peerChannelMachine = new PeerChannelMachine("Peer", sessionId)
-
-  private val channelHandler = new ChannelHandler(peerChannelMachine)
-
-  private val service = AmqpService.build(Some("server"))
-
-  private val indexThread = EventThreadService.build(s"indexer")
-
-  PeerRelayServer.connectIndexer(indexThread, service.eventLoop, sessionId, peerChannelMachine)
-
-  private val serialization = new ProtoSerializationProvider
-  private val amqpHandler = new AmqpChannelHandler(service.eventLoop, new ChannelParserImpl(sessionId, serialization), serialization, channelHandler)
-
-  def listen(host: String, port: Int): Future[AmqpListener] = {
-    service.listen(host, port, amqpHandler)
-  }
-
-  def close(): Unit = {
-    service.close()
-    indexThread.close()
   }
 }

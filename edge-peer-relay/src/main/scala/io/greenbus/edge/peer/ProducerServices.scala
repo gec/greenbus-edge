@@ -19,10 +19,8 @@
 package io.greenbus.edge.peer
 
 import io.greenbus.edge.api.EndpointId
-import io.greenbus.edge.api.stream.{ EndpointBuilder, EndpointProducerBuilderImpl, ProducerBinder, StreamProducerBinder }
+import io.greenbus.edge.api.stream.EndpointBuilder
 import io.greenbus.edge.stream.GatewayProxyChannel
-import io.greenbus.edge.stream.gateway.GatewayRouteSource
-import io.greenbus.edge.thread.SchedulableCallMarshaller
 
 trait ProducerServices {
   def endpointBuilder(id: EndpointId): EndpointBuilder
@@ -30,19 +28,4 @@ trait ProducerServices {
 
 trait GatewayLinkObserver {
   def connected(channel: GatewayProxyChannel): Unit
-}
-
-class ProducerManager(eventThread: SchedulableCallMarshaller) extends ProducerServices with GatewayLinkObserver {
-
-  private val gatewaySource = GatewayRouteSource.build(eventThread)
-
-  private val provider = new StreamProducerBinder(gatewaySource)
-
-  def connected(channel: GatewayProxyChannel): Unit = {
-    gatewaySource.connect(channel)
-  }
-
-  def endpointBuilder(id: EndpointId): EndpointBuilder = {
-    new EndpointProducerBuilderImpl(id, eventThread, provider)
-  }
 }

@@ -18,9 +18,8 @@
  */
 package io.greenbus.edge.api.proto.convert
 
-import com.google.protobuf.ByteString
+import io.greenbus.edge.api
 import io.greenbus.edge.api.proto
-import io.greenbus.edge.{ api, data }
 import io.greenbus.edge.data._
 import io.greenbus.edge.data.proto.convert.ValueConversions
 
@@ -244,6 +243,40 @@ object Conversions {
     }
   }
 
+  def toProto(obj: api.DynamicPath): proto.DynamicPath = {
+    val b = proto.DynamicPath.newBuilder()
+    b.setSet(obj.set)
+    b.setPath(toProto(obj.path))
+    b.build()
+  }
+
+  def fromProto(msg: proto.DynamicPath): Either[String, api.DynamicPath] = {
+    if (msg.hasPath) {
+      fromProto(msg.getPath).map(p => api.DynamicPath(msg.getSet, p))
+    } else {
+      Left("EndpointId unrecognized")
+    }
+  }
+
+  def toProto(obj: api.EndpointDynamicPath): proto.EndpointDynamicPath = {
+    val b = proto.EndpointDynamicPath.newBuilder()
+    b.setEndpointId(toProto(obj.endpoint))
+    b.setKey(toProto(obj.key))
+    b.build()
+  }
+  def fromProto(msg: proto.EndpointDynamicPath): Either[String, api.EndpointDynamicPath] = {
+    if (msg.hasEndpointId && msg.hasKey) {
+      for {
+        id <- fromProto(msg.getEndpointId)
+        key <- fromProto(msg.getKey)
+      } yield {
+        api.EndpointDynamicPath(id, key)
+      }
+    } else {
+      Left("EndpointDynamicPath missing endpoint id or key")
+    }
+  }
+
   def fromProtoSimple(msg: proto.UUID): java.util.UUID = {
     new java.util.UUID(msg.getHigh, msg.getLow)
   }
@@ -362,164 +395,3 @@ object ConversionUtil {
     }
   }
 }
-/*
-object ValueConversions {
- import ConversionUtil._
-
-
-def fromProto(msg: proto.ArrayValue): Either[String, ValueArray] = {
-   rightSequence(msg.getElementList.map(fromProto).toVector).map(s => data.ValueArray(s.toIndexedSeq))
- }
- def toProto(obj: ValueArray): proto.ArrayValue = {
-   val b = proto.ArrayValue.newBuilder()
-   obj.seq.foreach(v => b.addElement(toProto(v)))
-   b.build()
- }
-
- def fromProto(msg: proto.ObjectValue): Either[String, ValueObject] = {
-   val fields = msg.getFieldsMap.toVector.map { case (k, v) => fromProto(v).map(ve => (k, ve)) }
-   rightSequence(fields).map { all =>
-     data.ValueObject(all.toMap)
-   }
- }
- def toProto(obj: ValueObject): proto.ObjectValue = {
-   val b = proto.ObjectValue.newBuilder()
-   obj.map.foreach {
-     case (k, v) =>
-       b.putFields(k, toProto(v))
-   }
-   b.build()
- }
-
- def fromProto(msg: proto.TextValue): ValueText = {
-   val mimeOpt = if (msg.hasMimeType) Some(msg.getMimeType.getValue) else None
-   data.ValueText(msg.getValue, mimeOpt)
- }
-
- def toProto(obj: ValueText): proto.TextValue = {
-   val b = proto.TextValue.newBuilder().setValue(obj.v)
-   obj.mimeType.foreach(s => b.setMimeType(toOptionString(s)))
-   b.build()
- }
-
- def fromProto(msg: proto.AnnotatedBytesValue): ValueAnnotatedBytes = {
-   val mimeOpt = if (msg.hasMimeType) Some(msg.getMimeType.getValue) else None
-   val textOpt = if (msg.hasIsText) Some(msg.getIsText.getValue) else None
-   data.ValueAnnotatedBytes(msg.getValue.toByteArray, mimeOpt, textOpt)
- }
-
- def toProto(obj: ValueAnnotatedBytes): proto.AnnotatedBytesValue = {
-   val b = proto.AnnotatedBytesValue.newBuilder().setValue(ByteString.copyFrom(obj.v))
-   obj.mimeType.foreach(v => b.setMimeType(toOptionString(v)))
-   obj.isText.foreach(v => b.setIsText(toOptionBool(v)))
-   b.build()
- }
-
- def fromProto(msg: proto.Value): Either[String, Value] = {
-   import proto.Value.ValueTypesCase
-   msg.getValueTypesCase match {
-     case ValueTypesCase.BOOL_VALUE => Right(data.ValueBool(msg.getBoolValue))
-     case ValueTypesCase.FLOAT_VALUE => Right(ValueFloat(msg.getFloatValue))
-     case ValueTypesCase.DOUBLE_VALUE => Right(ValueDouble(msg.getDoubleValue))
-     case ValueTypesCase.SINT32_VALUE => Right(data.ValueInt32(msg.getSint32Value))
-     case ValueTypesCase.UINT32_VALUE => Right(data.ValueUInt32(msg.getUint32Value))
-     case ValueTypesCase.SINT64_VALUE => Right(data.ValueInt64(msg.getSint64Value))
-     case ValueTypesCase.UINT64_VALUE => Right(data.ValueUInt64(msg.getUint64Value))
-     case ValueTypesCase.STRING_VALUE => Right(data.ValueString(msg.getStringValue))
-     case ValueTypesCase.BYTES_VALUE => Right(data.ValueBytes(msg.getBytesValue.toByteArray))
-     case ValueTypesCase.TEXT_VALUE => Right(fromProto(msg.getTextValue))
-     case ValueTypesCase.BYTES_ANNOTATED_VALUE => Right(fromProto(msg.getBytesAnnotatedValue))
-     case ValueTypesCase.UUID_VALUE => Right(data.ValueUuid(fromProtoSimple(msg.getUuidValue)))
-     case ValueTypesCase.PATH_VALUE => Right(data.ValuePath(fromProtoSimple(msg.getPathValue)))
-     case ValueTypesCase.ENDPOINT_PATH_VALUE => fromProto(msg.getEndpointPathValue).map(data.ValueEndpointPath)
-     case ValueTypesCase.ARRAY_VALUE => fromProto(msg.getArrayValue)
-     case ValueTypesCase.OBJECT_VALUE => fromProto(msg.getObjectValue)
-     case ValueTypesCase.VALUETYPES_NOT_SET => Left("Unrecognizable value type")
-     case _ => Left("Unrecognizable value type")
-   }
- }
-
- def toProto(obj: Value): proto.Value = {
-   obj match {
-     case api.ValueBool(v) => proto.Value.newBuilder().setBoolValue(v).build()
-     case api.ValueFloat(v) => proto.Value.newBuilder().setDoubleValue(v).build()
-     case api.ValueDouble(v) => proto.Value.newBuilder().setDoubleValue(v).build()
-     case api.ValueInt32(v) => proto.Value.newBuilder().setSint32Value(v).build()
-     case api.ValueUInt32(v) => proto.Value.newBuilder().setUint32Value(v.toInt).build()
-     case api.ValueInt64(v) => proto.Value.newBuilder().setSint64Value(v).build()
-     case api.ValueUInt64(v) => proto.Value.newBuilder().setUint64Value(v).build()
-     case v: ValueString => proto.Value.newBuilder().setStringValue(v.v).build()
-     case v: ValueBytes => proto.Value.newBuilder().setBytesValue(ByteString.copyFrom(v.v)).build()
-     case v: ValueText => proto.Value.newBuilder().setTextValue(toProto(v)).build()
-     case v: ValueAnnotatedBytes => proto.Value.newBuilder().setBytesAnnotatedValue(toProto(v)).build()
-     case v: ValueUuid => proto.Value.newBuilder().setUuidValue(toProto(v.v)).build()
-     case v: ValuePath => proto.Value.newBuilder().setPathValue(toProto(v.v)).build()
-     case v: ValueEndpointPath => proto.Value.newBuilder().setEndpointPathValue(toProto(v.v)).build()
-     case v: ValueArray => proto.Value.newBuilder().setArrayValue(toProto(v)).build()
-     case v: ValueObject => proto.Value.newBuilder().setObjectValue(toProto(v)).build()
-     case other => throw new IllegalArgumentException(s"Conversion not implemented for $other")
-   }
- }
-
- def fromProto(msg: proto.IndexableValue): Either[String, IndexableValue] = {
-   import proto.IndexableValue.ValueTypesCase
-   msg.getValueTypesCase match {
-     case ValueTypesCase.BOOL_VALUE => Right(data.ValueBool(msg.getBoolValue))
-     case ValueTypesCase.FLOAT_VALUE => Right(data.ValueFloat(msg.getFloatValue))
-     case ValueTypesCase.DOUBLE_VALUE => Right(data.ValueDouble(msg.getDoubleValue))
-     case ValueTypesCase.SINT32_VALUE => Right(data.ValueInt32(msg.getSint32Value))
-     case ValueTypesCase.UINT32_VALUE => Right(data.ValueUInt32(msg.getUint32Value))
-     case ValueTypesCase.SINT64_VALUE => Right(data.ValueInt64(msg.getSint64Value))
-     case ValueTypesCase.UINT64_VALUE => Right(data.ValueUInt64(msg.getUint64Value))
-     case ValueTypesCase.STRING_VALUE => Right(data.ValueString(msg.getStringValue))
-     case ValueTypesCase.BYTES_VALUE => Right(data.ValueBytes(msg.getBytesValue.toByteArray))
-     case ValueTypesCase.UUID_VALUE => Right(data.ValueUuid(fromProtoSimple(msg.getUuidValue)))
-     case ValueTypesCase.VALUETYPES_NOT_SET => Left("Unrecognizable value type")
-     case _ => Left("Unrecognizable value type")
-   }
- }
-
- def toProto(obj: IndexableValue): proto.IndexableValue = {
-   obj match {
-     case api.ValueBool(v) => proto.IndexableValue.newBuilder().setBoolValue(v).build()
-     case api.ValueFloat(v) => proto.IndexableValue.newBuilder().setDoubleValue(v).build()
-     case api.ValueDouble(v) => proto.IndexableValue.newBuilder().setDoubleValue(v).build()
-     case api.ValueInt32(v) => proto.IndexableValue.newBuilder().setSint32Value(v).build()
-     case api.ValueUInt32(v) => proto.IndexableValue.newBuilder().setUint32Value(v.toInt).build()
-     case api.ValueInt64(v) => proto.IndexableValue.newBuilder().setSint64Value(v).build()
-     case api.ValueUInt64(v) => proto.IndexableValue.newBuilder().setUint64Value(v).build()
-     case v: ValueString => proto.IndexableValue.newBuilder().setStringValue(v.v).build()
-     case v: ValueBytes => proto.IndexableValue.newBuilder().setBytesValue(ByteString.copyFrom(v.v)).build()
-     case v: ValueUuid => proto.IndexableValue.newBuilder().setUuidValue(toProto(v.v)).build()
-     case other => throw new IllegalArgumentException(s"Conversion not implemented for $other")
-   }
- }
-
- def fromProto(msg: proto.SampleValue): Either[String, SampleValue] = {
-   import proto.SampleValue.ValueTypesCase
-   msg.getValueTypesCase match {
-     case ValueTypesCase.BOOL_VALUE => Right(data.ValueBool(msg.getBoolValue))
-     case ValueTypesCase.FLOAT_VALUE => Right(data.ValueFloat(msg.getFloatValue))
-     case ValueTypesCase.DOUBLE_VALUE => Right(data.ValueDouble(msg.getDoubleValue))
-     case ValueTypesCase.SINT32_VALUE => Right(data.ValueInt32(msg.getSint32Value))
-     case ValueTypesCase.UINT32_VALUE => Right(data.ValueUInt32(msg.getUint32Value))
-     case ValueTypesCase.SINT64_VALUE => Right(data.ValueInt64(msg.getSint64Value))
-     case ValueTypesCase.UINT64_VALUE => Right(data.ValueUInt64(msg.getUint64Value))
-     case ValueTypesCase.VALUETYPES_NOT_SET => Left("Unrecognizable value type")
-     case _ => Left("Unrecognizable value type")
-   }
- }
-
- def toProto(obj: SampleValue): proto.SampleValue = {
-   obj match {
-     case api.ValueBool(v) => proto.SampleValue.newBuilder().setBoolValue(v).build()
-     case api.ValueFloat(v) => proto.SampleValue.newBuilder().setDoubleValue(v).build()
-     case api.ValueDouble(v) => proto.SampleValue.newBuilder().setDoubleValue(v).build()
-     case api.ValueInt32(v) => proto.SampleValue.newBuilder().setSint32Value(v).build()
-     case api.ValueUInt32(v) => proto.SampleValue.newBuilder().setUint32Value(v.toInt).build()
-     case api.ValueInt64(v) => proto.SampleValue.newBuilder().setSint64Value(v).build()
-     case api.ValueUInt64(v) => proto.SampleValue.newBuilder().setUint64Value(v).build()
-     case other => throw new IllegalArgumentException(s"Conversion not implemented for $other")
-   }
- }
-}*/ 

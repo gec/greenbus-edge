@@ -24,7 +24,6 @@ import com.typesafe.scalalogging.LazyLogging
 import org.apache.qpid.proton.Proton
 import org.apache.qpid.proton.amqp.Binary
 import org.apache.qpid.proton.amqp.messaging.Data
-import org.apache.qpid.proton.engine.{ Receiver, Sender }
 import org.apache.qpid.proton.message.Message
 
 import scala.annotation.tailrec
