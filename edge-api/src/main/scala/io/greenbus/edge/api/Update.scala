@@ -20,10 +20,6 @@ package io.greenbus.edge.api
 
 import io.greenbus.edge.data.{ IndexableValue, SampleValue, Value }
 
-case class EndpointDescSub(endpointId: EndpointId)
-
-class EndpointSubscription(endpointId: EndpointId, descOpt: Option[EndpointDescSub], dataKeys: Set[Path], outputKeys: Path)
-
 case class DataKeyUpdate(descriptor: Option[DataKeyDescriptor], value: DataKeyValueUpdate)
 case class OutputKeyUpdate(descriptor: Option[OutputKeyDescriptor], value: OutputKeyStatus)
 
