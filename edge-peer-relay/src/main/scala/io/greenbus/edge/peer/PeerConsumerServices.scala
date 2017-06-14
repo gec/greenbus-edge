@@ -21,8 +21,7 @@ package io.greenbus.edge.peer
 import java.util.UUID
 
 import io.greenbus.edge.api.stream.EdgePeer
-import io.greenbus.edge.api.{ EdgeSubscriptionClient, ServiceClient, ServiceClientChannel }
-import io.greenbus.edge.flow.Source
+import io.greenbus.edge.api.{ EdgeSubscriptionClient, ServiceClient }
 import io.greenbus.edge.stream.{ PeerLinkProxyChannel, PeerSessionId }
 import io.greenbus.edge.thread.SchedulableCallMarshaller
 

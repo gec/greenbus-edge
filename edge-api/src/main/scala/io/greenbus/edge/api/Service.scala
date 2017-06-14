@@ -18,7 +18,6 @@
  */
 package io.greenbus.edge.api
 
-import io.greenbus.edge.flow.{ CloseObservable, Sender }
+import io.greenbus.edge.flow.Sender
 
 trait ServiceClient extends Sender[OutputRequest, OutputResult]
-trait ServiceClientChannel extends ServiceClient with CloseObservable

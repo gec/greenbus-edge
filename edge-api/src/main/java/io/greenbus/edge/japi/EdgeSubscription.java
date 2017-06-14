@@ -16,17 +16,13 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.peer
+package io.greenbus.edge.japi;
 
-import io.greenbus.edge.api.{ EdgeSubscriptionClient, ServiceClient }
-import io.greenbus.edge.stream.{ PeerLinkProxyChannel, PeerSessionId }
+import io.greenbus.edge.japi.flow.Source;
 
-trait PeerLinkObserver {
-  def connected(session: PeerSessionId, channel: PeerLinkProxyChannel): Unit
-}
+import java.util.List;
 
-trait ConsumerServices {
-  def subscriptionClient: EdgeSubscriptionClient
-
-  def queuingServiceClient: ServiceClient
+public interface EdgeSubscription {
+    Source<List<IdentifiedEdgeUpdate>> updates();
+    void close();
 }

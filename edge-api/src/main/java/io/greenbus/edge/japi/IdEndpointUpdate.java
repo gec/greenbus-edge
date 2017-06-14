@@ -18,6 +18,8 @@
  */
 package io.greenbus.edge.japi;
 
+import java.util.Optional;
+
 public class IdEndpointUpdate {
     private final Path prefix;
     private final EdgeDataStatus status;
@@ -37,8 +39,8 @@ public class IdEndpointUpdate {
         return status;
     }
 
-    public EndpointDescriptor getUpdate() {
-        return update;
+    public Optional<EndpointDescriptor> getUpdate() {
+        return Optional.ofNullable(update);
     }
 
     @Override

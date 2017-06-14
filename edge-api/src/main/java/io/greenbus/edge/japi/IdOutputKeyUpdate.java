@@ -18,6 +18,8 @@
  */
 package io.greenbus.edge.japi;
 
+import java.util.Optional;
+
 public class IdOutputKeyUpdate {
     private final EndpointPath id;
     private final EdgeDataStatus status;
@@ -37,8 +39,8 @@ public class IdOutputKeyUpdate {
         return status;
     }
 
-    public OutputKeyUpdate getUpdate() {
-        return update;
+    public Optional<OutputKeyUpdate> getUpdate() {
+        return Optional.ofNullable(update);
     }
 
     @Override

@@ -18,29 +18,21 @@
  */
 package io.greenbus.edge.japi;
 
-import java.util.Optional;
+public class OutputRequest {
+    private final EndpointPath path;
+    private final OutputParams value;
 
-public class IdEndpointPrefixUpdate {
-    private final Path prefix;
-    private final EdgeDataStatus status;
-    private final EndpointSetUpdate update;
-
-    public IdEndpointPrefixUpdate(Path prefix, EdgeDataStatus status, EndpointSetUpdate update) {
-        this.prefix = prefix;
-        this.status = status;
-        this.update = update;
+    public OutputRequest(EndpointPath path, OutputParams value) {
+        this.path = path;
+        this.value = value;
     }
 
-    public Path getPrefix() {
-        return prefix;
+    public EndpointPath getPath() {
+        return path;
     }
 
-    public EdgeDataStatus getStatus() {
-        return status;
-    }
-
-    public Optional<EndpointSetUpdate> getUpdate() {
-        return Optional.ofNullable(update);
+    public OutputParams getValue() {
+        return value;
     }
 
     @Override
@@ -48,18 +40,16 @@ public class IdEndpointPrefixUpdate {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        IdEndpointPrefixUpdate that = (IdEndpointPrefixUpdate) o;
+        OutputRequest that = (OutputRequest) o;
 
-        if (prefix != null ? !prefix.equals(that.prefix) : that.prefix != null) return false;
-        if (status != that.status) return false;
-        return update != null ? update.equals(that.update) : that.update == null;
+        if (path != null ? !path.equals(that.path) : that.path != null) return false;
+        return value != null ? value.equals(that.value) : that.value == null;
     }
 
     @Override
     public int hashCode() {
-        int result = prefix != null ? prefix.hashCode() : 0;
-        result = 31 * result + (status != null ? status.hashCode() : 0);
-        result = 31 * result + (update != null ? update.hashCode() : 0);
+        int result = path != null ? path.hashCode() : 0;
+        result = 31 * result + (value != null ? value.hashCode() : 0);
         return result;
     }
 }
