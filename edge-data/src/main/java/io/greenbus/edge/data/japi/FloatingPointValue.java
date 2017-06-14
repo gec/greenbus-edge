@@ -16,23 +16,9 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.api
+package io.greenbus.edge.data.japi;
 
-import java.util.UUID
-
-import io.greenbus.edge.data.Value
-
-case class SessionId(persistenceId: UUID, instanceId: Long)
-
-sealed trait OutputResult
-case class OutputSuccess(valueOpt: Option[Value]) extends OutputResult
-case class OutputFailure(reason: String) extends OutputResult
-
-case class OutputKeyStatus(session: UUID, sequence: Long, valueOpt: Option[Value])
-
-case class OutputRequest(key: EndpointPath, value: OutputParams)
-
-case class OutputParams(sessionOpt: Option[UUID] = None,
-  sequenceOpt: Option[Long] = None,
-  compareValueOpt: Option[Value] = None,
-  outputValueOpt: Option[Value] = None)
+public interface FloatingPointValue extends NumericConvertible {
+    float toFloat();
+    double toDouble();
+}

@@ -16,23 +16,31 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.api
+package io.greenbus.edge.data.japi;
 
-import java.util.UUID
+public class ValueString implements IndexableValue {
+    private final String value;
 
-import io.greenbus.edge.data.Value
+    public ValueString(String value) {
+        this.value = value;
+    }
 
-case class SessionId(persistenceId: UUID, instanceId: Long)
+    public String getValue() {
+        return value;
+    }
 
-sealed trait OutputResult
-case class OutputSuccess(valueOpt: Option[Value]) extends OutputResult
-case class OutputFailure(reason: String) extends OutputResult
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
 
-case class OutputKeyStatus(session: UUID, sequence: Long, valueOpt: Option[Value])
+        ValueString that = (ValueString) o;
 
-case class OutputRequest(key: EndpointPath, value: OutputParams)
+        return value != null ? value.equals(that.value) : that.value == null;
+    }
 
-case class OutputParams(sessionOpt: Option[UUID] = None,
-  sequenceOpt: Option[Long] = None,
-  compareValueOpt: Option[Value] = None,
-  outputValueOpt: Option[Value] = None)
+    @Override
+    public int hashCode() {
+        return value != null ? value.hashCode() : 0;
+    }
+}

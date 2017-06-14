@@ -16,23 +16,43 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.api
+package io.greenbus.edge.data.japi;
 
-import java.util.UUID
+public class ValueByte implements NumericConvertible, SampleValue {
+    private final byte value;
 
-import io.greenbus.edge.data.Value
+    public ValueByte(byte value) {
+        this.value = value;
+    }
 
-case class SessionId(persistenceId: UUID, instanceId: Long)
+    public byte getValue() {
+        return value;
+    }
 
-sealed trait OutputResult
-case class OutputSuccess(valueOpt: Option[Value]) extends OutputResult
-case class OutputFailure(reason: String) extends OutputResult
+    public double toDouble() {
+        return (double)value;
+    }
 
-case class OutputKeyStatus(session: UUID, sequence: Long, valueOpt: Option[Value])
+    public long toLong() {
+        return (long)value;
+    }
 
-case class OutputRequest(key: EndpointPath, value: OutputParams)
+    public boolean toBoolean() {
+        return value != 0;
+    }
 
-case class OutputParams(sessionOpt: Option[UUID] = None,
-  sequenceOpt: Option[Long] = None,
-  compareValueOpt: Option[Value] = None,
-  outputValueOpt: Option[Value] = None)
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        ValueByte valueByte = (ValueByte) o;
+
+        return value == valueByte.value;
+    }
+
+    @Override
+    public int hashCode() {
+        return (int) value;
+    }
+}

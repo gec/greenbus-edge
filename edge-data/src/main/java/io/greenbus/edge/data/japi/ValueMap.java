@@ -16,23 +16,33 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.api
+package io.greenbus.edge.data.japi;
 
-import java.util.UUID
+import java.util.Map;
 
-import io.greenbus.edge.data.Value
+public class ValueMap implements BasicValue {
+    private final Map<Value, Value> value;
 
-case class SessionId(persistenceId: UUID, instanceId: Long)
+    public ValueMap(Map<Value, Value> value) {
+        this.value = value;
+    }
 
-sealed trait OutputResult
-case class OutputSuccess(valueOpt: Option[Value]) extends OutputResult
-case class OutputFailure(reason: String) extends OutputResult
+    public Map<Value, Value> getValue() {
+        return value;
+    }
 
-case class OutputKeyStatus(session: UUID, sequence: Long, valueOpt: Option[Value])
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
 
-case class OutputRequest(key: EndpointPath, value: OutputParams)
+        ValueMap valueMap = (ValueMap) o;
 
-case class OutputParams(sessionOpt: Option[UUID] = None,
-  sequenceOpt: Option[Long] = None,
-  compareValueOpt: Option[Value] = None,
-  outputValueOpt: Option[Value] = None)
+        return value != null ? value.equals(valueMap.value) : valueMap.value == null;
+    }
+
+    @Override
+    public int hashCode() {
+        return value != null ? value.hashCode() : 0;
+    }
+}
