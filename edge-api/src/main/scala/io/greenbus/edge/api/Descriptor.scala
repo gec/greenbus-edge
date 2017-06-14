@@ -44,5 +44,3 @@ case class EndpointDescriptor(
   metadata: Map[Path, Value],
   dataKeySet: Map[Path, DataKeyDescriptor],
   outputKeySet: Map[Path, OutputKeyDescriptor])
-
-case class IndexSpecifier(key: Path, valueOpt: Option[IndexableValue])

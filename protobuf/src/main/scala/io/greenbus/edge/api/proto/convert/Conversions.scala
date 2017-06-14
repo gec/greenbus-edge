@@ -176,25 +176,6 @@ object Conversions {
     }
   }
 
-  def toProto(obj: api.IndexSpecifier): proto.IndexSpecifier = {
-    val b = proto.IndexSpecifier.newBuilder()
-    b.setKey(toProto(obj.key))
-    obj.valueOpt.foreach(v => b.setValue(ValueConversions.toProto(v)))
-    b.build()
-  }
-  def fromProto(msg: proto.IndexSpecifier): Either[String, api.IndexSpecifier] = {
-    if (msg.hasKey) {
-      for {
-        key <- fromProto(msg.getKey)
-        paramOpt <- if (msg.hasValue) ValueConversions.fromProto(msg.getValue).map(r => Some(r)) else Right(None)
-      } yield {
-        api.IndexSpecifier(key, paramOpt)
-      }
-    } else {
-      Left("IndexSpecifier missing key")
-    }
-  }
-
   def toProto(obj: api.Path): proto.Path = {
     val b = proto.Path.newBuilder()
     obj.parts.foreach(b.addPart)
@@ -226,7 +207,7 @@ object Conversions {
   def toProto(obj: api.EndpointPath): proto.EndpointPath = {
     val b = proto.EndpointPath.newBuilder()
     b.setEndpointId(toProto(obj.endpoint))
-    b.setKey(toProto(obj.key))
+    b.setKey(toProto(obj.path))
     b.build()
   }
 
