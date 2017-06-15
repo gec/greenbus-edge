@@ -20,19 +20,19 @@ package io.greenbus.edge.japi;
 
 import java.util.Optional;
 
-public class IdEndpointUpdate {
-    private final Path prefix;
+public class IdEndpointUpdate implements IdentifiedEdgeUpdate {
+    private final EndpointId id;
     private final EdgeDataStatus status;
     private final EndpointDescriptor update;
 
-    public IdEndpointUpdate(Path prefix, EdgeDataStatus status, EndpointDescriptor update) {
-        this.prefix = prefix;
+    public IdEndpointUpdate(EndpointId prefix, EdgeDataStatus status, EndpointDescriptor update) {
+        this.id = prefix;
         this.status = status;
         this.update = update;
     }
 
-    public Path getPrefix() {
-        return prefix;
+    public EndpointId getId() {
+        return id;
     }
 
     public EdgeDataStatus getStatus() {
@@ -50,14 +50,14 @@ public class IdEndpointUpdate {
 
         IdEndpointUpdate that = (IdEndpointUpdate) o;
 
-        if (prefix != null ? !prefix.equals(that.prefix) : that.prefix != null) return false;
+        if (id != null ? !id.equals(that.id) : that.id != null) return false;
         if (status != that.status) return false;
         return update != null ? update.equals(that.update) : that.update == null;
     }
 
     @Override
     public int hashCode() {
-        int result = prefix != null ? prefix.hashCode() : 0;
+        int result = id != null ? id.hashCode() : 0;
         result = 31 * result + (status != null ? status.hashCode() : 0);
         result = 31 * result + (update != null ? update.hashCode() : 0);
         return result;

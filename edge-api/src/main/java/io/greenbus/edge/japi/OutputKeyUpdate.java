@@ -21,10 +21,10 @@ package io.greenbus.edge.japi;
 import java.util.Optional;
 
 public class OutputKeyUpdate {
-    private final DataKeyDescriptor descriptor;
+    private final OutputKeyDescriptor descriptor;
     private final OutputKeyStatus update;
 
-    public OutputKeyUpdate(DataKeyDescriptor descriptor, OutputKeyStatus update) {
+    public OutputKeyUpdate(OutputKeyDescriptor descriptor, OutputKeyStatus update) {
         this.descriptor = descriptor;
         this.update = update;
     }
@@ -34,7 +34,7 @@ public class OutputKeyUpdate {
         this.update = update;
     }
 
-    public Optional<DataKeyDescriptor> getDescriptor() {
+    public Optional<OutputKeyDescriptor> getDescriptor() {
         return Optional.ofNullable(descriptor);
     }
 

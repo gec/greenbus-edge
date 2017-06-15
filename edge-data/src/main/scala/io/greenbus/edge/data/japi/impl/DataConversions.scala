@@ -72,6 +72,60 @@ object DataConversions {
     }
   }
 
+  def convertIndexableValueToJava(obj: data.IndexableValue): japi.IndexableValue = {
+    obj match {
+      case v: data.ValueBool => convertValueBoolToJava(v)
+      case v: data.ValueByte => convertValueByteToJava(v)
+      case v: data.ValueFloat => convertValueFloatToJava(v)
+      case v: data.ValueDouble => convertValueDoubleToJava(v)
+      case v: data.ValueInt32 => convertValueInt32ToJava(v)
+      case v: data.ValueUInt32 => convertValueUInt32ToJava(v)
+      case v: data.ValueInt64 => convertValueInt64ToJava(v)
+      case v: data.ValueUInt64 => convertValueUInt64ToJava(v)
+      case v: data.ValueBytes => convertValueBytesToJava(v)
+      case v: data.ValueString => convertValueStringToJava(v)
+    }
+  }
+  def convertIndexableValueToScala(obj: japi.IndexableValue): data.IndexableValue = {
+    obj match {
+      case v: japi.ValueBool => convertValueBoolToScala(v)
+      case v: japi.ValueByte => convertValueByteToScala(v)
+      case v: japi.ValueFloat => convertValueFloatToScala(v)
+      case v: japi.ValueDouble => convertValueDoubleToScala(v)
+      case v: japi.ValueInt32 => convertValueInt32ToScala(v)
+      case v: japi.ValueUInt32 => convertValueUInt32ToScala(v)
+      case v: japi.ValueInt64 => convertValueInt64ToScala(v)
+      case v: japi.ValueUInt64 => convertValueUInt64ToScala(v)
+      case v: japi.ValueBytes => convertValueBytesToScala(v)
+      case v: japi.ValueString => convertValueStringToScala(v)
+    }
+  }
+
+  def convertSampleValueToJava(obj: data.SampleValue): japi.SampleValue = {
+    obj match {
+      case v: data.ValueBool => convertValueBoolToJava(v)
+      case v: data.ValueByte => convertValueByteToJava(v)
+      case v: data.ValueFloat => convertValueFloatToJava(v)
+      case v: data.ValueDouble => convertValueDoubleToJava(v)
+      case v: data.ValueInt32 => convertValueInt32ToJava(v)
+      case v: data.ValueUInt32 => convertValueUInt32ToJava(v)
+      case v: data.ValueInt64 => convertValueInt64ToJava(v)
+      case v: data.ValueUInt64 => convertValueUInt64ToJava(v)
+    }
+  }
+  def convertSampleValueToScala(obj: japi.SampleValue): data.SampleValue = {
+    obj match {
+      case v: japi.ValueBool => convertValueBoolToScala(v)
+      case v: japi.ValueByte => convertValueByteToScala(v)
+      case v: japi.ValueFloat => convertValueFloatToScala(v)
+      case v: japi.ValueDouble => convertValueDoubleToScala(v)
+      case v: japi.ValueInt32 => convertValueInt32ToScala(v)
+      case v: japi.ValueUInt32 => convertValueUInt32ToScala(v)
+      case v: japi.ValueInt64 => convertValueInt64ToScala(v)
+      case v: japi.ValueUInt64 => convertValueUInt64ToScala(v)
+    }
+  }
+
   def convertTaggedValueToJava(obj: data.TaggedValue): japi.TaggedValue = {
     new japi.TaggedValue(obj.tag, convertBasicValueToJava(obj.value))
   }

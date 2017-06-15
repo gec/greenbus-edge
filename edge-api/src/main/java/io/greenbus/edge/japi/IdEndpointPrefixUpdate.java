@@ -20,7 +20,7 @@ package io.greenbus.edge.japi;
 
 import java.util.Optional;
 
-public class IdEndpointPrefixUpdate {
+public class IdEndpointPrefixUpdate implements IdentifiedEdgeUpdate {
     private final Path prefix;
     private final EdgeDataStatus status;
     private final EndpointSetUpdate update;
