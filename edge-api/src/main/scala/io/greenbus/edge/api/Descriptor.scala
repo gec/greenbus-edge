@@ -29,7 +29,7 @@ trait DataKeyDescriptor extends KeyDescriptor
 
 case class LatestKeyValueDescriptor(indexes: Map[Path, IndexableValue], metadata: Map[Path, Value]) extends DataKeyDescriptor
 case class TimeSeriesValueDescriptor(indexes: Map[Path, IndexableValue], metadata: Map[Path, Value]) extends DataKeyDescriptor
-case class EventTopicValueDescriptor(indexes: Map[Path, IndexableValue], metadata: Map[Path, Value]) extends DataKeyDescriptor
+case class TopicEventValueDescriptor(indexes: Map[Path, IndexableValue], metadata: Map[Path, Value]) extends DataKeyDescriptor
 case class ActiveSetValueDescriptor(indexes: Map[Path, IndexableValue], metadata: Map[Path, Value]) extends DataKeyDescriptor
 
 // For reading from proto

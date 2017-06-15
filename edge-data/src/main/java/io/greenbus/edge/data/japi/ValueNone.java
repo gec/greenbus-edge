@@ -16,35 +16,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.japi;
+package io.greenbus.edge.data.japi;
 
-import io.greenbus.edge.data.japi.Value;
-
-import java.util.Map;
-
-public class EventTopicValueDescriptor implements DataKeyDescriptor {
-    private final Map<Path, Value> metadata;
-
-    public EventTopicValueDescriptor(Map<Path, Value> metadata) {
-        this.metadata = metadata;
-    }
-
-    public Map<Path, Value> getMetadata() {
-        return metadata;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        EventTopicValueDescriptor that = (EventTopicValueDescriptor) o;
-
-        return metadata != null ? metadata.equals(that.metadata) : that.metadata == null;
-    }
-
-    @Override
-    public int hashCode() {
-        return metadata != null ? metadata.hashCode() : 0;
-    }
+public class ValueNone implements BasicValue {
 }

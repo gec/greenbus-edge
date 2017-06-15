@@ -25,7 +25,7 @@ public class ValueBool implements NumericConvertible, SampleValue {
         this.value = value;
     }
 
-    public boolean isValue() {
+    public boolean getValue() {
         return value;
     }
 

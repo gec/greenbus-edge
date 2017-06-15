@@ -16,29 +16,21 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.greenbus.edge.data.japi;
+package io.greenbus.edge.japi;
 
-public class ValueUInt32 implements IntegerValue, SampleValue {
-    private final int value;
+import io.greenbus.edge.data.japi.Value;
 
-    public ValueUInt32(int value) {
-        this.value = value;
+import java.util.Map;
+
+public class TopicEventValueDescriptor implements DataKeyDescriptor {
+    private final Map<Path, Value> metadata;
+
+    public TopicEventValueDescriptor(Map<Path, Value> metadata) {
+        this.metadata = metadata;
     }
 
-    public int getValue() {
-        return value;
-    }
-
-    public double toDouble() {
-        return (double)value;
-    }
-
-    public long toLong() {
-        return (long)value;
-    }
-
-    public boolean toBoolean() {
-        return value != 0;
+    public Map<Path, Value> getMetadata() {
+        return metadata;
     }
 
     @Override
@@ -46,14 +38,13 @@ public class ValueUInt32 implements IntegerValue, SampleValue {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        ValueUInt32 that = (ValueUInt32) o;
+        TopicEventValueDescriptor that = (TopicEventValueDescriptor) o;
 
-        return Double.compare(that.value, value) == 0;
+        return metadata != null ? metadata.equals(that.metadata) : that.metadata == null;
     }
 
     @Override
     public int hashCode() {
-        long temp = Double.doubleToLongBits(value);
-        return (int) (temp ^ (temp >>> 32));
+        return metadata != null ? metadata.hashCode() : 0;
     }
 }

@@ -36,7 +36,7 @@ object Conversions {
     obj match {
       case d: api.LatestKeyValueDescriptor => b.setLatestKeyValue(proto.LatestKeyValueDescriptor.newBuilder().build())
       case d: api.TimeSeriesValueDescriptor => b.setTimeSeriesValue(proto.TimeSeriesValueDescriptor.newBuilder().build())
-      case d: api.EventTopicValueDescriptor => b.setEventTopicValue(proto.EventTopicValueDescriptor.newBuilder().build())
+      case d: api.TopicEventValueDescriptor => b.setEventTopicValue(proto.EventTopicValueDescriptor.newBuilder().build())
       case d: api.ActiveSetValueDescriptor => b.setActiveSetValue(proto.ActiveSetValueDescriptor.newBuilder().build())
     }
     b.build()
@@ -53,7 +53,7 @@ object Conversions {
         case proto.DataKeyDescriptor.ValueTypesCase.TIME_SERIES_VALUE =>
           api.TimeSeriesValueDescriptor(indexes.toMap, metadata.toMap)
         case proto.DataKeyDescriptor.ValueTypesCase.EVENT_TOPIC_VALUE =>
-          api.EventTopicValueDescriptor(indexes.toMap, metadata.toMap)
+          api.TopicEventValueDescriptor(indexes.toMap, metadata.toMap)
         case proto.DataKeyDescriptor.ValueTypesCase.ACTIVE_SET_VALUE =>
           api.ActiveSetValueDescriptor(indexes.toMap, metadata.toMap)
         case _ =>
