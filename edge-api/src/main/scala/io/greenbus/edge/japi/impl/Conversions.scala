@@ -219,6 +219,35 @@ object Conversions {
     api.OutputKeyStatus(obj.getSession, obj.getSequence, Option(obj.getValue).map(convertValueToScala))
   }
 
+  def convertOutputParamsToJava(obj: api.OutputParams): japi.OutputParams = {
+    new japi.OutputParams(
+      obj.sessionOpt.orNull,
+      obj.sequenceOpt.map(l => new java.lang.Long(l)).orNull,
+      obj.compareValueOpt.map(convertValueToJava).orNull,
+      obj.outputValueOpt.map(convertValueToJava).orNull)
+  }
+  def convertOutputParamsToScala(obj: japi.OutputParams): api.OutputParams = {
+    api.OutputParams(
+      Option(
+        obj.getSession),
+      Option(obj.getSequence),
+      Option(obj.getCompareValue).map(convertValueToScala),
+      Option(obj.getOutputValue).map(convertValueToScala))
+  }
+
+  def convertOutputResultToJava(obj: api.OutputResult): japi.OutputResult = {
+    obj match {
+      case r: api.OutputSuccess => new japi.OutputSuccess(r.valueOpt.map(convertValueToJava).orNull)
+      case r: api.OutputFailure => new japi.OutputFailure(r.reason)
+    }
+  }
+  def convertOutputResultToScala(obj: japi.OutputResult): api.OutputResult = {
+    obj match {
+      case r: japi.OutputSuccess => api.OutputSuccess(Option(r.getValue).map(convertValueToScala))
+      case r: japi.OutputFailure => api.OutputFailure(r.getReason)
+    }
+  }
+
   def convertIdEndpointUpdateToJava(obj: api.IdEndpointUpdate): japi.IdEndpointUpdate = {
     val (status, v) = obj.data match {
       case api.Pending => (japi.EdgeDataStatus.Pending, null)

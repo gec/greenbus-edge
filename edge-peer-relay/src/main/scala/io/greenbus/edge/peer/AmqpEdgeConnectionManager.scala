@@ -19,6 +19,7 @@
 package io.greenbus.edge.peer
 
 import io.greenbus.edge.amqp.AmqpService
+import io.greenbus.edge.api.{ ConsumerService, ProducerService }
 import io.greenbus.edge.thread.{ EventThreadService, SchedulableCallMarshaller }
 
 import scala.concurrent.ExecutionContext
@@ -44,13 +45,13 @@ class AmqpEdgeConnectionManager(host: String, port: Int, retryIntervalMs: Long, 
     exe.close()
   }
 
-  def buildConsumerServices(): ConsumerServices = {
+  def buildConsumerServices(): ConsumerService = {
     val services = new PeerConsumerServices(s"consumer-$host:$port", exe)
     retrier.bindPeerLinkObserver(services)
     services
   }
 
-  def buildProducerServices(): ProducerServices = {
+  def buildProducerServices(): ProducerService = {
     val services = new PeerProducerServices(s"producer-$host:$port", exe, appendLimitDefault)
     retrier.bindGatewayObserver(services)
     services

@@ -25,7 +25,6 @@ import io.greenbus.edge.api._
 import io.greenbus.edge.api.consumer.proto.convert.ConsumerConversions
 import io.greenbus.edge.api.consumer.proto.{ ClientOutputRequest, ClientToServerMessage, EdgeUpdateSet, ServerToClientMessage }
 import io.greenbus.edge.api.proto.convert.{ Conversions, OutputConversions }
-import io.greenbus.edge.peer.ConsumerServices
 import io.greenbus.edge.thread.CallMarshaller
 
 import scala.collection.JavaConversions._
@@ -38,11 +37,11 @@ object PeerLinkMgr {
   case class SocketDisconnected(socket: Socket)
   case class SocketMessage(text: String, socket: Socket)
 
-  def props(services: ConsumerServices): Props = {
+  def props(services: ConsumerService): Props = {
     Props(classOf[PeerLinkMgr], services)
   }
 }
-class PeerLinkMgr(services: ConsumerServices) extends Actor with LazyLogging {
+class PeerLinkMgr(services: ConsumerService) extends Actor with LazyLogging {
   import PeerLinkMgr._
 
   private var linkMap = Map.empty[Socket, ActorRef]
@@ -160,11 +159,11 @@ object PeerLink {
 
   case class FromSocket(text: String)
 
-  def props(socket: Socket, services: ConsumerServices): Props = {
+  def props(socket: Socket, services: ConsumerService): Props = {
     Props(classOf[PeerLink], socket, services)
   }
 }
-class PeerLink(socket: Socket, services: ConsumerServices) extends Actor with CallMarshalActor with LazyLogging {
+class PeerLink(socket: Socket, services: ConsumerService) extends Actor with CallMarshalActor with LazyLogging {
   import PeerLink._
   import context.dispatcher
 

@@ -25,7 +25,7 @@ import io.greenbus.edge.data.{ ValueDouble, ValueString }
 
 object TestModel {
 
-  class Producer1(producer: ProducerServices) {
+  class Producer1(producer: ProducerService) {
 
     val endpointId = EndpointId(Path("my-endpoint"))
     val builder = producer.endpointBuilder(endpointId)
@@ -34,7 +34,7 @@ object TestModel {
     val seriesEndPath = EndpointPath(endpointId, seriesDataKey)
 
     val series1 = builder.seriesValue(seriesDataKey, KeyMetadata(indexes = Map(Path("index1") -> ValueString("value 1"))))
-    val buffer = builder.build(seriesBuffersSize = 100, eventBuffersSize = 100)
+    val buffer = builder.build()
 
     def updateAndFlush(v: Double, time: Long): Unit = {
       series1.update(ValueDouble(v), time)
@@ -50,7 +50,7 @@ object TestModel {
     }
   }
 
-  class Producer2(producer: ProducerServices) {
+  class Producer2(producer: ProducerService) {
 
     val endpointId = EndpointId(Path("my-endpoint-2"))
     val builder = producer.endpointBuilder(endpointId)
@@ -59,7 +59,7 @@ object TestModel {
     val seriesEndPath = EndpointPath(endpointId, seriesDataKey)
 
     val series1 = builder.seriesValue(seriesDataKey, KeyMetadata(indexes = Map(Path("index2") -> ValueString("value 2"))))
-    val buffer = builder.build(seriesBuffersSize = 100, eventBuffersSize = 100)
+    val buffer = builder.build()
 
     def updateAndFlush(v: Double, time: Long): Unit = {
       series1.update(ValueDouble(v), time)
@@ -84,7 +84,7 @@ object TestModel {
     val endpointPath = EndpointPath(endpointId, key)
   }
 
-  class TypesProducer(producer: ProducerServices, suffix: String) {
+  class TypesProducer(producer: ProducerService, suffix: String) {
 
     val endpointId = EndpointId(Path(s"my-types-endpoint-$suffix"))
     val builder = producer.endpointBuilder(endpointId)
@@ -94,7 +94,7 @@ object TestModel {
     val kv1 = KeyEntry.build(endpointId, Path("latest-kv-1")) { key => builder.latestKeyValue(key, KeyMetadata(indexes = Map(Path("index2") -> ValueString("value 2")))) }
     val event1 = KeyEntry.build(endpointId, Path("events-1")) { key => builder.topicEventValue(key, KeyMetadata(indexes = Map(Path("index2") -> ValueString("value 2")))) }
 
-    val buffer = builder.build(seriesBuffersSize = 100, eventBuffersSize = 100)
+    val buffer = builder.build()
 
     def updateAndFlush(v: Double, time: Long): Unit = {
       series1.handle.update(ValueDouble(v), time)
@@ -110,7 +110,7 @@ object TestModel {
     }
   }
 
-  class OutputProducer(producer: ProducerServices, suffix: String) {
+  class OutputProducer(producer: ProducerService, suffix: String) {
 
     val uuid = UUID.randomUUID()
 
@@ -120,20 +120,20 @@ object TestModel {
     val outStatus = KeyEntry.build(endpointId, Path("output-key-1")) { key => builder.outputStatus(key) }
     val outRcv = builder.registerOutput(Path("output-key-1"))
 
-    val buffer = builder.build(seriesBuffersSize = 100, eventBuffersSize = 100)
+    val buffer = builder.build()
 
     def close(): Unit = {
       buffer.close()
     }
   }
 
-  class DynamicKeyProducer(producer: ProducerServices, suffix: String, dynamicDataKey: DynamicDataKey) {
+  class DynamicKeyProducer(producer: ProducerService, suffix: String, dynamicDataKey: DynamicDataKey) {
     val endpointId = EndpointId(Path(s"my-endpoint-$suffix"))
     val builder = producer.endpointBuilder(endpointId)
 
     val dynHandle = builder.seriesDynamicSet("dset", dynamicDataKey)
 
-    val buffer = builder.build(seriesBuffersSize = 100, eventBuffersSize = 100)
+    val buffer = builder.build()
 
     def close(): Unit = {
       buffer.close()

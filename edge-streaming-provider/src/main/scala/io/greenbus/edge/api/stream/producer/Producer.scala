@@ -187,7 +187,7 @@ class EndpointBuilderImpl(endpointId: EndpointId, gatewayThread: CallMarshaller,
     new DynamicSeriesPublisher(endpointId, set, gateway, updateBuffer)
   }
 
-  def build(seriesBuffersSize: Int, eventBuffersSize: Int): ProducerHandle = {
+  def build(): ProducerHandle = {
     val desc = EndpointDescriptor(indexes, metadata, data.toMap, outputStatuses.toMap)
     addDescriptor(desc)
     val route = EdgeCodecCommon.endpointIdToRoute(endpointId)

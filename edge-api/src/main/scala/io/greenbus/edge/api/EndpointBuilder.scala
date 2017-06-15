@@ -47,7 +47,7 @@ trait EndpointBuilder {
 
   def seriesDynamicSet(set: String, callbacks: DynamicDataKey): DynamicSeriesHandle
 
-  def build(seriesBuffersSize: Int, eventBuffersSize: Int): ProducerHandle
+  def build(): ProducerHandle
 }
 
 trait ProducerHandle {
