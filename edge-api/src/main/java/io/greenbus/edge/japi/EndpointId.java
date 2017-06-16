@@ -18,11 +18,17 @@
  */
 package io.greenbus.edge.japi;
 
+import java.util.Arrays;
+
 public class EndpointId {
     private final Path path;
 
     public EndpointId(Path path) {
         this.path = path;
+    }
+
+    public EndpointId(String... parts) {
+        this.path = new Path(Arrays.asList(parts));
     }
 
     public Path getPath() {

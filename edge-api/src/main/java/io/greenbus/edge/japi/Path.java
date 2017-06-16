@@ -18,6 +18,8 @@
  */
 package io.greenbus.edge.japi;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -26,6 +28,10 @@ public class Path {
 
     public Path(List<String> value) {
         this.value = value;
+    }
+
+    public Path(String... parts) {
+        this.value = Arrays.asList(parts);
     }
 
     public List<String> getValue() {
