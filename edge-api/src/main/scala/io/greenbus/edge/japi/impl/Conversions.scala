@@ -235,6 +235,13 @@ object Conversions {
       Option(obj.getOutputValue).map(convertValueToScala))
   }
 
+  def convertOutputRequestToJava(obj: api.OutputRequest): japi.OutputRequest = {
+    new japi.OutputRequest(convertEndpointPathToJava(obj.key), convertOutputParamsToJava(obj.value))
+  }
+  def convertOutputRequestToScala(obj: japi.OutputRequest): api.OutputRequest = {
+    api.OutputRequest(convertEndpointPathToScala(obj.getPath), convertOutputParamsToScala(obj.getValue))
+  }
+
   def convertOutputResultToJava(obj: api.OutputResult): japi.OutputResult = {
     obj match {
       case r: api.OutputSuccess => new japi.OutputSuccess(r.valueOpt.map(convertValueToJava).orNull)

@@ -20,4 +20,5 @@ package io.greenbus.edge.japi;
 
 public interface ConsumerService {
     EdgeSubscriptionClient subscriptionClient();
+    ServiceClient serviceClient();
 }
