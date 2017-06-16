@@ -45,13 +45,13 @@ class AmqpEdgeConnectionManager(host: String, port: Int, retryIntervalMs: Long, 
     exe.close()
   }
 
-  def buildConsumerServices(): ConsumerService = {
+  def bindConsumerServices(): ConsumerService = {
     val services = new PeerConsumerServices(s"consumer-$host:$port", exe)
     retrier.bindPeerLinkObserver(services)
     services
   }
 
-  def buildProducerServices(): ProducerService = {
+  def bindProducerServices(): ProducerService = {
     val services = new PeerProducerServices(s"producer-$host:$port", exe, appendLimitDefault)
     retrier.bindGatewayObserver(services)
     services

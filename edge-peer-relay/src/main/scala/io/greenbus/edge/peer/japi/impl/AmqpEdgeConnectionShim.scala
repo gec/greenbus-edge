@@ -32,10 +32,10 @@ class AmqpEdgeConnectionShim(host: String, port: Int, retryIntervalMs: Long, con
   def shutdown(): Unit = mgr.shutdown()
 
   def bindConsumerService(): ConsumerService = {
-    new ConsumerServiceShim(mgr.buildConsumerServices())
+    new ConsumerServiceShim(mgr.bindConsumerServices())
   }
 
   def bindProducerService(): ProducerService = {
-    new ProducerServiceShim(mgr.buildProducerServices())
+    new ProducerServiceShim(mgr.bindProducerServices())
   }
 }
