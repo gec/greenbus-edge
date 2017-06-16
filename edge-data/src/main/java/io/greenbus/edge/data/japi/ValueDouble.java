@@ -60,4 +60,11 @@ public class ValueDouble implements FloatingPointValue, SampleValue {
         long temp = Double.doubleToLongBits(value);
         return (int) (temp ^ (temp >>> 32));
     }
+
+    @Override
+    public String toString() {
+        return "ValueDouble{" +
+                "value=" + value +
+                '}';
+    }
 }

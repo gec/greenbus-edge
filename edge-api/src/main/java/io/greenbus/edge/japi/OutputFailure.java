@@ -43,4 +43,11 @@ public class OutputFailure implements OutputResult {
     public int hashCode() {
         return reason != null ? reason.hashCode() : 0;
     }
+
+    @Override
+    public String toString() {
+        return "OutputFailure{" +
+                "reason='" + reason + '\'' +
+                '}';
+    }
 }

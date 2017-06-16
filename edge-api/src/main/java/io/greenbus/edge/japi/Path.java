@@ -46,4 +46,11 @@ public class Path {
     public int hashCode() {
         return value != null ? value.hashCode() : 0;
     }
+
+    @Override
+    public String toString() {
+        return "Path{" +
+                "value=" + value +
+                '}';
+    }
 }

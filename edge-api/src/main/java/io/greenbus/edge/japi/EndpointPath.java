@@ -52,4 +52,12 @@ public class EndpointPath {
         result = 31 * result + (path != null ? path.hashCode() : 0);
         return result;
     }
+
+    @Override
+    public String toString() {
+        return "EndpointPath{" +
+                "endpointId=" + endpointId +
+                ", path=" + path +
+                '}';
+    }
 }

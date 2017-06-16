@@ -59,4 +59,12 @@ public class DataKeyUpdate {
         result = 31 * result + (update != null ? update.hashCode() : 0);
         return result;
     }
+
+    @Override
+    public String toString() {
+        return "DataKeyUpdate{" +
+                "descriptor=" + descriptor +
+                ", update=" + update +
+                '}';
+    }
 }

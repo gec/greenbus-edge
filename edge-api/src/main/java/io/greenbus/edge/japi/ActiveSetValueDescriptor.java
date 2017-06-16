@@ -47,4 +47,11 @@ public class ActiveSetValueDescriptor implements DataKeyDescriptor {
     public int hashCode() {
         return metadata != null ? metadata.hashCode() : 0;
     }
+
+    @Override
+    public String toString() {
+        return "ActiveSetValueDescriptor{" +
+                "metadata=" + metadata +
+                '}';
+    }
 }

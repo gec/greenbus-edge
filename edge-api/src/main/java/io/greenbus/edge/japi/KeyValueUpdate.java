@@ -45,4 +45,11 @@ public class KeyValueUpdate implements DataUpdate {
     public int hashCode() {
         return value != null ? value.hashCode() : 0;
     }
+
+    @Override
+    public String toString() {
+        return "KeyValueUpdate{" +
+                "value=" + value +
+                '}';
+    }
 }

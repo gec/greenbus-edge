@@ -74,4 +74,14 @@ public class ActiveSetUpdate implements DataUpdate {
         result = 31 * result + (modified != null ? modified.hashCode() : 0);
         return result;
     }
+
+    @Override
+    public String toString() {
+        return "ActiveSetUpdate{" +
+                "value=" + value +
+                ", removes=" + removes +
+                ", added=" + added +
+                ", modified=" + modified +
+                '}';
+    }
 }

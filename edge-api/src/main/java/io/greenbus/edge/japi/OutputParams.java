@@ -79,4 +79,14 @@ public class OutputParams {
         result = 31 * result + (outputValue != null ? outputValue.hashCode() : 0);
         return result;
     }
+
+    @Override
+    public String toString() {
+        return "OutputParams{" +
+                "session=" + session +
+                ", sequence=" + sequence +
+                ", compareValue=" + compareValue +
+                ", outputValue=" + outputValue +
+                '}';
+    }
 }

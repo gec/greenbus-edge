@@ -54,4 +54,12 @@ public class SeriesUpdate implements DataUpdate {
         result = 31 * result + (int) (time ^ (time >>> 32));
         return result;
     }
+
+    @Override
+    public String toString() {
+        return "SeriesUpdate{" +
+                "value=" + value +
+                ", time=" + time +
+                '}';
+    }
 }

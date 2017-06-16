@@ -62,4 +62,13 @@ public class TopicEventUpdate implements DataUpdate {
         result = 31 * result + (int) (time ^ (time >>> 32));
         return result;
     }
+
+    @Override
+    public String toString() {
+        return "TopicEventUpdate{" +
+                "topic=" + topic +
+                ", value=" + value +
+                ", time=" + time +
+                '}';
+    }
 }

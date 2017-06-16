@@ -72,4 +72,14 @@ public class SubscriptionParams {
         result = 31 * result + (outputKeys != null ? outputKeys.hashCode() : 0);
         return result;
     }
+
+    @Override
+    public String toString() {
+        return "SubscriptionParams{" +
+                "endpointPrefixSet=" + endpointPrefixSet +
+                ", endpointDescriptors=" + endpointDescriptors +
+                ", dataKeys=" + dataKeys +
+                ", outputKeys=" + outputKeys +
+                '}';
+    }
 }

@@ -55,4 +55,11 @@ public class ValueUInt64 implements IntegerValue, SampleValue {
     public int hashCode() {
         return (int) (value ^ (value >>> 32));
     }
+
+    @Override
+    public String toString() {
+        return "ValueUInt64{" +
+                "value=" + value +
+                '}';
+    }
 }

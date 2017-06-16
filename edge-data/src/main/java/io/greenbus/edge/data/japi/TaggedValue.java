@@ -52,4 +52,12 @@ public class TaggedValue implements Value {
         result = 31 * result + (value != null ? value.hashCode() : 0);
         return result;
     }
+
+    @Override
+    public String toString() {
+        return "TaggedValue{" +
+                "tag='" + tag + '\'' +
+                ", value=" + value +
+                '}';
+    }
 }

@@ -47,4 +47,11 @@ public class UnrecognizedValueDescriptor implements DataKeyDescriptor {
     public int hashCode() {
         return metadata != null ? metadata.hashCode() : 0;
     }
+
+    @Override
+    public String toString() {
+        return "UnrecognizedValueDescriptor{" +
+                "metadata=" + metadata +
+                '}';
+    }
 }

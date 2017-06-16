@@ -56,4 +56,11 @@ public class ValueUInt32 implements IntegerValue, SampleValue {
         long temp = Double.doubleToLongBits(value);
         return (int) (temp ^ (temp >>> 32));
     }
+
+    @Override
+    public String toString() {
+        return "ValueUInt32{" +
+                "value=" + value +
+                '}';
+    }
 }

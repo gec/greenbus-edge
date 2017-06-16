@@ -59,4 +59,11 @@ public class ValueFloat implements FloatingPointValue, SampleValue {
     public int hashCode() {
         return (value != +0.0f ? Float.floatToIntBits(value) : 0);
     }
+
+    @Override
+    public String toString() {
+        return "ValueFloat{" +
+                "value=" + value +
+                '}';
+    }
 }

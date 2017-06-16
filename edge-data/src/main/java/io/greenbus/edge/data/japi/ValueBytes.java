@@ -45,6 +45,13 @@ public class ValueBytes implements IndexableValue {
     public int hashCode() {
         return Arrays.hashCode(value);
     }
+
+    @Override
+    public String toString() {
+        return "ValueBytes{" +
+                "value=" + Arrays.toString(value) +
+                '}';
+    }
 }
 
 

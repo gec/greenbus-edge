@@ -47,4 +47,11 @@ public class OutputKeyDescriptor implements KeyDescriptor {
     public int hashCode() {
         return metadata != null ? metadata.hashCode() : 0;
     }
+
+    @Override
+    public String toString() {
+        return "OutputKeyDescriptor{" +
+                "metadata=" + metadata +
+                '}';
+    }
 }

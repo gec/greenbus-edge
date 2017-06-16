@@ -45,4 +45,11 @@ public class ValueMap implements BasicValue {
     public int hashCode() {
         return value != null ? value.hashCode() : 0;
     }
+
+    @Override
+    public String toString() {
+        return "ValueMap{" +
+                "value=" + value +
+                '}';
+    }
 }

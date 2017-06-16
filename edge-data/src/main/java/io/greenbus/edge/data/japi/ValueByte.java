@@ -55,4 +55,11 @@ public class ValueByte implements NumericConvertible, SampleValue {
     public int hashCode() {
         return (int) value;
     }
+
+    @Override
+    public String toString() {
+        return "ValueByte{" +
+                "value=" + value +
+                '}';
+    }
 }

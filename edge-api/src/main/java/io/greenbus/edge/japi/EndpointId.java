@@ -43,4 +43,11 @@ public class EndpointId {
     public int hashCode() {
         return path != null ? path.hashCode() : 0;
     }
+
+    @Override
+    public String toString() {
+        return "EndpointId{" +
+                "path=" + path +
+                '}';
+    }
 }

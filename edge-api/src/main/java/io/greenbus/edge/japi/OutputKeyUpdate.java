@@ -41,4 +41,12 @@ public class OutputKeyUpdate {
     public OutputKeyStatus getUpdate() {
         return update;
     }
+
+    @Override
+    public String toString() {
+        return "OutputKeyUpdate{" +
+                "descriptor=" + descriptor +
+                ", update=" + update +
+                '}';
+    }
 }

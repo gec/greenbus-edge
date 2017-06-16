@@ -55,4 +55,11 @@ public class ValueInt32 implements IntegerValue, SampleValue {
     public int hashCode() {
         return value;
     }
+
+    @Override
+    public String toString() {
+        return "ValueInt32{" +
+                "value=" + value +
+                '}';
+    }
 }

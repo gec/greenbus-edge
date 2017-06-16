@@ -52,4 +52,12 @@ public class OutputRequest {
         result = 31 * result + (value != null ? value.hashCode() : 0);
         return result;
     }
+
+    @Override
+    public String toString() {
+        return "OutputRequest{" +
+                "path=" + path +
+                ", value=" + value +
+                '}';
+    }
 }

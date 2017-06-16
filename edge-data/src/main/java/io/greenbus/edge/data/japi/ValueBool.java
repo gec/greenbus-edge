@@ -55,4 +55,11 @@ public class ValueBool implements NumericConvertible, SampleValue {
     public int hashCode() {
         return (value ? 1 : 0);
     }
+
+    @Override
+    public String toString() {
+        return "ValueBool{" +
+                "value=" + value +
+                '}';
+    }
 }

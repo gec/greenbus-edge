@@ -62,4 +62,13 @@ public class EndpointSetUpdate {
         result = 31 * result + (adds != null ? adds.hashCode() : 0);
         return result;
     }
+
+    @Override
+    public String toString() {
+        return "EndpointSetUpdate{" +
+                "value=" + value +
+                ", removes=" + removes +
+                ", adds=" + adds +
+                '}';
+    }
 }

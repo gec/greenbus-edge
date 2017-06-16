@@ -62,4 +62,13 @@ public class IdEndpointUpdate implements IdentifiedEdgeUpdate {
         result = 31 * result + (update != null ? update.hashCode() : 0);
         return result;
     }
+
+    @Override
+    public String toString() {
+        return "IdEndpointUpdate{" +
+                "id=" + id +
+                ", status=" + status +
+                ", update=" + update +
+                '}';
+    }
 }

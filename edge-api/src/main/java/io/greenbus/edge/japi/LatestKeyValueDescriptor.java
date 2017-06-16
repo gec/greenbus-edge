@@ -48,4 +48,11 @@ public class LatestKeyValueDescriptor implements DataKeyDescriptor {
     public int hashCode() {
         return metadata != null ? metadata.hashCode() : 0;
     }
+
+    @Override
+    public String toString() {
+        return "LatestKeyValueDescriptor{" +
+                "metadata=" + metadata +
+                '}';
+    }
 }

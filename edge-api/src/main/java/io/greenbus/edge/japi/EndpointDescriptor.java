@@ -64,4 +64,13 @@ public class EndpointDescriptor {
         result = 31 * result + (outputKeySet != null ? outputKeySet.hashCode() : 0);
         return result;
     }
+
+    @Override
+    public String toString() {
+        return "EndpointDescriptor{" +
+                "metadata=" + metadata +
+                ", dataKeySet=" + dataKeySet +
+                ", outputKeySet=" + outputKeySet +
+                '}';
+    }
 }
