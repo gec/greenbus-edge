@@ -18,8 +18,10 @@
  */
 package io.greenbus.edge.peer.japi;
 
+import io.greenbus.edge.peer.japi.impl.AmqpEdgeConnectionShim;
+
 public class AmqpEdge {
     public static AmqpEdgeConnectionManager build(String host, int port, long retryIntervalMs, long connectTimeoutMs, int appendLimitDefault) {
-        return null;
+        return new AmqpEdgeConnectionShim(host, port, retryIntervalMs, connectTimeoutMs, appendLimitDefault);
     }
 }

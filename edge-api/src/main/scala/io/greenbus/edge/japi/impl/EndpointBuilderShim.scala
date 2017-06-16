@@ -117,3 +117,9 @@ class EndpointBuilderShim(eb: api.EndpointBuilder) extends japi.EndpointBuilder 
     }
   }
 }
+
+class ProducerServiceShim(serv: api.ProducerService) extends japi.ProducerService {
+  def endpointBuilder(id: EndpointId): EndpointBuilder = {
+    new EndpointBuilderShim(serv.endpointBuilder(Conversions.convertEndpointIdToScala(id)))
+  }
+}
