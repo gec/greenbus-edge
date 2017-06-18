@@ -72,20 +72,24 @@ object FilteringStreamOps extends LazyLogging {
     }
   }
 
-  def synthSequenceJump(sequence: SequencedTypeValue, current: SequenceSnapshot, resync: Resync): (SequenceSnapshot, SequenceEvent) = {
+  def synthSequenceJump(sequence: SequencedTypeValue, current: SequenceSnapshot, resync: Resync): (SequenceSnapshot, Option[SequenceEvent]) = {
     current match {
       case l: SetSnapshot =>
-        (resync.snapshot, resync)
-      case s: MapSnapshot =>
-        (resync.snapshot, resync)
-      case s: AppendSnapshot =>
+        (resync.snapshot, Some(resync))
+      case l: MapSnapshot =>
+        (resync.snapshot, Some(resync))
+      case l: AppendSnapshot =>
         resync.snapshot match {
           case r: AppendSnapshot => {
             val filtered = PresequencedStreamOps.filterSequencedDiffs(sequence, r.previous :+ r.current)
-            (resync.snapshot, Resync(resync.sequence, AppendSnapshot(filtered.last, filtered.init)))
+            if (filtered.nonEmpty) {
+              (resync.snapshot, Some(Resync(resync.sequence, AppendSnapshot(filtered.last, filtered.init))))
+            } else {
+              (resync.snapshot, None)
+            }
           }
           case _ =>
-            (resync.snapshot, resync)
+            (resync.snapshot, Some(resync))
         }
     }
   }
@@ -97,8 +101,8 @@ object FilteringStreamOps extends LazyLogging {
       val (snap, event) = synthResyncSingleStep(current, resync)
       (resync.sequence, snap, Some(event))
     } else if (sequence.isLessThan(resync.sequence).contains(true)) {
-      val (snap, event) = synthSequenceJump(sequence, current, resync)
-      (resync.sequence, snap, Some(event))
+      val (snap, eventOpt) = synthSequenceJump(sequence, current, resync)
+      (resync.sequence, snap, eventOpt)
     } else {
       (sequence, current, None)
     }
