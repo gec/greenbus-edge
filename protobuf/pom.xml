@@ -35,18 +35,6 @@
                             ${project.basedir}/../edge-data-proto/src/main/proto
                         </additionalProtoPathElement>
                     </additionalProtoPathElements>
-                    <!--<plugins>
-                        <plugin>
-                            <name>msgscala</name>
-                            <outputDirectory>${project.build.directory}/generated-sources/scala</outputDirectory>
-                            <pluginCommand>protoc-gen-msgscala</pluginCommand>
-                        </plugin>
-                        <plugin>
-                            <name>msgjava</name>
-                            <outputDirectory>${project.build.directory}/generated-sources/java</outputDirectory>
-                            <pluginCommand>protoc-gen-msgjava</pluginCommand>
-                        </plugin>
-                    </plugins>-->
                 </configuration>
                 <executions>
                     <execution>
