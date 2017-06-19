@@ -47,32 +47,44 @@ object EdgeCoreModel {
     case object IntegerEnum extends SeriesType("integer_enum")
   }
 
+  def seriesTypeValue(seriesType: SeriesType): Value = {
+    ValueString(seriesType.value)
+  }
   def seriesType(seriesType: SeriesType): (Path, Value) = {
-    (seriesTypeKey, ValueString(seriesType.value))
+    (seriesTypeKey, seriesTypeValue(seriesType))
   }
 
+  def unitValue(unit: String): Value = {
+    ValueString(unit)
+  }
   def unitMetadata(unit: String): (Path, Value) = {
-    (unitKey, ValueString(unit))
+    (unitKey, unitValue(unit))
   }
 
+  def labeledBooleanValue(truthLabel: String, falseLabel: String): Value = {
+    ValueMap(Map(
+      ValueBool(true) -> ValueString(truthLabel),
+      ValueBool(false) -> ValueString(falseLabel)))
+  }
   def labeledBooleanMetadata(truthLabel: String, falseLabel: String): (Path, Value) = {
-    (booleanLabelKey,
-      ValueMap(Map(
-        ValueBool(true) -> ValueString(truthLabel),
-        ValueBool(false) -> ValueString(falseLabel))))
+    (booleanLabelKey, labeledBooleanValue(truthLabel, falseLabel))
   }
 
-  def labeledIntegerMetadata(map: Map[Long, String]): (Path, Value) = {
-
+  def labeledIntegerValue(map: Map[Long, String]): Value = {
     val vmap: Map[Value, Value] = map.map {
       case (k, v) => (ValueInt64(k), ValueString(v))
     }
-
-    (integerLabelKey, ValueMap(vmap))
+    ValueMap(vmap)
+  }
+  def labeledIntegerMetadata(map: Map[Long, String]): (Path, Value) = {
+    (integerLabelKey, labeledIntegerValue(map))
   }
 
+  def analogDecimalPointsValue(decimalPoints: Int): Value = {
+    ValueUInt32(decimalPoints)
+  }
   def analogDecimalPoints(decimalPoints: Int): (Path, Value) = {
-    (analogDecimalPointsKey, ValueUInt32(decimalPoints))
+    (analogDecimalPointsKey, analogDecimalPointsValue(decimalPoints))
   }
 
   sealed abstract class OutputType(val value: String)
@@ -83,29 +95,43 @@ object EdgeCoreModel {
     case object EnumerationSetpoint extends OutputType("enumeration_setpoint")
   }
 
+  def outputTypeValue(outputType: OutputType): Value = {
+    ValueString(outputType.value)
+  }
   def outputType(outputType: OutputType): (Path, Value) = {
-    (outputTypeKey, ValueString(outputType.value))
+    (outputTypeKey, outputTypeValue(outputType))
   }
 
+  def requestBooleanLabelsValue(truthLabel: String, falseLabel: String): Value = {
+    ValueMap(Map(
+      ValueBool(true) -> ValueString(truthLabel),
+      ValueBool(false) -> ValueString(falseLabel)))
+  }
   def requestBooleanLabels(truthLabel: String, falseLabel: String): (Path, Value) = {
-    (requestBooleansLabelsKey,
-      ValueMap(Map(
-        ValueBool(true) -> ValueString(truthLabel),
-        ValueBool(false) -> ValueString(falseLabel))))
+    (requestBooleansLabelsKey, requestBooleanLabelsValue(truthLabel, falseLabel))
   }
 
-  def requestIntegerLabels(map: Map[Long, String]): (Path, Value) = {
-
+  def requestIntegerLabelsValue(map: Map[Long, String]): Value = {
     val vmap: Map[Value, Value] = map.map {
       case (k, v) => (ValueInt64(k), ValueString(v))
     }
+    ValueMap(vmap)
+  }
+  def requestIntegerLabels(map: Map[Long, String]): (Path, Value) = {
+    (requestIntegerLabelsKey, requestIntegerLabelsValue(map))
+  }
 
-    (requestIntegerLabelsKey, ValueMap(vmap))
+  def requestScaleValue(scale: Double): Value = {
+    ValueDouble(scale)
   }
   def requestScale(scale: Double): (Path, Value) = {
-    (requestScaleKey, ValueDouble(scale))
+    (requestScaleKey, requestScaleValue(scale))
+  }
+
+  def requestOffsetValue(offset: Double): Value = {
+    ValueDouble(offset)
   }
   def requestOffset(offset: Double): (Path, Value) = {
-    (requestOffsetKey, ValueDouble(offset))
+    (requestOffsetKey, requestOffsetValue(offset))
   }
 }
