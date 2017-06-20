@@ -18,10 +18,7 @@
  */
 package io.greenbus.edge.japi.flow;
 
-import scala.util.Try;
-
-import java.util.function.Consumer;
-
-public interface Sender<A, B> {
-    void send(A obj, ResponseHandler<B> handleResponse);
+public interface ResponseHandler<T> {
+    void onResponse(T obj);
+    void onError(Throwable ex);
 }

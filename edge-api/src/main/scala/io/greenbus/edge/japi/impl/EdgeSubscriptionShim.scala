@@ -24,10 +24,10 @@ import java.util.function.Consumer
 import io.greenbus.edge.api
 import io.greenbus.edge.japi
 import io.greenbus.edge.japi._
-import io.greenbus.edge.japi.flow.Source
+import io.greenbus.edge.japi.flow.{ ResponseHandler, Source }
 
 import scala.collection.JavaConverters._
-import scala.util.Try
+import scala.util.{ Failure, Success, Try }
 
 class EdgeSubscriptionShim(sub: api.EdgeSubscription) extends japi.EdgeSubscription {
   def updates(): Source[util.List[IdentifiedEdgeUpdate]] = {
@@ -52,11 +52,12 @@ class EdgeSubscriptionClientShim(client: api.EdgeSubscriptionClient) extends jap
 }
 
 class ServiceClientShim(serv: api.ServiceClient) extends japi.ServiceClient {
-  def send(obj: OutputRequest, handleResponse: Consumer[Try[OutputResult]]): Unit = {
+  def send(obj: OutputRequest, handleResponse: ResponseHandler[OutputResult]): Unit = {
     val req = Conversions.convertOutputRequestToScala(obj)
 
-    serv.send(req, resp => {
-      handleResponse.accept(resp.map(Conversions.convertOutputResultToJava))
+    serv.send(req, {
+      case Success(respObj) => handleResponse.onResponse(Conversions.convertOutputResultToJava(respObj))
+      case Failure(ex) => handleResponse.onError(ex)
     })
   }
 }
