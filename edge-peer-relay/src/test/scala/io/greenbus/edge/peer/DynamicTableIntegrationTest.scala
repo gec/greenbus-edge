@@ -18,6 +18,7 @@
  */
 package io.greenbus.edge.peer
 
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 
 import com.typesafe.scalalogging.LazyLogging
@@ -244,7 +245,117 @@ class DynamicTableIntegrationTest extends FunSuite with Matchers with BeforeAndA
           case up: IdDynamicDataKeyUpdate => up.id == dynKey && up.data == ResolvedAbsent
         }), 5000)
 
-    //Await.result(unsubProm.future, 5000.milliseconds) shouldEqual true
+  }
+
+  test("dynamic table multiple") {
+    import EdgeSubHelpers._
+
+    startRelay()
+
+    val bufferOpt = new AtomicReference[Option[ProducerHandle]](None)
+    val dynHandleOpt = new AtomicReference[Option[DynamicSeriesHandle]](None)
+
+    val map = new ConcurrentHashMap[Path, SeriesValueHandle]()
+
+    val unsubProm = Promise[Boolean]
+
+    val dyn = new DynamicDataKey {
+      def subscribed(path: Path): Unit = {
+        logger.debug(s"TEST GOT ADD: $path")
+        val seriesHandle = dynHandleOpt.get.get.add(path)
+        map.put(path, seriesHandle)
+        path match {
+          case Path(Seq("path", "01")) =>
+            seriesHandle.update(ValueDouble(0.44), 1)
+          case Path(Seq("path", "02")) =>
+            seriesHandle.update(ValueDouble(0.88), 2)
+        }
+        bufferOpt.get.get.flush()
+      }
+
+      def unsubscribed(path: Path): Unit = {
+        logger.debug(s"TEST GOT REMOVE: $path")
+        unsubProm.success(true)
+      }
+    }
+
+    val producerA = new TestProducer
+    val producer = new DynamicKeyProducer(producerA.producerMgr, "dyn01", dyn)
+
+    dynHandleOpt.set(Some(producer.dynHandle))
+    bufferOpt.set(Some(producer.buffer))
+
+    producerA.connect()
+
+    val dynKeyA = EndpointDynamicPath(producer.endpointId, DynamicPath("dset", Path(Seq("path", "01"))))
+    val paramsA = SubscriptionParams(dynamicDataKeys = Set(dynKeyA))
+    val consA = new TestConsumer(paramsA)
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          case up: IdDynamicDataKeyUpdate => up.id == dynKeyA && up.data == Pending
+        },
+        fixed {
+          case up: IdDynamicDataKeyUpdate => up.id == dynKeyA && up.data == DataUnresolved
+        }), 5000)
+
+    consA.connect()
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          idDynamicDataKeyResolved(dynKeyA) {
+            case up => up.value == SeriesUpdate(ValueDouble(0.44), 1)
+          }
+        }), 5000)
+
+    val dynKeyB = EndpointDynamicPath(producer.endpointId, DynamicPath("dset", Path(Seq("path", "02"))))
+    val paramsB = SubscriptionParams(dynamicDataKeys = Set(dynKeyB))
+    val consB = new TestConsumer(paramsB)
+
+    consB.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          case up: IdDynamicDataKeyUpdate => up.id == dynKeyB && up.data == Pending
+        },
+        fixed {
+          case up: IdDynamicDataKeyUpdate => up.id == dynKeyB && up.data == DataUnresolved
+        }), 5000)
+
+    consB.connect()
+
+    consB.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          idDynamicDataKeyResolved(dynKeyB) {
+            case up => up.value == SeriesUpdate(ValueDouble(0.88), 2)
+          }
+        }), 5000)
+
+    map.get(Path(Seq("path", "01"))).update(ValueDouble(0.55), 3)
+    map.get(Path(Seq("path", "02"))).update(ValueDouble(0.99), 4)
+    producer.buffer.flush()
+
+    consA.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          idDynamicDataKeyResolved(dynKeyA) {
+            case up => up.value == SeriesUpdate(ValueDouble(0.55), 3)
+          }
+        }), 5000)
+
+    consB.queue.awaitListen(
+      prefixMatcher(
+        fixed {
+          idDynamicDataKeyResolved(dynKeyB) {
+            case up => up.value == SeriesUpdate(ValueDouble(0.99), 4)
+          }
+        }), 5000)
+
+    consA.disconnect()
+
+    Await.result(unsubProm.future, 5000.milliseconds) shouldEqual true
   }
 }
 
