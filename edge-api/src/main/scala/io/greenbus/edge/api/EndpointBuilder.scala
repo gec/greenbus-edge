@@ -46,6 +46,8 @@ trait EndpointBuilder {
   def registerOutput(key: Path): Receiver[OutputParams, OutputResult]
 
   def seriesDynamicSet(set: String, callbacks: DynamicDataKey): DynamicSeriesHandle
+  def keyValueDynamicSet(set: String, callbacks: DynamicDataKey): DynamicKeyValueHandle
+  def activeSetDynamicSet(set: String, callbacks: DynamicDataKey): DynamicActiveSetHandle
 
   def build(): ProducerHandle
 }
@@ -74,5 +76,13 @@ trait ActiveSetHandle {
 
 trait DynamicSeriesHandle {
   def add(path: Path, metadata: KeyMetadata = KeyMetadata()): SeriesValueHandle
+  def remove(path: Path): Unit
+}
+trait DynamicKeyValueHandle {
+  def add(path: Path, metadata: KeyMetadata = KeyMetadata()): LatestKeyValueHandle
+  def remove(path: Path): Unit
+}
+trait DynamicActiveSetHandle {
+  def add(path: Path, metadata: KeyMetadata = KeyMetadata()): ActiveSetHandle
   def remove(path: Path): Unit
 }

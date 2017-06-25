@@ -89,6 +89,34 @@ class DynamicSeriesPublisher(endpointId: EndpointId, set: String, gateway: Gatew
   }
 }
 
+class DynamicKeyValuePublisher(endpointId: EndpointId, set: String, gateway: GatewayEventHandler, updates: Sink[RowUpdate]) extends DynamicKeyValueHandle {
+  def add(path: Path, metadata: KeyMetadata = KeyMetadata()): LatestKeyValueHandle = {
+    val rowId = EdgeCodecCommon.dynamicDataKeyRow(EndpointDynamicPath(endpointId, DynamicPath(set, path)))
+    val handle = new LatestKeyValuePublisher(rowId.tableRow, updates)
+    val desc = LatestKeyValueDescriptor(metadata.indexes, metadata.metadata)
+    gateway.handleEvent(RouteBatchEvent(EdgeCodecCommon.writeEndpointId(endpointId), Seq(AddRow(rowId.tableRow, SequenceCtx(None, Some(EdgeCodecCommon.writeDataKeyDescriptor(desc)))))))
+    handle
+  }
+  def remove(path: Path): Unit = {
+    val rowId = EdgeCodecCommon.dynamicDataKeyRow(EndpointDynamicPath(endpointId, DynamicPath(set, path)))
+    gateway.handleEvent(RouteBatchEvent(EdgeCodecCommon.writeEndpointId(endpointId), Seq(DropRow(rowId.tableRow))))
+  }
+}
+
+class DynamicActiveSetPublisher(endpointId: EndpointId, set: String, gateway: GatewayEventHandler, updates: Sink[RowUpdate]) extends DynamicActiveSetHandle {
+  def add(path: Path, metadata: KeyMetadata = KeyMetadata()): ActiveSetHandle = {
+    val rowId = EdgeCodecCommon.dynamicDataKeyRow(EndpointDynamicPath(endpointId, DynamicPath(set, path)))
+    val handle = new ActiveSetPublisher(rowId.tableRow, updates)
+    val desc = LatestKeyValueDescriptor(metadata.indexes, metadata.metadata)
+    gateway.handleEvent(RouteBatchEvent(EdgeCodecCommon.writeEndpointId(endpointId), Seq(AddRow(rowId.tableRow, SequenceCtx(None, Some(EdgeCodecCommon.writeDataKeyDescriptor(desc)))))))
+    handle
+  }
+  def remove(path: Path): Unit = {
+    val rowId = EdgeCodecCommon.dynamicDataKeyRow(EndpointDynamicPath(endpointId, DynamicPath(set, path)))
+    gateway.handleEvent(RouteBatchEvent(EdgeCodecCommon.writeEndpointId(endpointId), Seq(DropRow(rowId.tableRow))))
+  }
+}
+
 case class ProducerOutputEntry(path: Path, responder: Responder[OutputParams, OutputResult])
 
 class EndpointBuilderImpl(endpointId: EndpointId, gatewayThread: CallMarshaller, gateway: GatewayEventHandler) extends EndpointBuilder with LazyLogging {
@@ -161,30 +189,24 @@ class EndpointBuilderImpl(endpointId: EndpointId, gatewayThread: CallMarshaller,
   }
 
   def seriesDynamicSet(set: String, callbacks: DynamicDataKey): DynamicSeriesHandle = {
-
-    val table = new DynamicTable {
-      def subscribed(key: TypeValue): Unit = {
-        EdgeCodecCommon.readPath(key) match {
-          case Left(err) => logger.debug("Dynamic key parse error: " + err)
-          case Right(path) =>
-            logger.debug(s"Dynamic key subscribed: $path")
-            callbacks.subscribed(path)
-        }
-      }
-
-      def unsubscribed(key: TypeValue): Unit = {
-        EdgeCodecCommon.readPath(key) match {
-          case Left(err) => logger.debug("Dynamic key parse error: " + err)
-          case Right(path) =>
-            logger.debug(s"Dynamic key unsubscribed: $path")
-            callbacks.unsubscribed(path)
-        }
-      }
-    }
-
+    val table = new DynamicTableShim(callbacks)
     dynamicTables.put(set, table)
 
     new DynamicSeriesPublisher(endpointId, set, gateway, updateBuffer)
+  }
+
+  def keyValueDynamicSet(set: String, callbacks: DynamicDataKey): DynamicKeyValueHandle = {
+    val table = new DynamicTableShim(callbacks)
+    dynamicTables.put(set, table)
+
+    new DynamicKeyValuePublisher(endpointId, set, gateway, updateBuffer)
+  }
+
+  def activeSetDynamicSet(set: String, callbacks: DynamicDataKey): DynamicActiveSetHandle = {
+    val table = new DynamicTableShim(callbacks)
+    dynamicTables.put(set, table)
+
+    new DynamicActiveSetPublisher(endpointId, set, gateway, updateBuffer)
   }
 
   def build(): ProducerHandle = {
