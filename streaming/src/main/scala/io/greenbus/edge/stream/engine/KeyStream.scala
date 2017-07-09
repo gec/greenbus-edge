@@ -101,6 +101,7 @@ class SynthKeyStream[Source](observer: KeyStreamObserver, appendLimitDefault: In
 
   def handle(source: Source, event: AppendEvent): Unit = {
     val emitted = rowSynthesizer.append(source, event)
+    println("emitted: " + emitted)
     if (emitted.nonEmpty) {
       emitted.foreach(ev => observer.handle(ev))
     }
@@ -121,6 +122,8 @@ class RetailKeyStream(appendLimitDefault: Int) extends KeyStreamObserver with Ca
   def targeted(): Boolean = observers.nonEmpty
 
   def handle(event: AppendEvent): Unit = {
+    println("handle: " + cache)
+    println("handle: " + this.observers.toVector)
     cache.handle(event)
     this.observers.foreach(_.handle(event))
   }

@@ -38,6 +38,7 @@ class SimpleRouteTargetQueues(route: TypeValue) {
 
   private class SimpleKeyObserver(row: TableRow) extends KeyStreamObserver {
     def handle(event: AppendEvent): Unit = {
+      println("buffering!!")
       buffer += RowAppendEvent(row.toRowId(route), event)
     }
   }
@@ -54,6 +55,7 @@ class SimpleRouteTargetQueues(route: TypeValue) {
 
   def dequeue(): Seq[StreamEvent] = {
     val results = buffer.toVector
+    println("results: " + results)
     buffer.clear()
     results
   }

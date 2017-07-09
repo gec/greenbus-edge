@@ -39,7 +39,9 @@ class UserSubscriptionSynth(map: Map[TypeValue, Map[TableRow, ValueUpdateSynthes
     val results = Vector.newBuilder[RowUpdate]
     events.foreach {
       case ev: RowAppendEvent =>
+        println("user synth map: " + map)
         lookup(ev.rowId).foreach { synth =>
+          println(synth)
           synth.handle(ev.appendEvent).foreach { up => results += RowUpdate(ev.rowId, up) }
         }
       case ev: RouteUnresolved =>

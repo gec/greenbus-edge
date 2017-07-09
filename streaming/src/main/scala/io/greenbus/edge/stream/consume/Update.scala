@@ -30,6 +30,7 @@ class ValueUpdateSynthesizerImpl extends ValueUpdateSynthesizer {
   private var activeSynthOpt = Option.empty[(Option[TypeValue], UpdateSynthesizer[_ <: DataValueUpdate])]
 
   def handle(event: AppendEvent): Option[ValueUpdate] = {
+    println(activeSynthOpt)
     event match {
       case ev: ResyncSession => {
         activeSynthOpt match {
@@ -43,6 +44,8 @@ class ValueUpdateSynthesizerImpl extends ValueUpdateSynthesizer {
                 synth.resync(ev.resync) // initialize latest value
                 (Appended(all), synth)
             }
+            println("synth: " + update)
+            println("synth: " + updateFilter)
 
             activeSynthOpt = Some((ev.context.userMetadata, updateFilter))
             Some(ValueSync(ev.context.userMetadata, update))

@@ -37,7 +37,9 @@ class StreamSubHandle(synth: UserSubscriptionSynth, dist: Source[Seq[StreamEvent
     (handler: Handler[Seq[RowUpdate]]) =>
       {
         dist.bind { events =>
+          println("stream events: " + events)
           val rowUpdates = synth.handle(events)
+          println("row updates: " + rowUpdates)
           handler.handle(rowUpdates)
         }
       }

@@ -90,6 +90,8 @@ class DynamicDataKeyCodec(logId: String, toUpdate: EdgeDataStatus[DataKeyUpdate]
 
   def updateFor(dataValueUpdate: DataValueUpdate, metaOpt: Option[TypeValue]): Seq[IdentifiedEdgeUpdate] = {
 
+    println("metaOpt: " + metaOpt)
+
     val descUpdateOpt = metaOpt.flatMap { tv =>
       EdgeCodecCommon.readDataKeyDescriptor(tv) match {
         case Left(str) =>
@@ -98,6 +100,8 @@ class DynamicDataKeyCodec(logId: String, toUpdate: EdgeDataStatus[DataKeyUpdate]
         case Right(value) => Some(value)
       }
     }
+
+    println("descUpdateOpt: " + descUpdateOpt)
 
     descUpdateOpt.foreach {
       case _: TimeSeriesValueDescriptor =>
@@ -109,7 +113,10 @@ class DynamicDataKeyCodec(logId: String, toUpdate: EdgeDataStatus[DataKeyUpdate]
       case _: ActiveSetValueDescriptor =>
         activeCodec = Some(new MapDataKeySubCodec(logId, ActiveSetCodec, toUpdate))
       case _ =>
+        logger.warn(s"Unrecognized value codec")
     }
+
+    println("activeCodec: " + activeCodec)
 
     activeCodec match {
       case Some(codec) => codec.updateFor(dataValueUpdate, descUpdateOpt)

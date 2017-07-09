@@ -40,9 +40,14 @@ class EdgeSubImpl(sub: StreamUserSubscription, initial: Seq[IdentifiedEdgeUpdate
             handler.handle(initial)
             initialIssued = true
           }
+          println("rowUpdates: " + rowUpdates)
+          println(map)
           val edgeUpdates = rowUpdates.flatMap { up =>
             map.get(up.row).map(_.handle(up.update)).getOrElse(Seq())
           }
+          println("edgeUpdates: " + edgeUpdates)
+          println(map)
+
           handler.handle(edgeUpdates)
         }
       }
@@ -108,6 +113,7 @@ class EdgeSubscriptionProvider(peer: StreamPeer) extends EdgeSubscriptionClient 
 class EdgeKeyUpdateTranslator(codec: EdgeSubCodec) {
 
   def handle(update: ValueUpdate): Seq[IdentifiedEdgeUpdate] = {
+    println("EdgeUpdateTranslator handle: " + update + ", " + codec)
     update match {
       case vs: ValueSync =>
         codec.updateFor(vs.initial, vs.metadata)
