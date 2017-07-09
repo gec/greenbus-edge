@@ -109,6 +109,7 @@ class DynamicDataKeyCodec(logId: String, toUpdate: EdgeDataStatus[DataKeyUpdate]
       case _: ActiveSetValueDescriptor =>
         activeCodec = Some(new MapDataKeySubCodec(logId, ActiveSetCodec, toUpdate))
       case _ =>
+        logger.warn(s"Unrecognized value codec")
     }
 
     activeCodec match {

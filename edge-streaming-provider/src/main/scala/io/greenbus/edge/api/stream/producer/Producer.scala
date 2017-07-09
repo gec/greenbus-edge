@@ -107,7 +107,7 @@ class DynamicActiveSetPublisher(endpointId: EndpointId, set: String, gateway: Ga
   def add(path: Path, metadata: KeyMetadata = KeyMetadata()): ActiveSetHandle = {
     val rowId = EdgeCodecCommon.dynamicDataKeyRow(EndpointDynamicPath(endpointId, DynamicPath(set, path)))
     val handle = new ActiveSetPublisher(rowId.tableRow, updates)
-    val desc = LatestKeyValueDescriptor(metadata.indexes, metadata.metadata)
+    val desc = ActiveSetValueDescriptor(metadata.indexes, metadata.metadata)
     gateway.handleEvent(RouteBatchEvent(EdgeCodecCommon.writeEndpointId(endpointId), Seq(AddRow(rowId.tableRow, SequenceCtx(None, Some(EdgeCodecCommon.writeDataKeyDescriptor(desc)))))))
     handle
   }
