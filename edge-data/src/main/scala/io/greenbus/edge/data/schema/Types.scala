@@ -24,7 +24,7 @@ sealed trait ValueType
 case class VTField(fieldName: String, fieldType: VTValueElem) extends ValueType
 
 sealed trait VTValueElem extends ValueType
-case class TExt(ns: TypeNamespace, tag: String, reprType: BasicValueType) extends VTValueElem
+case class TExt(ns: TypeNamespace, tag: String, reprType: BasicValueType, doc: String = "") extends VTValueElem
 
 sealed trait BasicValueType extends VTValueElem
 sealed trait PrimitiveValueType extends BasicValueType
