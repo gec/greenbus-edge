@@ -24,7 +24,7 @@ sealed trait ValueType
 case class VTField(fieldName: String, fieldType: VTValueElem) extends ValueType
 
 sealed trait VTValueElem extends ValueType
-case class TExt(ns: TypeNamespace, tag: String, reprType: BasicValueType) extends VTValueElem
+case class TExt(ns: TypeNamespace, tag: String, reprType: BasicValueType, doc: String = "") extends VTValueElem
 
 sealed trait BasicValueType extends VTValueElem
 sealed trait PrimitiveValueType extends BasicValueType
@@ -46,10 +46,10 @@ case class TUnion(unionTypes: Set[VTValueElem]) extends BasicValueType
 case class TOption(paramType: VTValueElem) extends BasicValueType
 case class TEither(leftType: VTValueElem, rightType: VTValueElem) extends BasicValueType
 
-case class StructFieldDef(name: String, typ: VTValueElem, number: Int)
+case class StructFieldDef(name: String, typ: VTValueElem, number: Int, doc: String = "")
 case class TStruct(fields: Seq[StructFieldDef]) extends BasicValueType
 case class TList(paramType: VTValueElem) extends BasicValueType
 case class TMap(keyType: VTValueElem, valueType: VTValueElem) extends BasicValueType
 
-case class EnumDef(label: String, value: Int)
+case class EnumDef(label: String, value: Int, doc: String = "")
 case class TEnum(enumDefs: Seq[EnumDef]) extends BasicValueType
