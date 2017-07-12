@@ -37,9 +37,26 @@ object DocGen {
     typ.reprType match {
       case t: TStruct => structEntry(w, typ.tag, t, typ.doc)
       case t: TEnum => enumEntry(w, typ.tag, t, typ.doc)
+      case t: TUnion => unionEntry(w, typ.tag, t, typ.doc)
       case t: BasicValueType => aliasEntry(w, typ.tag, t)
       case _ =>
     }
+  }
+
+  def unionEntry(w: PrintWriter, tag: String, t: TUnion, doc: String): Unit = {
+    w.println()
+    w.println(s"### $tag")
+    if (doc.trim.length > 0) {
+      w.println()
+      w.println(doc)
+    }
+    w.println()
+    w.println(s"Union type: ")
+    w.println()
+    t.unionTypes.toSeq.map(fieldDefName).sorted.foreach { typ =>
+      w.println(s" * $typ")
+    }
+    w.println()
   }
 
   def aliasEntry(w: PrintWriter, tag: String, t: BasicValueType): Unit = {
