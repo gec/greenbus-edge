@@ -20,7 +20,7 @@ package io.greenbus.edge.japi;
 
 import java.util.Optional;
 
-public class IdDataKeyUpdate implements IdentifiedEdgeUpdate {
+public class IdDataKeyUpdate implements IdentifiedEdgeUpdate, DataStatusHolder<DataKeyUpdate> {
     private final EndpointPath id;
     private final EdgeDataStatus status;
     private final DataKeyUpdate update;
