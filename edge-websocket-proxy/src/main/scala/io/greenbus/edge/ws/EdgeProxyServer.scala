@@ -56,6 +56,8 @@ class EdgeGuiServer(port: Int) {
 class EdgeServlet extends WebSocketServlet with LazyLogging {
   def configure(webSocketServletFactory: WebSocketServletFactory): Unit = {
     logger.info("Got servlet configure " + this)
+    webSocketServletFactory.getPolicy.setMaxBinaryMessageSize(5000000)
+    webSocketServletFactory.getPolicy.setMaxTextMessageSize(5000000)
     webSocketServletFactory.register(classOf[EdgeSocket])
   }
 }
