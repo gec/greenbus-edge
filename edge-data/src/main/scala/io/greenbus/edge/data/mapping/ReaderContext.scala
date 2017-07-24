@@ -22,6 +22,7 @@ trait ReaderContext {
   def context: String
   def field(name: String): ReaderContext
   def structField(tag: String, name: String): ReaderContext
+  def listField(index: Int): ReaderContext
 }
 
 sealed trait ContextEntry
@@ -32,12 +33,18 @@ case class RootCtx(tag: String) extends ContextEntry {
 }
 case class FieldCtx(name: String) extends ContextEntry {
   override def toString: String = {
-    "." + name + " / "
+    s".$name"
   }
 }
 case class StructFieldCtx(tag: String, name: String) extends ContextEntry {
   override def toString: String = {
-    s".($tag).$name"
+    //s".($tag)$name"
+    s".$name"
+  }
+}
+case class ListFieldCtx(index: Int) extends ContextEntry {
+  override def toString: String = {
+    s"[$index]"
   }
 }
 
@@ -52,5 +59,9 @@ case class SimpleReaderContext(stack: Vector[ContextEntry]) extends ReaderContex
 
   def structField(tag: String, name: String): ReaderContext = {
     SimpleReaderContext(stack :+ StructFieldCtx(tag, name))
+  }
+
+  def listField(index: Int): ReaderContext = {
+    SimpleReaderContext(stack :+ ListFieldCtx(index))
   }
 }

@@ -50,7 +50,11 @@ object MappingLibrary {
   }
 
   def getMapField(name: String, map: ValueMap): Either[String, Value] = {
-    map.value.get(ValueString(name)).map(r => Right(r)).getOrElse(Left(s"Struct map did not contain field $name"))
+    map.value.get(ValueString(name)).map(r => Right(r)).getOrElse(Left(s"Struct did not contain field $name"))
+  }
+
+  def getMapField(name: String, map: ValueMap, ctx: ReaderContext): Either[String, Value] = {
+    map.value.get(ValueString(name)).map(r => Right(r)).getOrElse(Left(s"${ctx.context} struct did not contain field $name"))
   }
 
   def readFieldSubStruct[A](fieldName: String, element: Value, tag: String, read: (Value, ReaderContext) => Either[String, A], ctx: ReaderContext): Either[String, A] = {
@@ -107,7 +111,7 @@ object MappingLibrary {
   def readList[A](elem: Value, readContained: (Value, ReaderContext) => Either[String, A], ctx: ReaderContext): Either[String, Seq[A]] = {
     elem match {
       case v: ValueList =>
-        EitherUtil.rightSequence(v.value.map(readContained(_, ctx)))
+        EitherUtil.rightSequence(v.value.zipWithIndex.map { case (listElem, i) => readContained(listElem, ctx.listField(i)) })
       case _ => Left(s"${ctx.context} error: expected string value, saw: ${descName(elem)}")
     }
   }

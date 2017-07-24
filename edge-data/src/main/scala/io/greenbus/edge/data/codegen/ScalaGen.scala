@@ -288,23 +288,23 @@ object ScalaGen extends LazyLogging {
     pw.println(tab(4) + s"tagged.value match {")
     pw.println(tab(5) + s"case data: IntegerValue => readInteger(data, ctx)")
     pw.println(tab(5) + s"case data: ValueString => readString(data, ctx)")
-    pw.println(tab(5) + s"""case other => Left("Type $name did not recognize value type " + other)""")
+    pw.println(tab(5) + s"""case other => Left(ctx.context + " type $name did not recognize value type " + other)""")
     pw.println(tab(4) + "}")
-    pw.println(tab(3) + s"""case other => Left("Type $name did not recognize value type " + other)""")
+    pw.println(tab(3) + s"""case other => Left(ctx.context + " type $name did not recognize value type " + other)""")
     pw.println(tab(2) + "}")
     pw.println(tab(1) + "}")
 
     pw.println(tab(1) + s"def readInteger(element: IntegerValue, ctx: ReaderContext): Either[String, $name] = {")
     pw.println(tab(2) + s"element.toInt match {")
     itemDefs.foreach(ed => pw.println(tab(3) + s"""case ${ed.value} => Right(${ed.label})"""))
-    pw.println(tab(3) + s"""case other => Left("Enum $name did not recognize integer value " + other)""")
+    pw.println(tab(3) + s"""case other => Left(ctx.context + " enum $name did not recognize integer value " + other)""")
     pw.println(tab(2) + "}")
     pw.println(tab(1) + "}")
 
     pw.println(tab(1) + s"def readString(element: ValueString, ctx: ReaderContext): Either[String, $name] = {")
     pw.println(tab(2) + s"element.value match {")
     itemDefs.foreach(ed => pw.println(tab(3) + s"""case "${ed.label}" => Right(${ed.label})"""))
-    pw.println(tab(3) + s"""case other => Left("Enum $name did not recognize string value " + other)""")
+    pw.println(tab(3) + s"""case other => Left(ctx.context + " enum $name did not recognize string value " + other)""")
     pw.println(tab(2) + "}")
     pw.println(tab(1) + "}")
 
@@ -329,10 +329,10 @@ object ScalaGen extends LazyLogging {
     pw.println(tab(3) + s"""case t: TaggedValue => """)
     pw.println(tab(4) + s"""t.tag match {""")
     unionDef.tags.foreach(tag => pw.println(tab(5) + s"""case "${tag._1}" => ${getScalaPkg(tag._2)}.${tag._1}.read(element, ctx)"""))
-    pw.println(tab(5) + s"""case other => throw new IllegalArgumentException("Type $name did not union type tag " + other)""")
+    pw.println(tab(5) + s"""case other => throw new IllegalArgumentException(ctx.context + " type $name did not union type tag " + other)""")
     pw.println(tab(4) + s"""}""")
 
-    pw.println(tab(3) + s"""case other => throw new IllegalArgumentException("Type $name did not recognize " + other)""")
+    pw.println(tab(3) + s"""case other => throw new IllegalArgumentException(ctx.context + " type $name did not recognize " + other)""")
     pw.println(tab(2) + s"}")
     pw.println(tab(1) + "}")
 
@@ -365,9 +365,9 @@ object ScalaGen extends LazyLogging {
     pw.println(tab(3) + s"case tagged: TaggedValue =>")
     pw.println(tab(4) + s"tagged.value match {")
     pw.println(tab(5) + s"case data: $typeSignature => readRepr(data, ctx)")
-    pw.println(tab(5) + s"""case other => Left("Type $name did not recognize value type " + other)""")
+    pw.println(tab(5) + s"""case other => Left(ctx.context + " type $name did not recognize value type " + other)""")
     pw.println(tab(4) + "}")
-    pw.println(tab(3) + s"""case other => Left("Type $name did not recognize value type " + other)""")
+    pw.println(tab(3) + s"""case other => Left(ctx.context + " type $name did not recognize value type " + other)""")
     pw.println(tab(2) + "}")
     pw.println(tab(1) + "}")
 
@@ -418,9 +418,9 @@ object ScalaGen extends LazyLogging {
     pw.println(tab(3) + s"case tagged: TaggedValue =>")
     pw.println(tab(4) + s"tagged.value match {")
     pw.println(tab(5) + s"case data: ValueMap => readMap(data, ctx)")
-    pw.println(tab(5) + s"""case other => Left("Type $name did not recognize value type " + other)""")
+    pw.println(tab(5) + s"""case other => Left(ctx.context + "type $name did not recognize value type " + other)""")
     pw.println(tab(4) + "}")
-    pw.println(tab(3) + s"""case other => Left("Type $name did not recognize value type " + other)""")
+    pw.println(tab(3) + s"""case other => Left(ctx.context + "type $name did not recognize value type " + other)""")
     pw.println(tab(2) + "}")
     pw.println(tab(1) + "}")
 
@@ -430,18 +430,18 @@ object ScalaGen extends LazyLogging {
       fd.typ match {
         case std: SimpleTypeDef => {
           val readFun = readFuncForSimpleTyp(std.typ)
-          pw.println(tab(2) + "" + s"""val $name = $utilKlass.getMapField("$name", element).flatMap(elem => $readFun(elem, ctx))""")
+          pw.println(tab(2) + "" + s"""val $name = $utilKlass.getMapField("$name", element, ctx).flatMap(elem => $readFun(elem, ctx))""")
         }
         case ptd: ParamTypeDef => {
           ptd.typ match {
             case typ: TList => {
               val paramRead = readFuncForTypeParam(typ.paramType)
               val paramSig = fieldSignatureFor(typ.paramType)
-              pw.println(tab(2) + "" + s"""val $name = $utilKlass.optMapField("$name", element).map(elem => $utilKlass.readList[$paramSig](elem, $paramRead, ctx)).getOrElse(Right(Seq()))""")
+              pw.println(tab(2) + "" + s"""val $name = $utilKlass.optMapField("$name", element).map(elem => $utilKlass.readList[$paramSig](elem, $paramRead, ctx.field("$name"))).getOrElse(Right(Seq()))""")
             }
             case optTyp: TOption => {
               val paramRead = readFuncForTypeParam(optTyp.paramType)
-              pw.println(tab(2) + "" + s"""val $name = $utilKlass.optMapField("$name", element).flatMap(elem => $utilKlass.asOption(elem)).map(elem => $paramRead(elem, ctx).map(r => Some(r))).getOrElse(Right(None))""")
+              pw.println(tab(2) + "" + s"""val $name = $utilKlass.optMapField("$name", element).flatMap(elem => $utilKlass.asOption(elem)).map(elem => $paramRead(elem, ctx.field("$name")).map(r => Some(r))).getOrElse(Right(None))""")
 
             }
             case other => throw new IllegalArgumentException(s"Parameterized type not handled: $other")
@@ -449,7 +449,7 @@ object ScalaGen extends LazyLogging {
         }
         case ttd: TagTypeDef => {
           val tagName = ttd.tag
-          pw.println(tab(2) + "" + s"""val $name = $utilKlass.getMapField("$name", element).flatMap(elem => $utilKlass.readFieldSubStruct("$name", elem, "$tagName", ${tagType(ttd)}.read, ctx))""")
+          pw.println(tab(2) + "" + s"""val $name = $utilKlass.getMapField("$name", element, ctx).flatMap(elem => $utilKlass.readFieldSubStruct("$name", elem, "$tagName", ${tagType(ttd)}.read, ctx))""")
         }
       }
     }
