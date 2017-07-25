@@ -46,7 +46,8 @@ object EdgeWebSocketProxy {
       clientSettings.host,
       clientSettings.port,
       retryIntervalMs = clientSettings.retryIntervalMs,
-      connectTimeoutMs = clientSettings.connectTimeoutMs)
+      connectTimeoutMs = clientSettings.connectTimeoutMs,
+      appendLimitDefault = 1)
 
     val linkMgr = system.actorOf(PeerLinkMgr.props(services.bindConsumerServices()))
 
