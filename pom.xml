@@ -50,6 +50,7 @@
         <module>edge-streaming-provider</module>
         <module>protobuf</module>
         <module>amqp</module>
+        <module>edge-netty</module>
         <module>edge-peer-relay</module>
         <module>edge-websocket-proxy</module>
     </modules>
