@@ -1,0 +1,39 @@
+
+
+syntax = "proto3";
+
+package stream.protocol;
+
+import "Stream.proto";
+
+option java_package = "io.greenbus.edge.stream.protocol.proto";
+option java_multiple_files = true;
+
+
+message ClientMessage {
+    stream.data.SubscriptionSetUpdate subscription_set_update = 1;
+    stream.data.ServiceRequestBatch service_request_batch = 2;
+}
+message ServerMessage {
+    stream.data.EventBatch event_batch = 1;
+    stream.data.ServiceResponseBatch service_response_batch = 2;
+}
+
+
+/*
+
+alias add
+alias remove
+
+set (prefix) subscriptions
+set events
+
+event subscription set
+event batches
+
+blob requests
+blob responses
+service requests
+service responses
+
+ */

@@ -41,6 +41,7 @@
 
     <modules>
         <module>edge-common</module>
+        <module>stream2</module>
         <module>streaming</module>
         <module>edge-data</module>
         <module>edge-data-proto</module>
