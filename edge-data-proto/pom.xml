@@ -26,7 +26,7 @@
                 <artifactId>protobuf-maven-plugin</artifactId>
                 <version>0.5.1</version>
                 <configuration>
-                    <protocExecutable>./protoclink</protocExecutable>
+                    <protocExecutable>./protoc340</protocExecutable>
                     <protoSourceRoot>src/main/proto</protoSourceRoot>
                 </configuration>
                 <executions>
@@ -50,7 +50,7 @@
         <dependency>
             <groupId>com.google.protobuf</groupId>
             <artifactId>protobuf-java</artifactId>
-            <version>3.1.0</version>
+            <version>3.4.0</version>
         </dependency>
         <dependency>
             <groupId>org.scalatest</groupId>

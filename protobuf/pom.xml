@@ -26,7 +26,7 @@
                 <artifactId>protobuf-maven-plugin</artifactId>
                 <version>0.5.1</version>
                 <configuration>
-                    <protocExecutable>./protoclink</protocExecutable>
+                    <protocExecutable>./protoc340</protocExecutable>
                     <protoSourceRoot>src/main/proto</protoSourceRoot>
                     <checkStaleness>true</checkStaleness>
                 </configuration>
