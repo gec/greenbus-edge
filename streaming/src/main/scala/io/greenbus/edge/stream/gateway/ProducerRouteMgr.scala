@@ -37,8 +37,21 @@ class ProducerRouteMgr(appendLimitDefault: Int) extends RouteTargetSubject with 
   private val subjectMap = mutable.Map.empty[TableRow, ProducerStreamSubject]
   private val subscriptionMap = mutable.Map.empty[StreamObserver, Map[TableRow, KeyStreamObserver]]
 
+  def isProduced: Boolean = produced
+
   def bind(events: Seq[ProducerKeyEvent], dynamic: Map[String, DynamicTable], handler: Sink[RouteServiceRequest]): Unit = {
+    logger.debug(s"Subject map before bind: " + subjectMap.keySet)
+    logger.debug(s"Subscription map before bind: " + subscriptionMap)
     unbind()
+
+    subscriptionMap.foreach {
+      case (obs, subscriptionSet) =>
+        subscriptionSet.foreach {
+          case (key, obs) =>
+            observerAdded(key, obs)
+        }
+    }
+
     bindTables(dynamic)
     events.foreach(handleEvent)
     requestHandlerOpt = Some(handler)
@@ -84,7 +97,14 @@ class ProducerRouteMgr(appendLimitDefault: Int) extends RouteTargetSubject with 
         streamAdded(key, stream)
       }
       case RowUpdate(key, update) => {
-        updateMap.get(key).foreach(_.handle(update))
+        //updateMap.get(key).foreach(_.handle(update))
+
+        updateMap.get(key) match {
+          case None => logger.debug(s"No stream for key: " + key)
+          case Some(handler) =>
+            handler.handle(update)
+        }
+
       }
       case DropRow(key) =>
         updateMap.get(key).foreach(s => streamRemoved(key, s))
@@ -92,7 +112,7 @@ class ProducerRouteMgr(appendLimitDefault: Int) extends RouteTargetSubject with 
   }
 
   private def streamAdded(key: TableRow, stream: ProducerUpdateStream): Unit = {
-    logger.debug(s"Stream added $key")
+    logger.debug(s"Stream added $key; subjects: " + subjectMap.get(key))
     updateMap.update(key, stream)
     subjectMap.get(key).foreach { subj =>
       subj.bind(stream.cache)
@@ -163,6 +183,7 @@ class ProducerRouteMgr(appendLimitDefault: Int) extends RouteTargetSubject with 
 
   def targeted(): Boolean = {
     subjectMap.keySet.nonEmpty || produced
+    //subscriptionMap.nonEmpty || produced
   }
 
   def targetUpdate(target: StreamObserver, subscription: Map[TableRow, KeyStreamObserver]): Unit = {
@@ -181,6 +202,7 @@ class ProducerRouteMgr(appendLimitDefault: Int) extends RouteTargetSubject with 
     }
 
     val untargetedStreams = removes.filter(key => subjectMap.get(key).exists(!_.targeted()))
+    logger.debug(s"Removing untargeted: " + untargetedStreams)
     subjectMap --= untargetedStreams
 
     subscriptionMap.update(target, subscription)
@@ -188,6 +210,8 @@ class ProducerRouteMgr(appendLimitDefault: Int) extends RouteTargetSubject with 
 
   def targetRemoved(target: StreamObserver): Unit = {
     val previous = subscriptionMap.getOrElse(target, Map())
+
+    logger.debug(s"targetRemoved: ${previous.keySet}")
 
     previous.foreach {
       case (key, obs) =>

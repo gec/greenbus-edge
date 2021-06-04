@@ -47,12 +47,16 @@ class ProducerMgr(appendLimitDefault: Int) extends StreamTargetSubject[ProducerR
 
   protected val routeMap = mutable.Map.empty[TypeValue, ProducerRouteMgr]
 
-  def routeSet: Set[TypeValue] = routeMap.keySet.toSet
+  def routeSet: Set[TypeValue] = {
+    routeMap.keySet.toSet
+    //routeMap.filter { case (route, mgr) => mgr.isProduced }.keySet.toSet
+  }
 
   def handleEvent(event: ProducerEvent): Unit = {
     logger.debug(s"Producer event: $event")
     event match {
       case ev: RouteBindEvent => {
+        logger.debug(s"Route map before bind: " + routeSet)
         val mgr = routeMap.getOrElseUpdate(ev.route, new ProducerRouteMgr(appendLimitDefault))
         mgr.bind(ev.initialEvents, ev.dynamic, ev.handler)
       }
@@ -63,6 +67,7 @@ class ProducerMgr(appendLimitDefault: Int) extends StreamTargetSubject[ProducerR
         routeMap.get(ev.route).foreach { routeMgr =>
           routeMgr.unbind()
           if (!routeMgr.targeted()) {
+            logger.debug(s"Removing untargeted route: " + ev.route)
             routeMap -= ev.route
           }
         }

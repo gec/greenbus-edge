@@ -41,6 +41,7 @@ trait StreamTargetSubject[A <: RouteTargetSubject] extends LazyLogging {
         routeMap.get(route).foreach { routeStreams =>
           routeStreams.targetRemoved(entry.streamObserver)
           if (!routeStreams.targeted()) {
+            logger.debug(s"removing as untargeted: " + route)
             routeMap -= route
           }
         }
@@ -59,11 +60,13 @@ trait StreamTargetSubject[A <: RouteTargetSubject] extends LazyLogging {
   }
   def targetRemoved(target: StreamTarget): Unit = {
     val prev = targetToRouteMap.getOrElse(target, Map())
+    logger.debug(s"Removing target for: ${prev.keySet}")
     prev.foreach {
       case (route, obs) =>
         routeMap.get(route).foreach { routeStreams =>
           routeStreams.targetRemoved(obs.streamObserver)
           if (!routeStreams.targeted()) {
+            logger.debug(s"removing as untargeted: " + route)
             routeMap -= route
           }
         }

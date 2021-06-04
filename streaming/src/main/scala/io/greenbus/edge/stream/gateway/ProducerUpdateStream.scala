@@ -18,11 +18,12 @@
  */
 package io.greenbus.edge.stream.gateway
 
+import com.typesafe.scalalogging.LazyLogging
 import io.greenbus.edge.stream.engine.StreamObserverSet
 import io.greenbus.edge.stream.filter.{ StreamCache, StreamCacheImpl }
 import io.greenbus.edge.stream.{ PeerSessionId, SequenceCtx }
 
-class ProducerUpdateStream(sessionId: PeerSessionId, ctx: SequenceCtx, appendLimit: Int) {
+class ProducerUpdateStream(sessionId: PeerSessionId, ctx: SequenceCtx, appendLimit: Int) extends LazyLogging {
 
   private var sequencerOpt = Option.empty[UpdateSequencer]
   private var observerOpt = Option.empty[StreamObserverSet]
@@ -39,7 +40,17 @@ class ProducerUpdateStream(sessionId: PeerSessionId, ctx: SequenceCtx, appendLim
     }
 
     val sequenced = sequencer.handle(update)
+
+    if (sequenced.isEmpty) {
+      logger.debug(s"Empty sequenced results")
+    }
+
     sequenced.foreach(streamCache.handle)
+
+    if (observerOpt.isEmpty) {
+      logger.debug(s"No observer")
+    }
+
     observerOpt.foreach { set =>
       set.observers.foreach { observer =>
         sequenced.foreach(observer.handle)
@@ -48,10 +59,12 @@ class ProducerUpdateStream(sessionId: PeerSessionId, ctx: SequenceCtx, appendLim
   }
 
   def bind(set: StreamObserverSet): Unit = {
+    logger.debug("Stream observer bound")
     observerOpt = Some(set)
   }
 
   def unbind(): Unit = {
+    logger.debug("Stream observer unbound")
     observerOpt = None
   }
 }

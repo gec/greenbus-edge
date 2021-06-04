@@ -31,70 +31,6 @@ import org.scalatest.{ BeforeAndAfterEach, FunSuite, Matchers }
 import scala.concurrent.duration._
 import scala.concurrent.{ Await, Promise }
 
-object EdgeMatchers {
-  import EdgeSubHelpers._
-
-  def idDataKeyResolved(endPath: EndpointPath)(f: DataKeyUpdate => Boolean): PartialFunction[IdentifiedEdgeUpdate, Boolean] = {
-    case up: IdDataKeyUpdate =>
-      val valueMatched = up.data match {
-        case ResolvedValue(v) =>
-          v match {
-            case v: DataKeyUpdate => f(v)
-            case _ => false
-          }
-        case _ => false
-      }
-
-      up.id == endPath && valueMatched
-  }
-  def idOutputKeyResolved(endPath: EndpointPath)(f: OutputKeyUpdate => Boolean): PartialFunction[IdentifiedEdgeUpdate, Boolean] = {
-    case up: IdOutputKeyUpdate =>
-      val valueMatched = up.data match {
-        case ResolvedValue(v) =>
-          v match {
-            case v: OutputKeyUpdate => f(v)
-            case _ => false
-          }
-        case _ => false
-      }
-
-      up.id == endPath && valueMatched
-  }
-  def idDynamicDataKeyResolved(endPath: EndpointDynamicPath)(f: DataKeyUpdate => Boolean): PartialFunction[IdentifiedEdgeUpdate, Boolean] = {
-    case up: IdDynamicDataKeyUpdate =>
-      val valueMatched = up.data match {
-        case ResolvedValue(v) =>
-          v match {
-            case v: DataKeyUpdate => f(v)
-            case _ => false
-          }
-        case _ => false
-      }
-
-      up.id == endPath && valueMatched
-  }
-
-  def dataKeyResolved(f: DataKeyUpdate => Boolean): PartialFunction[IdentifiedEdgeUpdate, Boolean] = {
-    case up: IdDataKeyUpdate =>
-      up.data match {
-        case ResolvedValue(v) =>
-          v match {
-            case v: DataKeyUpdate => f(v)
-            case _ => false
-          }
-        case _ => false
-      }
-  }
-
-  def matchSeriesUpdates(seq: Seq[(Double, Long)]) = {
-    seq.map {
-      case (v, t) => fixed {
-        dataKeyResolved { up: DataKeyUpdate => up.value == SeriesUpdate(ValueDouble(v), t) }
-      }
-    }
-  }
-}
-
 @RunWith(classOf[JUnitRunner])
 class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach with BaseEdgeIntegration with LazyLogging {
   import EdgeMatchers._
@@ -152,6 +88,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
           }
         }), 5000)
 
+    logger.info("======== PRODUCER CLOSED =========")
     producer.close()
 
     flatQueue.awaitListen(
@@ -290,6 +227,7 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
 
     consA.connect()
 
+    logger.info("STARTING PRODUCER")
     val producerA = new TestProducer
     val producer = new Producer1(producerA.producerMgr)
     producerA.connect()
@@ -681,6 +619,102 @@ class IntegrationTest extends FunSuite with Matchers with BeforeAndAfterEach wit
           }
         }), 5000)
   }
+
+  /*test("Producer comes up after consumer and rebuilds") {
+
+    logger.info("PRODUCER REBOOT:")
+
+    val consumer = buildConsumer()
+    val subClient = consumer.subscriptionClient
+
+    val params = SubscriptionParams(
+      dataKeys = Set(EndpointPath(EndpointId(Path("my-endpoint")), Path("series-double-1"))))
+
+    val subscription = subClient.subscribe(params)
+
+    val flatQueue = new FlatQueue
+    subscription.updates.bind(flatQueue.received)
+
+    flatQueue.awaitListen(
+      prefixMatcher(
+        fixed {
+          case up: IdDataKeyUpdate => up.data == Pending
+        },
+        fixed {
+          case up: IdDataKeyUpdate => up.data == DataUnresolved
+        }), 5000)
+
+    startRelay()
+
+    connectConsumer(consumer)
+
+    val producerMgr = buildProducer()
+    val producer = new Producer1(producerMgr)
+    connectProducer(producerMgr)
+
+    logger.info("UPDATE:")
+    producer.updateAndFlush(2.33, 5)
+
+    logger.info("WAITING:")
+    flatQueue.awaitListen(
+      prefixMatcher(
+        fixed {
+          dataKeyResolved { v: DataKeyUpdate =>
+            v.value == SeriesUpdate(ValueDouble(2.33), 5)
+          }
+        }), 5000)
+
+    producer.updateAndFlush(4.33, 6)
+
+    flatQueue.awaitListen(
+      prefixMatcher(
+        fixed {
+          dataKeyResolved { v: DataKeyUpdate =>
+            v.value == SeriesUpdate(ValueDouble(4.33), 6)
+          }
+        }), 5000)
+
+    logger.info("======= PRODUCER CLOSE ======")
+    producer.close()
+
+    flatQueue.awaitListen(
+      prefixMatcher(
+        fixed {
+          case up: IdDataKeyUpdate => up.data == DataUnresolved
+        }), 5000)
+
+
+    logger.info("======= PRODUCER BUILD ======")
+    //val producerMgr2 = buildProducer()
+    val endpoint2 = new Producer2(producerMgr)
+    //connectProducer(producerMgr2)
+
+    producer.updateAndFlush(3.44, 7)
+
+    logger.info("WAITING 2:")
+    flatQueue.awaitListen(
+      prefixMatcher(
+        fixed {
+          dataKeyResolved { v: DataKeyUpdate =>
+            v.value == SeriesUpdate(ValueDouble(3.44), 7)
+          }
+        }), 5000)
+
+
+    logger.info("======= PRODUCER CLOSE ======")
+    endpoint2.close()
+
+    flatQueue.awaitListen(
+      prefixMatcher(
+        fixed {
+          case up: IdDataKeyUpdate => up.data == DataUnresolved
+        }), 5000)
+
+
+    logger.info("======= STOPPING RELAY ======")
+    stopRelay()
+
+  }*/
 
 }
 
