@@ -54,6 +54,14 @@
         <module>edge-websocket-proxy</module>
     </modules>
 
+    <distributionManagement>
+        <repository>
+            <id>fermatadev-fermatarepo</id>
+            <name>fermatadev-fermatarepo</name>
+            <url>https://fermatadev-570889591489.d.codeartifact.us-east-1.amazonaws.com/maven/fermatarepo/</url>
+        </repository>
+    </distributionManagement>
+
     <repositories>
 
         <repository>
