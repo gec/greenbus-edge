@@ -56,9 +56,9 @@
 
     <distributionManagement>
         <repository>
-            <id>fermatadev-fermatarepo</id>
-            <name>fermatadev-fermatarepo</name>
-            <url>https://fermatadev-570889591489.d.codeartifact.us-east-1.amazonaws.com/maven/fermatarepo/</url>
+            <id>fermatacode-fermatadev</id>
+            <name>fermatacode-fermatadev</name>
+            <url>https://fermatacode-335362030826.d.codeartifact.us-east-1.amazonaws.com/maven/fermatadev/</url>
         </repository>
     </distributionManagement>
 
